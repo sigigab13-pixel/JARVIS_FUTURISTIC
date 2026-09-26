@@ -635,24 +635,6 @@ function App() {
   }
 
   return (
-      <main className="jarvis-shell">
-        <div className="scanline" />
-        <section className="auth-screen">
-          <div className="auth-card">
-            <div className="orb"><Sparkles size={20} /></div>
-            <span className="eyebrow">JARVIS AUTHENTICATION</span>
-            <h1>Welcome to JARVIS</h1>
-            <p>Sign in with Google to create your personal JARVIS account and keep your conversations, memory and preferences connected to you.</p>
-            <button className="security-primary" onClick={() => void signInWithGoogle()} disabled={authBusy}>{authBusy ? 'Connecting...' : 'Continue with Google'}</button>
-            {authError && <div className="security-result"><AlertTriangle size={14} /> {authError}</div>}
-            <small>JARVIS uses Supabase Auth for account identity. Your Google password is never handled by JARVIS.</small>
-          </div>
-        </section>
-      </main>
-    );
-  }
-
-  return (
     <main className="jarvis-shell">
       <div className="scanline" />
       <header className="topbar">
