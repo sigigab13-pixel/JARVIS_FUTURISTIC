@@ -169,6 +169,7 @@ function App() {
   }, [messages, busy]);
 
   useEffect(() => {
+    if (!session) return;
     let active = true;
     void api.get('/api/chat/history').then(response => {
       const cloudMessages = Array.isArray(response.data?.messages) ? response.data.messages : [];
@@ -178,7 +179,7 @@ function App() {
       // Local memory remains available if the cloud memory service is temporarily unavailable.
     });
     return () => { active = false; };
-  }, []);
+  }, [session]);
 
   const speak = async (text: string) => {
     if (!voiceEnabled || !text.trim()) return;
@@ -633,8 +634,7 @@ function App() {
     return <main className="jarvis-shell"><section className="auth-screen"><div className="auth-card"><div className="orb"><Sparkles size={20} /></div><span className="eyebrow">JARVIS AUTHENTICATION</span><h1>Connecting to JARVIS...</h1><p>Preparing your secure account session.</p></div></section></main>;
   }
 
-  if (!session) {
-    return (
+  return (
       <main className="jarvis-shell">
         <div className="scanline" />
         <section className="auth-screen">
