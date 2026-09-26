@@ -131,6 +131,12 @@ async function requireAuthenticatedJarvisUser(req) {
   return { authUser: user, jarvisUser };
 }
 
+async function getOptionalAuthenticatedJarvisUser(req) {
+  const authorization = String(req.headers.authorization || '');
+  if (!authorization.trim()) return null;
+  return requireAuthenticatedJarvisUser(req);
+}
+
 function redirect(res, location) {
   res.writeHead(302, { Location: location });
   res.end();
@@ -403,9 +409,10 @@ export async function handleApi(req, res, pathname, url) {
   }
 
   if (req.method === 'GET' && pathname === '/api/chat/history') {
-    const { jarvisUser } = await requireAuthenticatedJarvisUser(req);
-    const history = await getConversationMessages(jarvisUser.id, 100);
-    return json(res, 200, { messages: history, persistent: true }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+    const authenticated = await getOptionalAuthenticatedJarvisUser(req);
+    if (!authenticated) return json(res, 200, { messages: [], persistent: false, guest: true });
+    const history = await getConversationMessages(authenticated.jarvisUser.id, 100);
+    return json(res, 200, { messages: history, persistent: true }, { 'Set-Cookie': jarvisCookie(authenticated.jarvisUser.id) });
   }
 
   if (req.method === 'POST' && pathname === '/api/chat') {
@@ -414,18 +421,18 @@ export async function handleApi(req, res, pathname, url) {
       ? input.messages.filter(m => ['user', 'assistant', 'system', 'model'].includes(String(m?.role)) && String(m?.content || '').trim()).slice(-16)
       : [];
     if (!messages.length) return json(res, 400, { error: 'A message is required.' });
-    const { jarvisUser } = await requireAuthenticatedJarvisUser(req);
-    const userId = jarvisUser.id;
-    const token = process.env.HUGGINGFACE_API_TOKEN;
+    const authenticated = await getOptionalAuthenticatedJarvisUser(req);
+    const userId = authenticated?.jarvisUser?.id || null;
+    const token = process.env.HUGGINGFACE_API_TOKEN || process.env.HF_TOKEN;
     if (!token) return json(res, 503, { error: 'Hugging Face AI is not configured on this deployment.' });
 
     const latestUserMessage = String(messages[messages.length - 1]?.content || '').trim();
     let semanticMemories = [];
     try {
-      semanticMemories = await searchSemanticMemories(userId, latestUserMessage, {
+      semanticMemories = userId ? await searchSemanticMemories(userId, latestUserMessage, {
         threshold: 0.72,
         count: 8,
-      });
+      }) : [];
     } catch (memoryError) {
       console.error('Semantic memory retrieval error:', memoryError);
     }
@@ -459,29 +466,29 @@ export async function handleApi(req, res, pathname, url) {
     if (!response.ok) return json(res, response.status >= 400 && response.status < 500 ? 400 : 502, { error: data?.error?.message || 'Hugging Face AI request failed.' });
     const text = String(data?.choices?.[0]?.message?.content || '').trim();
     if (!text) return json(res, 502, { error: 'The AI core returned an empty response.' });
-    const shouldRemember = /\b(remember|don't forget|do not forget|keep in mind|i prefer|i like|my favorite|i want|my goal|i plan to|i am building|i'm building|we decided|from now on|call me)\b/i.test(latestUserMessage)
-      && latestUserMessage.length >= 12;
-
-    if (shouldRemember) {
+    if (userId && latestUserMessage.length >= 12) {
+      const memory = classifyMemory(latestUserMessage);
       try {
         await saveSemanticMemory(userId, latestUserMessage, {
           source: 'chat',
-          importance: /\b(remember|don't forget|do not forget|from now on|call me)\b/i.test(latestUserMessage) ? 0.9 : 0.7,
-        }, 'chat_memory');
+          importance: memory.importance,
+        }, memory.type);
       } catch (memoryError) {
         console.error('Semantic memory save error:', memoryError);
       }
     }
 
-    await appendConversationMessages(userId, [
-      { role: 'user', content: latestUserMessage },
-      { role: 'assistant', content: text },
-    ]);
+    if (userId) {
+      await appendConversationMessages(userId, [
+        { role: 'user', content: latestUserMessage },
+        { role: 'assistant', content: text },
+      ]);
+    }
     return json(
       res,
       200,
-      { text, provider: 'Hugging Face Inference Providers', model: HF_MODEL, persistent: true },
-      { 'Set-Cookie': jarvisCookie(userId) },
+      { text, provider: 'Hugging Face Inference Providers', model: HF_MODEL, persistent: Boolean(userId), guest: !userId },
+      userId ? { 'Set-Cookie': jarvisCookie(userId) } : {},
     );
   }
 
