@@ -40,7 +40,6 @@ export function buildPipelinePlan(payload = {}) {
     executionPolicy: {
       parallel: [
         ['character_bible', 'world_asset_bible'],
-        ['story_director', 'voice_audio'],
       ],
       maxConcurrentWorkers: 4,
       hardConcurrencyCap: 8,
