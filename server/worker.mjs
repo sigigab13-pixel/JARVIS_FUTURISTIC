@@ -95,56 +95,87 @@ export async function executeJob(job) {
   };
 }
 
-export async function runWorker({ workerId = createWorkerId(), once = false, pollMs = 5000, logger = console } = {}) {
+async function processJob(job, workerId, logger) {
+  await heartbeatJob(job.id, workerId);
+  const heartbeatMs = Math.max(15_000, Number(process.env.JARVIS_WORKER_HEARTBEAT_MS || 60_000));
+  const heartbeatTimer = setInterval(() => {
+    heartbeatJob(job.id, workerId).catch(error =>
+      logger.warn?.(`[JARVIS worker] heartbeat failed ${job.id}:`, error)
+    );
+  }, heartbeatMs);
+
+  try {
+    const result = await executeJob(job);
+    await finishJob(job.id, workerId, result);
+    logger.info?.(`[JARVIS worker] completed ${job.id} (${job.type})`);
+    return { ok: true, jobId: job.id };
+  } catch (error) {
+    logger.error?.(`[JARVIS worker] failed ${job.id}:`, error);
+    try {
+      await failJob(job.id, workerId, error);
+    } catch (failureError) {
+      logger.error?.('[JARVIS worker] failed to persist failure:', failureError);
+    }
+    return { ok: false, jobId: job.id, error };
+  } finally {
+    clearInterval(heartbeatTimer);
+  }
+}
+
+async function claimOne(workerId) {
+  const queued = isRedisConfigured() ? await dequeueJob() : null;
+  let job = queued?.jobId ? await claimJob(queued.jobId, workerId) : await claimNextJob(workerId);
+
+  // If a stale/duplicate Redis message was consumed, recover any other queued Supabase job.
+  if (!job && queued?.jobId) job = await claimNextJob(workerId);
+  return job;
+}
+
+export async function runWorker({
+  workerId = createWorkerId(),
+  once = false,
+  pollMs = 5000,
+  logger = console,
+  concurrency = Number(process.env.JARVIS_WORKER_CONCURRENCY || 4),
+} = {}) {
   if (!configured()) throw new Error('SUPABASE_URL and SUPABASE_SECRET_KEY/SUPABASE_SERVICE_ROLE_KEY are required.');
 
+  const maxConcurrency = Math.min(8, Math.max(1, Math.floor(Number(concurrency) || 4)));
   let processed = 0;
+
   while (true) {
-    let job;
-    try {
-      const queued = isRedisConfigured() ? await dequeueJob() : null;
-      job = queued?.jobId ? await claimJob(queued.jobId, workerId) : await claimNextJob(workerId);
-      // If a stale/duplicate Redis message was consumed, recover any other queued Supabase job.
-      if (!job && queued?.jobId) job = await claimNextJob(workerId);
-    } catch (error) {
-      logger.error?.('[JARVIS worker] claim failed:', error);
-      if (once) throw error;
+    const jobs = [];
+    for (let i = 0; i < maxConcurrency; i += 1) {
+      try {
+        const job = await claimOne(workerId);
+        if (!job) break;
+        jobs.push(job);
+      } catch (error) {
+        logger.error?.('[JARVIS worker] claim failed:', error);
+        if (once && jobs.length === 0) throw error;
+        break;
+      }
+    }
+
+    if (jobs.length === 0) {
+      if (once) return { workerId, processed, concurrency: maxConcurrency };
       await new Promise(resolve => setTimeout(resolve, pollMs));
       continue;
     }
 
-    if (!job) {
-      if (once) return { workerId, processed };
-      await new Promise(resolve => setTimeout(resolve, pollMs));
-      continue;
-    }
+    const results = await Promise.all(jobs.map(job => processJob(job, workerId, logger)));
+    processed += results.filter(result => result.ok).length;
 
-    try {
-      await heartbeatJob(job.id, workerId);
-      const heartbeatMs = Math.max(15_000, Number(process.env.JARVIS_WORKER_HEARTBEAT_MS || 60_000));
-      let heartbeatTimer = setInterval(() => {
-        heartbeatJob(job.id, workerId).catch(error => logger.warn?.(`[JARVIS worker] heartbeat failed ${job.id}:`, error));
-      }, heartbeatMs);
-      try {
-        const result = await executeJob(job);
-        await finishJob(job.id, workerId, result);
-      } finally {
-        clearInterval(heartbeatTimer);
-        heartbeatTimer = null;
-      }
-      processed += 1;
-      logger.info?.(`[JARVIS worker] completed ${job.id} (${job.type})`);
-    } catch (error) {
-      logger.error?.(`[JARVIS worker] failed ${job.id}:`, error);
-      try {
-        await failJob(job.id, workerId, error);
-      } catch (failureError) {
-        logger.error?.('[JARVIS worker] failed to persist failure:', failureError);
-      }
-      if (once) throw error;
+    // GitHub Actions runs the worker with JARVIS_WORKER_ONCE=1. Process one
+    // bounded batch per invocation so scheduled runs remain predictable.
+    if (once) {
+      return {
+        workerId,
+        processed,
+        attempted: jobs.length,
+        concurrency: maxConcurrency,
+      };
     }
-
-    if (once) return { workerId, processed };
   }
 }
 
