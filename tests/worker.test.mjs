@@ -9,15 +9,30 @@ test('worker creates unique stable ids', () => {
   assert.notEqual(a, b);
 });
 
-test('worker handles video jobs without pretending generation is complete', async () => {
+test('worker builds a dependency-aware video plan without spending provider credits', async () => {
   const result = await executeJob({
     type: 'video_pipeline',
     payload: { operation: 'plan', project_id: 'project-1' },
   });
   assert.equal(result.accepted, true);
-  assert.equal(result.status, 'worker_received');
+  assert.equal(result.type, 'video_pipeline');
   assert.equal(result.projectId, 'project-1');
-  assert.match(result.message, /later pipeline milestone/);
+  assert.equal(result.mode, 'dependency_planned');
+  assert.equal(result.safety.spending, 'no provider credits are consumed by planning');
+  assert.deepEqual(result.executionPolicy.parallel, [
+    ['character_bible', 'world_asset_bible'],
+  ]);
+  assert.equal(result.executionPolicy.maxConcurrentWorkers, 4);
+  assert.equal(result.executionPolicy.hardConcurrencyCap, 8);
+});
+
+test('video plan keeps voice dependent on the story', async () => {
+  const result = await executeJob({
+    type: 'video_pipeline',
+    payload: { operation: 'plan', project_id: 'project-2' },
+  });
+  const voice = result.stages.find(stage => stage.id === 'voice_audio');
+  assert.deepEqual(voice.dependsOn, ['story_director']);
 });
 
 test('worker safely records unknown job types', async () => {
