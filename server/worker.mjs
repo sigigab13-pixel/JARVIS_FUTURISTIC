@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { dequeueJob, isRedisConfigured } from './queue.mjs';
+import { buildPipelinePlan } from './pipeline.mjs';
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
 const SUPABASE_SERVER_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -68,14 +69,7 @@ export async function executeJob(job) {
   const payload = job?.payload && typeof job.payload === 'object' ? job.payload : {};
 
   if (type === 'video_pipeline') {
-    return {
-      accepted: true,
-      type,
-      operation: String(payload.operation || 'unknown'),
-      projectId: payload.project_id || null,
-      status: 'worker_received',
-      message: 'Durable worker received the video job. Generation/rendering adapters remain a later pipeline milestone.',
-    };
+    return buildPipelinePlan(payload);
   }
 
   if (type === 'memory_maintenance') {
@@ -91,7 +85,7 @@ export async function executeJob(job) {
     accepted: true,
     type: type || 'unknown',
     status: 'worker_received',
-    message: 'Durable worker recorded the job without executing an unregistered job type.',
+    message: 'JARVIS recorded the job without executing an unregistered job type.',
   };
 }
 
@@ -125,8 +119,6 @@ async function processJob(job, workerId, logger) {
 async function claimOne(workerId) {
   const queued = isRedisConfigured() ? await dequeueJob() : null;
   let job = queued?.jobId ? await claimJob(queued.jobId, workerId) : await claimNextJob(workerId);
-
-  // If a stale/duplicate Redis message was consumed, recover any other queued Supabase job.
   if (!job && queued?.jobId) job = await claimNextJob(workerId);
   return job;
 }
@@ -166,8 +158,6 @@ export async function runWorker({
     const results = await Promise.all(jobs.map(job => processJob(job, workerId, logger)));
     processed += results.filter(result => result.ok).length;
 
-    // GitHub Actions runs the worker with JARVIS_WORKER_ONCE=1. Process one
-    // bounded batch per invocation so scheduled runs remain predictable.
     if (once) {
       return {
         workerId,
