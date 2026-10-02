@@ -1,5 +1,16 @@
 const FORMATS = ['16:9', '9:16', '1:1'];
 
+const PROVIDERS = {
+  higgsfield: {
+    imageModel: 'gpt_image_2_5',
+    motionModel: 'cinematic_studio_video_4_0',
+    lipSyncModel: 'sync_so',
+  },
+  elevenlabs: {
+    speechModel: 'eleven_multilingual_v2',
+  },
+};
+
 function clean(value, max = 2400) {
   return String(value ?? '').trim().slice(0, max);
 }
@@ -8,6 +19,35 @@ function providerStatus() {
   return {
     higgsfield: process.env.HIGGSFIELD_API_KEY ? 'configured' : 'not_configured',
     elevenlabs: process.env.ELEVENLABS_API_KEY ? 'configured' : 'not_configured',
+  };
+}
+
+export function getGenerationCapabilities() {
+  const statuses = providerStatus();
+  return {
+    version: '1.1',
+    status: 'planning_ready',
+    providers: {
+      higgsfield: {
+        status: statuses.higgsfield,
+        imageModel: PROVIDERS.higgsfield.imageModel,
+        motionModel: PROVIDERS.higgsfield.motionModel,
+        lipSyncModel: PROVIDERS.higgsfield.lipSyncModel,
+        pipeline: 'story scene -> reference image -> motion video -> optional lip-sync',
+      },
+      elevenlabs: {
+        status: statuses.elevenlabs,
+        speechModel: PROVIDERS.elevenlabs.speechModel,
+        pipeline: 'dialogue/narration -> speech audio',
+      },
+    },
+    supportedFormats: FORMATS,
+    executionPolicy: [
+      'Do not submit a provider job from the planning endpoint.',
+      'Do not expose provider credentials to the browser.',
+      'Do not mark media generated until a provider confirms a completed result.',
+      'Keep each scene traceable to its story, character, audio, and QA inputs.',
+    ],
   };
 }
 
@@ -40,33 +80,47 @@ export function buildGenerationPlan({
 
     return {
       sceneNumber: number,
+      image: {
+        provider: 'higgsfield',
+        model: PROVIDERS.higgsfield.imageModel,
+        status: process.env.HIGGSFIELD_API_KEY ? 'ready_to_submit' : 'provider_not_configured',
+        format: safeFormat,
+        prompt: clean(visual?.generationPrompt || scene?.visualPlan || scene?.action),
+        execution: 'not_started',
+      },
       visual: {
         provider: 'higgsfield',
+        model: PROVIDERS.higgsfield.motionModel,
         status: process.env.HIGGSFIELD_API_KEY ? 'ready_to_submit' : 'provider_not_configured',
         format: safeFormat,
         prompt: clean(visual?.generationPrompt || scene?.visualPlan || scene?.action),
         shotType: clean(visual?.shotType, 80) || 'medium',
         cameraMovement: clean(visual?.cameraMovement, 160),
+        execution: 'not_started',
       },
       audio: {
         provider: 'elevenlabs',
+        model: PROVIDERS.elevenlabs.speechModel,
         status: process.env.ELEVENLABS_API_KEY ? 'ready_to_submit' : 'provider_not_configured',
         narratorDirection: clean(audio?.narratorDirection, 800),
         dialogueDirection: clean(audio?.dialogueDirection, 1000),
         emotion: clean(audio?.emotion, 160),
         pacing: clean(audio?.pacing, 160),
+        execution: 'not_started',
       },
       lipSync: {
+        provider: 'higgsfield',
+        model: PROVIDERS.higgsfield.lipSyncModel,
         status: lip?.segments?.length ? 'planned' : 'needs_dialogue_plan',
         segmentCount: Array.isArray(lip?.segments) ? lip.segments.length : 0,
+        execution: 'not_started',
       },
-      execution: 'not_started',
     };
   });
 
   const statuses = providerStatus();
   return {
-    version: '1.0',
+    version: '1.1',
     title: clean(title, 180),
     ageRange: clean(ageRange, 40),
     format: safeFormat,
