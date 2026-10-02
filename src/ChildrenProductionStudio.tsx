@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from './api';
 
 const genres = ['rhymes', 'bedtime story', 'adventure', 'educational story', 'moral story', 'science story'];
@@ -22,6 +22,7 @@ export default function ChildrenProductionStudio() {
   const [timeline, setTimeline] = useState<any>(null);
   const [qa, setQa] = useState<any>(null);
   const [generationPlan, setGenerationPlan] = useState<any>(null);
+  const [generationCapabilities, setGenerationCapabilities] = useState<any>(null);
   const [lipSyncBusy, setLipSyncBusy] = useState(false);
   const [timelineBusy, setTimelineBusy] = useState(false);
   const [qaBusy, setQaBusy] = useState(false);
@@ -35,6 +36,14 @@ export default function ChildrenProductionStudio() {
   const [error, setError] = useState('');
 
   const characterList = () => characters.split(',').map(x => x.trim()).filter(Boolean);
+
+  useEffect(() => {
+    let active = true;
+    void api.get('/api/children/generation-capabilities')
+      .then(response => { if (active) setGenerationCapabilities(response.data); })
+      .catch(() => { if (active) setGenerationCapabilities(null); });
+    return () => { active = false; };
+  }, []);
 
   const createStory = async () => {
     if (!idea.trim() || busy) return;
@@ -202,6 +211,18 @@ export default function ChildrenProductionStudio() {
 
         </div>
       </div>
+
+      {generationCapabilities && (
+        <article className="video-card">
+          <span className="card-label">MEDIA PROVIDER CAPABILITIES</span>
+          <h3>Generation layer connected to concrete provider models</h3>
+          <p>Planning only until provider credentials are configured in JARVIS. No media job is submitted from this status check.</p>
+          <div style={{display:'grid',gap:8}}>
+            <div><b>Higgsfield:</b> {generationCapabilities.providers?.higgsfield?.imageModel} → {generationCapabilities.providers?.higgsfield?.motionModel} → {generationCapabilities.providers?.higgsfield?.lipSyncModel}</div>
+            <div><b>ElevenLabs:</b> {generationCapabilities.providers?.elevenlabs?.speechModel}</div>
+          </div>
+        </article>
+      )}
 
       {error && <div className="security-result">{error}</div>}
 
