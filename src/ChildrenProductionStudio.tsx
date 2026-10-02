@@ -21,9 +21,11 @@ export default function ChildrenProductionStudio() {
   const [lipSyncPlan, setLipSyncPlan] = useState<any>(null);
   const [timeline, setTimeline] = useState<any>(null);
   const [qa, setQa] = useState<any>(null);
+  const [generationPlan, setGenerationPlan] = useState<any>(null);
   const [lipSyncBusy, setLipSyncBusy] = useState(false);
   const [timelineBusy, setTimelineBusy] = useState(false);
   const [qaBusy, setQaBusy] = useState(false);
+  const [generationBusy, setGenerationBusy] = useState(false);
   const [visualBusy, setVisualBusy] = useState(false);
   const [audioBusy, setAudioBusy] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -142,6 +144,19 @@ export default function ChildrenProductionStudio() {
     finally { setQaBusy(false); }
   };
 
+  const prepareGeneration = async () => {
+    if (!scenes.length || generationBusy) return;
+    setGenerationBusy(true); setError('');
+    try {
+      const response = await api.post('/api/children/generation-plan', {
+        title: story?.title, ageRange, format, scenes, visualPlan, audioPlan, lipSyncPlan, qa,
+      });
+      setGenerationPlan(response.data);
+    } catch (e: any) {
+      setError(e?.response?.data?.error || 'Generation preparation is temporarily unavailable.');
+    } finally { setGenerationBusy(false); }
+  };
+
   const checkContinuity = async () => {
     if (!scenes.length || !characterBible?.characters?.length || continuityBusy) return;
     setContinuityBusy(true); setError('');
@@ -183,6 +198,8 @@ export default function ChildrenProductionStudio() {
           <button className="security-secondary" onClick={()=>void buildLipSync()} disabled={lipSyncBusy || !scenes.length}>{lipSyncBusy ? 'Planning Lip-Sync...' : 'Build Lip-Sync Plan'}</button>
           <button className="security-secondary" onClick={()=>void buildTimeline()} disabled={timelineBusy || !scenes.length}>{timelineBusy ? 'Building Timeline...' : 'Build Timeline'}</button>
           <button className="security-secondary" onClick={()=>void runQa()} disabled={qaBusy}>{qaBusy ? 'Checking QA...' : 'Run Production QA'}</button>
+          <button className="security-secondary" onClick={()=>void prepareGeneration()} disabled={generationBusy || !scenes.length}>{generationBusy ? 'Preparing...' : 'Prepare Media Generation'}</button>
+
         </div>
       </div>
 
@@ -279,6 +296,24 @@ export default function ChildrenProductionStudio() {
 
       {qa && (
         <article className="video-card"><span className="card-label">PRODUCTION QA GATE</span><h3>{qa.status === 'ready_for_generation' ? 'Ready for generation' : 'Needs review'}</h3><p>{qa.issues?.length || 0} blocking issue(s) · {qa.warnings?.length || 0} warning(s)</p>{qa.issues?.map((x:string,i:number)=><div key={i} style={{padding:8,border:'1px solid #21445b',borderRadius:8,marginTop:6}}>{x}</div>)}<small>{qa.note}</small></article>
+      )}
+
+      {generationPlan?.jobs?.length > 0 && (
+        <article className="video-card">
+          <span className="card-label">MEDIA GENERATION GATE</span>
+          <h3>Generation prepared — not executed</h3>
+          <p>Higgsfield: {generationPlan.providers?.higgsfield} · ElevenLabs: {generationPlan.providers?.elevenlabs}</p>
+          <div style={{display:'grid',gap:8}}>
+            {generationPlan.jobs.map((job:any) => (
+              <div key={job.sceneNumber} style={{padding:10,border:'1px solid #21445b',borderRadius:8}}>
+                <b>Scene {job.sceneNumber}</b>
+                <p>Visual: {job.visual?.status} · Audio: {job.audio?.status} · Lip-sync: {job.lipSync?.status}</p>
+                <small>Execution: {job.execution}</small>
+              </div>
+            ))}
+          </div>
+          <small>Preparation creates safe provider jobs only. No media is claimed as generated until a connected provider confirms a result.</small>
+        </article>
       )}
 
       {continuity && (
