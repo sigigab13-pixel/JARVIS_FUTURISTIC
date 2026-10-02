@@ -14,23 +14,25 @@ export default function ChildrenProductionStudio() {
   const [story, setStory] = useState<any>(null);
   const [pack, setPack] = useState<any>(null);
   const [scenes, setScenes] = useState<any[]>([]);
+  const [characterBible, setCharacterBible] = useState<any>(null);
+  const [continuity, setContinuity] = useState<any>(null);
   const [busy, setBusy] = useState(false);
   const [sceneBusy, setSceneBusy] = useState(false);
+  const [characterBusy, setCharacterBusy] = useState(false);
+  const [continuityBusy, setContinuityBusy] = useState(false);
   const [error, setError] = useState('');
 
   const characterList = () => characters.split(',').map(x => x.trim()).filter(Boolean);
 
   const createStory = async () => {
     if (!idea.trim() || busy) return;
-    setBusy(true);
-    setError('');
+    setBusy(true); setError('');
     try {
       const response = await api.post('/api/children/story', {
         idea, genre, ageRange, lesson, characters: characterList(), length: 'medium',
       });
       setStory(response.data);
-      setPack(null);
-      setScenes([]);
+      setPack(null); setScenes([]); setCharacterBible(null); setContinuity(null);
     } catch (e: any) {
       setError(e?.response?.data?.error || 'Story creation is temporarily unavailable.');
     } finally { setBusy(false); }
@@ -38,14 +40,10 @@ export default function ChildrenProductionStudio() {
 
   const buildPack = async () => {
     if (!story?.content || busy) return;
-    setBusy(true);
-    setError('');
+    setBusy(true); setError('');
     try {
       const response = await api.post('/api/children/story-pack', {
-        title: story.title,
-        story: story.content,
-        genre,
-        ageRange,
+        title: story.title, story: story.content, genre, ageRange,
         characters: characterList(),
         productionTypes: ['full episode', 'short clip', 'rhyme', 'educational clip'],
       });
@@ -55,23 +53,46 @@ export default function ChildrenProductionStudio() {
     } finally { setBusy(false); }
   };
 
+  const buildCharacters = async () => {
+    if (!story?.content || characterBusy) return;
+    setCharacterBusy(true); setError('');
+    try {
+      const response = await api.post('/api/children/characters', {
+        title: story.title, masterStory: story.content, ageRange, characters: characterList(),
+      });
+      setCharacterBible(response.data);
+      setContinuity(null);
+    } catch (e: any) {
+      setError(e?.response?.data?.error || 'Character Bible is temporarily unavailable.');
+    } finally { setCharacterBusy(false); }
+  };
+
   const buildScenes = async () => {
     if (!story?.content || sceneBusy) return;
-    setSceneBusy(true);
-    setError('');
+    setSceneBusy(true); setError('');
     try {
       const response = await api.post('/api/children/scenes', {
-        title: story.title,
-        masterStory: story.content,
-        genre,
-        ageRange,
-        characters: characterList(),
-        sceneCount: 6,
+        title: story.title, masterStory: story.content, genre, ageRange,
+        characters: characterList(), sceneCount: 6,
       });
       setScenes(Array.isArray(response.data?.scenes) ? response.data.scenes : []);
+      setContinuity(null);
     } catch (e: any) {
       setError(e?.response?.data?.error || 'Scene Director is temporarily unavailable.');
     } finally { setSceneBusy(false); }
+  };
+
+  const checkContinuity = async () => {
+    if (!scenes.length || !characterBible?.characters?.length || continuityBusy) return;
+    setContinuityBusy(true); setError('');
+    try {
+      const response = await api.post('/api/children/continuity', {
+        scenes, characters: characterBible.characters,
+      });
+      setContinuity(response.data);
+    } catch (e: any) {
+      setError(e?.response?.data?.error || 'Continuity check is temporarily unavailable.');
+    } finally { setContinuityBusy(false); }
   };
 
   return (
@@ -94,7 +115,9 @@ export default function ChildrenProductionStudio() {
         <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
           <button className="security-primary" onClick={()=>void createStory()} disabled={busy || !idea.trim()}>{busy ? 'Working...' : 'Create Story'}</button>
           <button className="security-secondary" onClick={()=>void buildPack()} disabled={busy || !story?.content}>Build Story Pack</button>
+          <button className="security-secondary" onClick={()=>void buildCharacters()} disabled={characterBusy || !story?.content}>{characterBusy ? 'Building...' : 'Build Character Bible'}</button>
           <button className="security-secondary" onClick={()=>void buildScenes()} disabled={sceneBusy || !story?.content}>{sceneBusy ? 'Directing...' : 'Build Scenes'}</button>
+          <button className="security-secondary" onClick={()=>void checkContinuity()} disabled={continuityBusy || !scenes.length || !characterBible?.characters?.length}>{continuityBusy ? 'Checking...' : 'Check Continuity'}</button>
         </div>
       </div>
 
@@ -105,6 +128,25 @@ export default function ChildrenProductionStudio() {
           <span className="card-label">MASTER STORY</span>
           <h3>{story.title}</h3>
           <p style={{whiteSpace:'pre-wrap'}}>{story.content}</p>
+        </article>
+      )}
+
+      {characterBible?.characters?.length > 0 && (
+        <article className="video-card">
+          <span className="card-label">CHARACTER BIBLE</span>
+          <h3>{characterBible.characters.length} locked character profiles</h3>
+          <div style={{display:'grid',gap:10}}>
+            {characterBible.characters.map((character:any) => (
+              <div key={character.id} style={{padding:12,border:'1px solid #21445b',borderRadius:10}}>
+                <b>{character.name}</b> <small>· {character.role}</small>
+                <p><b>Personality:</b> {character.personality || 'planned'}</p>
+                <p><b>Appearance:</b> {character.appearance || 'planned'}</p>
+                <p><b>Clothing:</b> {character.clothing || 'planned'}</p>
+                <p><b>Voice:</b> {character.voiceDirection || 'planned'}</p>
+                <small>Identity lock: {character.identityLock}</small>
+              </div>
+            ))}
+          </div>
         </article>
       )}
 
@@ -142,7 +184,25 @@ export default function ChildrenProductionStudio() {
         </article>
       )}
 
-      <p style={{opacity:.72}}>Planning is separated from generation. JARVIS will not claim that a video has been rendered or published until a connected service confirms it.</p>
+      {continuity && (
+        <article className="video-card">
+          <span className="card-label">CONTINUITY GUARD</span>
+          <h3>{continuity.status === 'planned_ok' ? 'No text-level continuity issues found' : 'Review continuity flags'}</h3>
+          <p>Checked {continuity.checkedScenes} scenes against {continuity.checkedCharacters} character profiles.</p>
+          {continuity.issues?.length > 0 && (
+            <div style={{display:'grid',gap:8}}>
+              {continuity.issues.map((issue:any, index:number) => (
+                <div key={index} style={{padding:10,border:'1px solid #21445b',borderRadius:8}}>
+                  Scene {issue.sceneNumber || '—'} · {issue.character || 'Continuity'}: {issue.issue}
+                </div>
+              ))}
+            </div>
+          )}
+          <small>{continuity.note}</small>
+        </article>
+      )}
+
+      <p style={{opacity:.72}}>Planning is separated from generation. JARVIS will not claim that a video has been rendered or published until a connected service confirms it. Continuity checks are text-level until a visual generation service is connected.</p>
     </section>
   );
 }
