@@ -328,8 +328,8 @@ export default function ChildrenProductionStudio() {
             {generationPlan.jobs.map((job:any) => (
               <div key={job.sceneNumber} style={{padding:10,border:'1px solid #21445b',borderRadius:8}}>
                 <b>Scene {job.sceneNumber}</b>
-                <p>Visual: {job.visual?.status} · Audio: {job.audio?.status} · Lip-sync: {job.lipSync?.status}</p>
-                <small>Execution: {job.execution}</small>
+                <p>Image: {job.image?.status} · Visual: {job.visual?.status} · Audio: {job.audio?.status} · Lip-sync: {job.lipSync?.status}</p>
+                <small>Execution — Image: {job.image?.execution || 'not_started'} · Visual: {job.visual?.execution || 'not_started'} · Audio: {job.audio?.execution || 'not_started'} · Lip-sync: {job.lipSync?.execution || 'not_started'}</small>
               </div>
             ))}
           </div>
