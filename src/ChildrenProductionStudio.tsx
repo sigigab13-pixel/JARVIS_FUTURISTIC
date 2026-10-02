@@ -18,6 +18,12 @@ export default function ChildrenProductionStudio() {
   const [continuity, setContinuity] = useState<any>(null);
   const [visualPlan, setVisualPlan] = useState<any>(null);
   const [audioPlan, setAudioPlan] = useState<any>(null);
+  const [lipSyncPlan, setLipSyncPlan] = useState<any>(null);
+  const [timeline, setTimeline] = useState<any>(null);
+  const [qa, setQa] = useState<any>(null);
+  const [lipSyncBusy, setLipSyncBusy] = useState(false);
+  const [timelineBusy, setTimelineBusy] = useState(false);
+  const [qaBusy, setQaBusy] = useState(false);
   const [visualBusy, setVisualBusy] = useState(false);
   const [audioBusy, setAudioBusy] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -106,6 +112,36 @@ export default function ChildrenProductionStudio() {
     finally { setAudioBusy(false); }
   };
 
+  const buildLipSync = async () => {
+    if (!scenes.length || lipSyncBusy) return;
+    setLipSyncBusy(true); setError('');
+    try {
+      const response = await api.post('/api/children/lipsync', { title: story?.title, scenes, characters: characterBible?.characters || characterList(), ageRange });
+      setLipSyncPlan(response.data);
+    } catch (e: any) { setError(e?.response?.data?.error || 'Lip-sync planning is temporarily unavailable.'); }
+    finally { setLipSyncBusy(false); }
+  };
+
+  const buildTimeline = async () => {
+    if (!scenes.length || timelineBusy) return;
+    setTimelineBusy(true); setError('');
+    try {
+      const response = await api.post('/api/children/timeline', { title: story?.title, scenes, audioPlan, lipSyncPlan, format });
+      setTimeline(response.data);
+    } catch (e: any) { setError(e?.response?.data?.error || 'Timeline planning is temporarily unavailable.'); }
+    finally { setTimelineBusy(false); }
+  };
+
+  const runQa = async () => {
+    if (qaBusy) return;
+    setQaBusy(true); setError('');
+    try {
+      const response = await api.post('/api/children/qa', { story, characterBible, scenes, visualPlan, audioPlan, lipSyncPlan, timeline, pack });
+      setQa(response.data);
+    } catch (e: any) { setError(e?.response?.data?.error || 'Production QA is temporarily unavailable.'); }
+    finally { setQaBusy(false); }
+  };
+
   const checkContinuity = async () => {
     if (!scenes.length || !characterBible?.characters?.length || continuityBusy) return;
     setContinuityBusy(true); setError('');
@@ -144,6 +180,9 @@ export default function ChildrenProductionStudio() {
           <button className="security-secondary" onClick={()=>void checkContinuity()} disabled={continuityBusy || !scenes.length || !characterBible?.characters?.length}>{continuityBusy ? 'Checking...' : 'Check Continuity'}</button>
           <button className="security-secondary" onClick={()=>void buildVisualPlan()} disabled={visualBusy || !scenes.length}>{visualBusy ? 'Planning Visuals...' : 'Build Visual Plan'}</button>
           <button className="security-secondary" onClick={()=>void buildAudioPlan()} disabled={audioBusy || !scenes.length}>{audioBusy ? 'Planning Audio...' : 'Build Voice / Audio Plan'}</button>
+          <button className="security-secondary" onClick={()=>void buildLipSync()} disabled={lipSyncBusy || !scenes.length}>{lipSyncBusy ? 'Planning Lip-Sync...' : 'Build Lip-Sync Plan'}</button>
+          <button className="security-secondary" onClick={()=>void buildTimeline()} disabled={timelineBusy || !scenes.length}>{timelineBusy ? 'Building Timeline...' : 'Build Timeline'}</button>
+          <button className="security-secondary" onClick={()=>void runQa()} disabled={qaBusy}>{qaBusy ? 'Checking QA...' : 'Run Production QA'}</button>
         </div>
       </div>
 
@@ -228,6 +267,18 @@ export default function ChildrenProductionStudio() {
             {audioPlan.scenes.map((a:any) => <div key={a.sceneNumber} style={{padding:10,border:'1px solid #21445b',borderRadius:8}}><b>Scene {a.sceneNumber}</b><p>Emotion: {a.emotion || 'planned'} · Pacing: {a.pacing || 'planned'}</p><p>Music: {a.musicMood || 'planned'}</p><small>Mix: {a.mixNotes || 'planned'}</small></div>)}
           </div>
         </article>
+      )}
+
+      {lipSyncPlan?.scenes?.length > 0 && (
+        <article className="video-card"><span className="card-label">LIP-SYNC DIRECTOR</span><h3>{lipSyncPlan.scenes.length} lip-sync plans</h3><div style={{display:'grid',gap:8}}>{lipSyncPlan.scenes.map((s:any)=><div key={s.sceneNumber} style={{padding:10,border:'1px solid #21445b',borderRadius:8}}><b>Scene {s.sceneNumber}</b><p>{s.segments?.length || 0} dialogue segments</p><small>Status: {lipSyncPlan.status}</small></div>)}</div></article>
+      )}
+
+      {timeline?.scenes?.length > 0 && (
+        <article className="video-card"><span className="card-label">EDIT / TIMELINE DIRECTOR</span><h3>{timeline.scenes.length} timeline scenes</h3><p>Sequence: {timeline.sequenceId}</p><p>Tracks: {timeline.tracks?.join(' · ')}</p><p><b>Render:</b> {timeline.render?.status} · <b>Publish:</b> {timeline.publish?.status}</p></article>
+      )}
+
+      {qa && (
+        <article className="video-card"><span className="card-label">PRODUCTION QA GATE</span><h3>{qa.status === 'ready_for_generation' ? 'Ready for generation' : 'Needs review'}</h3><p>{qa.issues?.length || 0} blocking issue(s) · {qa.warnings?.length || 0} warning(s)</p>{qa.issues?.map((x:string,i:number)=><div key={i} style={{padding:8,border:'1px solid #21445b',borderRadius:8,marginTop:6}}>{x}</div>)}<small>{qa.note}</small></article>
       )}
 
       {continuity && (
