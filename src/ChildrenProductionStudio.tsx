@@ -16,6 +16,10 @@ export default function ChildrenProductionStudio() {
   const [scenes, setScenes] = useState<any[]>([]);
   const [characterBible, setCharacterBible] = useState<any>(null);
   const [continuity, setContinuity] = useState<any>(null);
+  const [visualPlan, setVisualPlan] = useState<any>(null);
+  const [audioPlan, setAudioPlan] = useState<any>(null);
+  const [visualBusy, setVisualBusy] = useState(false);
+  const [audioBusy, setAudioBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [sceneBusy, setSceneBusy] = useState(false);
   const [characterBusy, setCharacterBusy] = useState(false);
@@ -82,6 +86,26 @@ export default function ChildrenProductionStudio() {
     } finally { setSceneBusy(false); }
   };
 
+  const buildVisualPlan = async () => {
+    if (!scenes.length || visualBusy) return;
+    setVisualBusy(true); setError('');
+    try {
+      const response = await api.post('/api/children/visual-motion', { title: story?.title, scenes, characters: characterBible?.characters || characterList(), format, ageRange });
+      setVisualPlan(response.data);
+    } catch (e: any) { setError(e?.response?.data?.error || 'Visual and motion planning is temporarily unavailable.'); }
+    finally { setVisualBusy(false); }
+  };
+
+  const buildAudioPlan = async () => {
+    if (!scenes.length || audioBusy) return;
+    setAudioBusy(true); setError('');
+    try {
+      const response = await api.post('/api/children/voice-audio', { title: story?.title, scenes, characters: characterBible?.characters || characterList(), ageRange, language: 'en' });
+      setAudioPlan(response.data);
+    } catch (e: any) { setError(e?.response?.data?.error || 'Voice and audio planning is temporarily unavailable.'); }
+    finally { setAudioBusy(false); }
+  };
+
   const checkContinuity = async () => {
     if (!scenes.length || !characterBible?.characters?.length || continuityBusy) return;
     setContinuityBusy(true); setError('');
@@ -118,6 +142,8 @@ export default function ChildrenProductionStudio() {
           <button className="security-secondary" onClick={()=>void buildCharacters()} disabled={characterBusy || !story?.content}>{characterBusy ? 'Building...' : 'Build Character Bible'}</button>
           <button className="security-secondary" onClick={()=>void buildScenes()} disabled={sceneBusy || !story?.content}>{sceneBusy ? 'Directing...' : 'Build Scenes'}</button>
           <button className="security-secondary" onClick={()=>void checkContinuity()} disabled={continuityBusy || !scenes.length || !characterBible?.characters?.length}>{continuityBusy ? 'Checking...' : 'Check Continuity'}</button>
+          <button className="security-secondary" onClick={()=>void buildVisualPlan()} disabled={visualBusy || !scenes.length}>{visualBusy ? 'Planning Visuals...' : 'Build Visual Plan'}</button>
+          <button className="security-secondary" onClick={()=>void buildAudioPlan()} disabled={audioBusy || !scenes.length}>{audioBusy ? 'Planning Audio...' : 'Build Voice / Audio Plan'}</button>
         </div>
       </div>
 
@@ -184,6 +210,26 @@ export default function ChildrenProductionStudio() {
         </article>
       )}
 
+      {visualPlan?.scenes?.length > 0 && (
+        <article className="video-card">
+          <span className="card-label">VISUAL + MOTION DIRECTOR</span>
+          <h3>{visualPlan.scenes.length} visual plans</h3>
+          <div style={{display:'grid',gap:8}}>
+            {visualPlan.scenes.map((v:any) => <div key={v.sceneNumber} style={{padding:10,border:'1px solid #21445b',borderRadius:8}}><b>Scene {v.sceneNumber}</b><p>Shot: {v.shotType} · Camera: {v.cameraMovement || 'planned'}</p><p>{v.composition}</p><small>Continuity: {v.continuityLock}</small></div>)}
+          </div>
+        </article>
+      )}
+
+      {audioPlan?.scenes?.length > 0 && (
+        <article className="video-card">
+          <span className="card-label">VOICE + AUDIO DIRECTOR</span>
+          <h3>{audioPlan.scenes.length} audio plans</h3>
+          <div style={{display:'grid',gap:8}}>
+            {audioPlan.scenes.map((a:any) => <div key={a.sceneNumber} style={{padding:10,border:'1px solid #21445b',borderRadius:8}}><b>Scene {a.sceneNumber}</b><p>Emotion: {a.emotion || 'planned'} · Pacing: {a.pacing || 'planned'}</p><p>Music: {a.musicMood || 'planned'}</p><small>Mix: {a.mixNotes || 'planned'}</small></div>)}
+          </div>
+        </article>
+      )}
+
       {continuity && (
         <article className="video-card">
           <span className="card-label">CONTINUITY GUARD</span>
@@ -202,7 +248,7 @@ export default function ChildrenProductionStudio() {
         </article>
       )}
 
-      <p style={{opacity:.72}}>Planning is separated from generation. JARVIS will not claim that a video has been rendered or published until a connected service confirms it. Continuity checks are text-level until a visual generation service is connected.</p>
+      <p style={{opacity:.72}}>Planning is separated from generation. JARVIS will not claim that a video, image, voice track, or audio track has been generated or published until a connected service confirms it. Visual planning, audio planning, and continuity checks are planning-layer operations until generation services are connected.</p>
     </section>
   );
 }
