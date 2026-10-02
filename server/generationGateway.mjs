@@ -163,7 +163,8 @@ export function recordProviderResult({ plan, sceneNumber, lane, providerJobId, s
   if (!job) throw new Error('Scene was not found in the generation plan.');
   if (!providerJobId) throw new Error('A confirmed provider job ID is required.');
   const laneState = job[lane] || {};
-  const safeStatus = ['completed', 'failed', 'canceled'].includes(status) ? status : 'completed';
+  const safeStatus = ['completed', 'failed', 'canceled'].includes(status) ? status : null;
+  if (!safeStatus) throw new Error('Provider result status must be completed, failed, or canceled.');
   laneState.execution = safeStatus;
   laneState.providerJobId = clean(providerJobId, 200);
   if (safeStatus === 'completed' && resultUrl) laneState.resultUrl = clean(resultUrl, 2000);
