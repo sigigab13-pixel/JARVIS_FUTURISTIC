@@ -115,8 +115,22 @@ export async function handleChildrenApi(req, res, pathname, body = {}) {
       return json(res, 200, await getHiggsfieldStatus(providerJobId));
     }
 
-    if (pathname === '/api/children/provider-result') {
-      return json(res, 200, recordProviderResult(body));
+    if (pathname === '/api/children/provider-sync') {
+      const providerJobId = String(body?.providerJobId || '').trim();
+      if (!providerJobId) return json(res, 400, { error: 'A provider job ID is required.' });
+      const provider = await getHiggsfieldStatus(providerJobId);
+      if (!['completed', 'failed', 'canceled'].includes(provider.status)) {
+        return json(res, 200, { provider, plan: body?.plan || null, executionUpdated: false });
+      }
+      const plan = recordProviderResult({
+        plan: body?.plan,
+        sceneNumber: body?.sceneNumber,
+        lane: body?.lane,
+        providerJobId,
+        status: provider.status,
+        resultUrl: provider.resultUrl,
+      });
+      return json(res, 200, { provider, plan, executionUpdated: true });
     }
 
     if (pathname === '/api/children/generation-plan') {
