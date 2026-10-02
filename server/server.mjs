@@ -38,6 +38,7 @@ import {
 } from './store.mjs';
 import { enqueueJob, isRedisConfigured } from './queue.mjs';
 import { createMediaKey, isSupabaseStorageConfigured, putMedia } from './media.mjs';
+import { handleChildrenApi } from './childrenApi.mjs';
 
 const PORT = Number(process.env.PORT || 10000);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -177,6 +178,11 @@ function safePath(urlPath) {
 }
 
 export async function handleApi(req, res, pathname, url) {
+  if (pathname.startsWith('/api/children/')) {
+    const body = req.method === 'POST' ? await parseBody(req) : {};
+    return handleChildrenApi(req, res, pathname, body);
+  }
+
   if (req.method === 'GET' && pathname === '/api/_healthcheck') {
     return json(res, 200, { message: 'Success', service: 'JARVIS', deployment: 'vercel' });
   }
