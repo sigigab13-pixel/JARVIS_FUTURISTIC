@@ -9,7 +9,8 @@ import { buildStoryPack, validateStoryPack } from './storyPack.mjs';
 import { buildTimelinePlan } from './timelineDirector.mjs';
 import { buildVisualMotionPrompt, normalizeVisualMotionPlan } from './visualMotionDirector.mjs';
 import { buildVoiceAudioPrompt, normalizeVoiceAudioPlan } from './voiceAudioDirector.mjs';
-import { buildGenerationPlan, buildExecutionStatus, getGenerationCapabilities } from './generationGateway.mjs';
+import { buildGenerationPlan, buildExecutionStatus, getGenerationCapabilities, recordProviderResult } from './generationGateway.mjs';
+import { getHiggsfieldExecutionCapabilities, submitHiggsfield, getHiggsfieldStatus } from './higgsfieldAdapter.mjs';
 
 const HF_URL = 'https://router.huggingface.co/v1/chat/completions';
 const HF_MODEL = process.env.HF_MODEL || 'openai/gpt-oss-120b:fastest';
@@ -89,6 +90,33 @@ export async function handleChildrenApi(req, res, pathname, body = {}) {
 
     if (pathname === '/api/children/execution-status') {
       return json(res, 200, buildExecutionStatus(body?.plan));
+    }
+
+    if (pathname === '/api/children/provider-capabilities') {
+      return json(res, 200, getHiggsfieldExecutionCapabilities());
+    }
+
+    if (pathname === '/api/children/provider-submit') {
+      if (body?.confirm !== true) return json(res, 400, { error: 'Provider execution requires explicit confirmation.' });
+      const lane = String(body?.lane || '').trim();
+      const result = await submitHiggsfield({
+        lane,
+        prompt: body?.prompt,
+        format: body?.format,
+        duration: body?.duration,
+        imageUrl: body?.imageUrl,
+      });
+      return json(res, 202, result);
+    }
+
+    if (pathname === '/api/children/provider-status') {
+      const providerJobId = String(body?.providerJobId || '').trim();
+      if (!providerJobId) return json(res, 400, { error: 'A provider job ID is required.' });
+      return json(res, 200, await getHiggsfieldStatus(providerJobId));
+    }
+
+    if (pathname === '/api/children/provider-result') {
+      return json(res, 200, recordProviderResult(body));
     }
 
     if (pathname === '/api/children/generation-plan') {
