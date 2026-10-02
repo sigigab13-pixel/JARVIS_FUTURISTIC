@@ -9,7 +9,7 @@ import { buildStoryPack, validateStoryPack } from './storyPack.mjs';
 import { buildTimelinePlan } from './timelineDirector.mjs';
 import { buildVisualMotionPrompt, normalizeVisualMotionPlan } from './visualMotionDirector.mjs';
 import { buildVoiceAudioPrompt, normalizeVoiceAudioPlan } from './voiceAudioDirector.mjs';
-import { buildGenerationPlan, getGenerationCapabilities } from './generationGateway.mjs';
+import { buildGenerationPlan, buildExecutionStatus, getGenerationCapabilities } from './generationGateway.mjs';
 
 const HF_URL = 'https://router.huggingface.co/v1/chat/completions';
 const HF_MODEL = process.env.HF_MODEL || 'openai/gpt-oss-120b:fastest';
@@ -57,7 +57,8 @@ async function callHf({ token, system, prompt, maxTokens, temperature }) {
 
 export async function handleChildrenApi(req, res, pathname, body = {}) {
   if (!pathname.startsWith('/api/children/')) return false;
-  if (req.method !== 'POST') {
+  const isCapabilitiesGet = pathname === '/api/children/generation-capabilities' && req.method === 'GET';
+  if (req.method !== 'POST' && !isCapabilitiesGet) {
     methodNotAllowed(res);
     return true;
   }
@@ -84,6 +85,10 @@ export async function handleChildrenApi(req, res, pathname, body = {}) {
 
     if (pathname === '/api/children/generation-capabilities') {
       return json(res, 200, getGenerationCapabilities());
+    }
+
+    if (pathname === '/api/children/execution-status') {
+      return json(res, 200, buildExecutionStatus(body?.plan));
     }
 
     if (pathname === '/api/children/generation-plan') {
