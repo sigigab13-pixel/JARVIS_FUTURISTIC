@@ -16,7 +16,7 @@ function safeText(value, max = 5000) {
 
 const PATHS = {
   image: process.env.HIGGSFIELD_IMAGE_PATH || 'marketing-studio/image/sunburst',
-  visual: process.env.HIGGSFIELD_VIDEO_PATH || 'bytedance/seedance-2.0/text-to-video',
+  visual: process.env.HIGGSFIELD_VIDEO_PATH || 'higgsfield/cinema-studio/4.0',
 };
 
 export function getHiggsfieldExecutionCapabilities() {
@@ -47,7 +47,7 @@ export async function submitHiggsfield({ lane, prompt, format = '16:9', duration
     body.moderation = 'auto';
     body.enhance_prompt = false;
   } else {
-    body.duration = Math.max(4, Math.min(15, Number(duration) || 5));
+    body.duration = Math.max(4, Math.min(30, Number(duration) || 5));
     body.resolution = '720p';
     body.generate_audio = false;
     if (imageUrl) body.image_url = safeText(imageUrl, 2000);
