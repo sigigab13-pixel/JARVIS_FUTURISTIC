@@ -25,7 +25,7 @@ function providerStatus() {
 export function getGenerationCapabilities() {
   const statuses = providerStatus();
   return {
-    version: '1.1',
+    version: '1.2',
     status: 'planning_ready',
     providers: {
       higgsfield: {
@@ -47,6 +47,7 @@ export function getGenerationCapabilities() {
       'Do not expose provider credentials to the browser.',
       'Do not mark media generated until a provider confirms a completed result.',
       'Keep each scene traceable to its story, character, audio, and QA inputs.',
+      'Provider execution is adapter-based; this service records confirmed results without inventing provider job IDs or URLs.',
     ],
   };
 }
@@ -120,7 +121,7 @@ export function buildGenerationPlan({
 
   const statuses = providerStatus();
   return {
-    version: '1.1',
+    version: '1.2',
     title: clean(title, 180),
     ageRange: clean(ageRange, 40),
     format: safeFormat,
@@ -134,4 +135,38 @@ export function buildGenerationPlan({
       'Only original, child-safe production plans may proceed.',
     ],
   };
+}
+
+export function buildExecutionStatus(plan) {
+  if (!plan || typeof plan !== 'object') throw new Error('A generation plan is required.');
+  const jobs = Array.isArray(plan.jobs) ? plan.jobs.slice(0, 20) : [];
+  return {
+    status: plan.status || 'unknown',
+    title: clean(plan.title, 180),
+    jobs: jobs.map(job => ({
+      sceneNumber: Number(job?.sceneNumber) || 0,
+      image: { status: job?.image?.status || 'unknown', execution: job?.image?.execution || 'not_started' },
+      visual: { status: job?.visual?.status || 'unknown', execution: job?.visual?.execution || 'not_started' },
+      audio: { status: job?.audio?.status || 'unknown', execution: job?.audio?.execution || 'not_started' },
+      lipSync: { status: job?.lipSync?.status || 'unknown', execution: job?.lipSync?.execution || 'not_started' },
+    })),
+    rule: 'Only a confirmed provider result may move execution from not_started to completed.',
+  };
+}
+
+export function recordProviderResult({ plan, sceneNumber, lane, providerJobId, status = 'completed', resultUrl = '' }) {
+  if (!plan || typeof plan !== 'object') throw new Error('A generation plan is required.');
+  const allowedLanes = ['image', 'visual', 'audio', 'lipSync'];
+  if (!allowedLanes.includes(lane)) throw new Error('Invalid generation lane.');
+  const jobs = Array.isArray(plan.jobs) ? plan.jobs : [];
+  const job = jobs.find(item => Number(item?.sceneNumber) === Number(sceneNumber));
+  if (!job) throw new Error('Scene was not found in the generation plan.');
+  if (!providerJobId) throw new Error('A confirmed provider job ID is required.');
+  const laneState = job[lane] || {};
+  const safeStatus = ['completed', 'failed', 'canceled'].includes(status) ? status : 'completed';
+  laneState.execution = safeStatus;
+  laneState.providerJobId = clean(providerJobId, 200);
+  if (safeStatus === 'completed' && resultUrl) laneState.resultUrl = clean(resultUrl, 2000);
+  job[lane] = laneState;
+  return { ...plan, status: 'execution_updated', jobs };
 }
