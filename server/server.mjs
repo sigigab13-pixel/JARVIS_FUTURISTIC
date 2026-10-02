@@ -180,6 +180,10 @@ function safePath(urlPath) {
 export async function handleApi(req, res, pathname, url) {
   if (pathname.startsWith('/api/children/')) {
     const body = req.method === 'POST' ? await parseBody(req) : {};
+    const protectedProviderRoute = /^\/api\/children\/(provider-submit|provider-status|provider-sync)$/.test(pathname);
+    if (protectedProviderRoute) {
+      await requireAuthenticatedJarvisUser(req);
+    }
     return handleChildrenApi(req, res, pathname, body);
   }
 
