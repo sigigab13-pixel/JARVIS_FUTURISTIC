@@ -13,8 +13,12 @@ export default function ChildrenProductionStudio() {
   const [format, setFormat] = useState('16:9');
   const [story, setStory] = useState<any>(null);
   const [pack, setPack] = useState<any>(null);
+  const [scenes, setScenes] = useState<any[]>([]);
   const [busy, setBusy] = useState(false);
+  const [sceneBusy, setSceneBusy] = useState(false);
   const [error, setError] = useState('');
+
+  const characterList = () => characters.split(',').map(x => x.trim()).filter(Boolean);
 
   const createStory = async () => {
     if (!idea.trim() || busy) return;
@@ -22,19 +26,14 @@ export default function ChildrenProductionStudio() {
     setError('');
     try {
       const response = await api.post('/api/children/story', {
-        idea,
-        genre,
-        ageRange,
-        lesson,
-        characters: characters.split(',').map(x => x.trim()).filter(Boolean),
-        length: 'medium',
+        idea, genre, ageRange, lesson, characters: characterList(), length: 'medium',
       });
       setStory(response.data);
+      setPack(null);
+      setScenes([]);
     } catch (e: any) {
       setError(e?.response?.data?.error || 'Story creation is temporarily unavailable.');
-    } finally {
-      setBusy(false);
-    }
+    } finally { setBusy(false); }
   };
 
   const buildPack = async () => {
@@ -47,15 +46,32 @@ export default function ChildrenProductionStudio() {
         story: story.content,
         genre,
         ageRange,
-        characters: characters.split(',').map(x => x.trim()).filter(Boolean),
+        characters: characterList(),
         productionTypes: ['full episode', 'short clip', 'rhyme', 'educational clip'],
       });
       setPack(response.data);
     } catch (e: any) {
       setError(e?.response?.data?.error || 'Story Pack creation is temporarily unavailable.');
-    } finally {
-      setBusy(false);
-    }
+    } finally { setBusy(false); }
+  };
+
+  const buildScenes = async () => {
+    if (!story?.content || sceneBusy) return;
+    setSceneBusy(true);
+    setError('');
+    try {
+      const response = await api.post('/api/children/scenes', {
+        title: story.title,
+        masterStory: story.content,
+        genre,
+        ageRange,
+        characters: characterList(),
+        sceneCount: 6,
+      });
+      setScenes(Array.isArray(response.data?.scenes) ? response.data.scenes : []);
+    } catch (e: any) {
+      setError(e?.response?.data?.error || 'Scene Director is temporarily unavailable.');
+    } finally { setSceneBusy(false); }
   };
 
   return (
@@ -78,6 +94,7 @@ export default function ChildrenProductionStudio() {
         <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
           <button className="security-primary" onClick={()=>void createStory()} disabled={busy || !idea.trim()}>{busy ? 'Working...' : 'Create Story'}</button>
           <button className="security-secondary" onClick={()=>void buildPack()} disabled={busy || !story?.content}>Build Story Pack</button>
+          <button className="security-secondary" onClick={()=>void buildScenes()} disabled={sceneBusy || !story?.content}>{sceneBusy ? 'Directing...' : 'Build Scenes'}</button>
         </div>
       </div>
 
@@ -104,9 +121,28 @@ export default function ChildrenProductionStudio() {
             ].map(([n,label])=><div key={n}><b>{n}</b><span>{label}</span></div>)}
           </div>
           <p><b>Render:</b> {pack.render?.status || 'not_started'} · <b>Publish:</b> {pack.publish?.status || 'not_started'}</p>
-          <p>JARVIS is planning these outputs. Rendering and publishing require connected services and confirmation.</p>
         </article>
       )}
+
+      {scenes.length > 0 && (
+        <article className="video-card">
+          <span className="card-label">SCENE DIRECTOR</span>
+          <h3>{scenes.length} planned scenes</h3>
+          <div style={{display:'grid',gap:10}}>
+            {scenes.map(scene => (
+              <div key={scene.sceneNumber} style={{padding:12,border:'1px solid #21445b',borderRadius:10}}>
+                <b>Scene {scene.sceneNumber}: {scene.title}</b>
+                <p>{scene.setting}</p>
+                <p><b>Action:</b> {scene.action}</p>
+                {scene.dialogue && <p><b>Dialogue:</b> {scene.dialogue}</p>}
+                <small>Visual: {scene.visualPlan || 'planned'} · Lip-sync: {scene.lipSyncPlan?.status || 'planned'}</small>
+              </div>
+            ))}
+          </div>
+        </article>
+      )}
+
+      <p style={{opacity:.72}}>Planning is separated from generation. JARVIS will not claim that a video has been rendered or published until a connected service confirms it.</p>
     </section>
   );
 }
