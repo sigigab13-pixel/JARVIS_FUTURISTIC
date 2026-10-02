@@ -9,6 +9,7 @@ import { buildStoryPack, validateStoryPack } from './storyPack.mjs';
 import { buildTimelinePlan } from './timelineDirector.mjs';
 import { buildVisualMotionPrompt, normalizeVisualMotionPlan } from './visualMotionDirector.mjs';
 import { buildVoiceAudioPrompt, normalizeVoiceAudioPlan } from './voiceAudioDirector.mjs';
+import { buildGenerationPlan } from './generationGateway.mjs';
 
 const HF_URL = 'https://router.huggingface.co/v1/chat/completions';
 const HF_MODEL = process.env.HF_MODEL || 'openai/gpt-oss-120b:fastest';
@@ -79,6 +80,10 @@ export async function handleChildrenApi(req, res, pathname, body = {}) {
 
     if (pathname === '/api/children/qa') {
       return json(res, 200, runProductionQa(body));
+    }
+
+    if (pathname === '/api/children/generation-plan') {
+      return json(res, 200, buildGenerationPlan(body));
     }
 
     const token = process.env.HUGGINGFACE_API_TOKEN || process.env.HF_TOKEN || '';
