@@ -27,6 +27,8 @@ export default function ChildrenProductionStudio() {
   const [timelineBusy, setTimelineBusy] = useState(false);
   const [qaBusy, setQaBusy] = useState(false);
   const [generationBusy, setGenerationBusy] = useState(false);
+  const [executionStatus, setExecutionStatus] = useState<any>(null);
+  const [executionBusy, setExecutionBusy] = useState(false);
   const [visualBusy, setVisualBusy] = useState(false);
   const [audioBusy, setAudioBusy] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -166,6 +168,17 @@ export default function ChildrenProductionStudio() {
     } finally { setGenerationBusy(false); }
   };
 
+  const checkExecutionStatus = async () => {
+    if (!generationPlan || executionBusy) return;
+    setExecutionBusy(true); setError('');
+    try {
+      const response = await api.post('/api/children/execution-status', { plan: generationPlan });
+      setExecutionStatus(response.data);
+    } catch (e: any) {
+      setError(e?.response?.data?.error || 'Execution status is temporarily unavailable.');
+    } finally { setExecutionBusy(false); }
+  };
+
   const checkContinuity = async () => {
     if (!scenes.length || !characterBible?.characters?.length || continuityBusy) return;
     setContinuityBusy(true); setError('');
@@ -208,6 +221,7 @@ export default function ChildrenProductionStudio() {
           <button className="security-secondary" onClick={()=>void buildTimeline()} disabled={timelineBusy || !scenes.length}>{timelineBusy ? 'Building Timeline...' : 'Build Timeline'}</button>
           <button className="security-secondary" onClick={()=>void runQa()} disabled={qaBusy}>{qaBusy ? 'Checking QA...' : 'Run Production QA'}</button>
           <button className="security-secondary" onClick={()=>void prepareGeneration()} disabled={generationBusy || !scenes.length}>{generationBusy ? 'Preparing...' : 'Prepare Media Generation'}</button>
+          <button className="security-secondary" onClick={()=>void checkExecutionStatus()} disabled={executionBusy || !generationPlan}>{executionBusy ? 'Checking...' : 'Check Execution Status'}</button>
 
         </div>
       </div>
@@ -334,6 +348,22 @@ export default function ChildrenProductionStudio() {
             ))}
           </div>
           <small>Preparation creates safe provider jobs only. No media is claimed as generated until a connected provider confirms a result.</small>
+        </article>
+      )}
+
+      {executionStatus && (
+        <article className="video-card">
+          <span className="card-label">EXECUTION STATUS</span>
+          <h3>{executionStatus.status}</h3>
+          <div style={{display:'grid',gap:8}}>
+            {executionStatus.jobs?.map((job:any) => (
+              <div key={job.sceneNumber} style={{padding:10,border:'1px solid #21445b',borderRadius:8}}>
+                <b>Scene {job.sceneNumber}</b>
+                <p>Image: {job.image?.execution} · Video: {job.visual?.execution} · Audio: {job.audio?.execution} · Lip-sync: {job.lipSync?.execution}</p>
+              </div>
+            ))}
+          </div>
+          <small>{executionStatus.rule}</small>
         </article>
       )}
 
