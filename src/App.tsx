@@ -48,8 +48,8 @@ function safeText(value: unknown, fallback = ''): string {
   return String(value);
 }
 
-function normalizeMessages(value: unknown): Message[] {
-  if (!Array.isArray(value)) return starter;
+function normalizeMessages(value: unknown, fallback: Message[] = starter): Message[] {
+  if (!Array.isArray(value)) return fallback;
   return value
     .map((item: any) => {
       if (item?.role !== 'user' && item?.role !== 'assistant') return null;
@@ -175,9 +175,8 @@ function App() {
     const historyKey = `jarvis-history:${String(authUser.id || authUser.email || 'user')}`;
     try {
       const saved = localStorage.getItem(historyKey);
-      setMessages(saved ? normalizeMessages(JSON.parse(saved)) : makeStarter(displayName));
-      if (session?.user?.id) localStorage.removeItem(`jarvis-history:${session.user.id}`);
-    localStorage.removeItem('jarvis-history');
+      setMessages(saved ? normalizeMessages(JSON.parse(saved), makeStarter(displayName)) : makeStarter(displayName));
+      localStorage.removeItem('jarvis-history');
     } catch {
       setMessages(makeStarter(displayName));
     }
@@ -471,6 +470,7 @@ function App() {
   };
 
   const clearMemory = () => {
+    if (session?.user?.id) localStorage.removeItem(`jarvis-history:${session.user.id}`);
     localStorage.removeItem('jarvis-history');
     audioRef.current?.pause();
     audioRef.current = null;
