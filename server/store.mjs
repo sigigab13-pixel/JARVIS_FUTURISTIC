@@ -9,6 +9,8 @@ const memory = {
   youtube: null,
   users: new Map(),
   conversations: new Map(),
+  missions: new Map(),
+  missionEvents: new Map(),
 };
 
 export function persistenceMode() {
@@ -643,4 +645,177 @@ export async function queueVideoJobForUser(userId, projectId, payload = {}) {
     }),
   });
   return rows?.[0] || null;
+}
+
+function missionStateFromRow(row) {
+  if (!row) return null;
+  return {
+    id: String(row.id || ''),
+    userId: row.user_id ? String(row.user_id) : null,
+    goal: String(row.goal || ''),
+    autonomy: String(row.autonomy || 'advise'),
+    status: String(row.status || 'draft'),
+    currentStep: Number(row.current_step ?? -1),
+    steps: Array.isArray(row.steps) ? row.steps : [],
+    approval: row.approval && typeof row.approval === 'object' ? row.approval : {},
+    lastEvidence: row.last_evidence && typeof row.last_evidence === 'object' ? row.last_evidence : {},
+    metadata: row.metadata && typeof row.metadata === 'object' ? row.metadata : {},
+    createdAt: row.created_at || new Date().toISOString(),
+    updatedAt: row.updated_at || new Date().toISOString(),
+    completedAt: row.completed_at || null,
+  };
+}
+
+function missionEventFromRow(row) {
+  if (!row) return null;
+  return {
+    id: String(row.id || ''),
+    missionId: String(row.mission_id || ''),
+    userId: String(row.user_id || ''),
+    eventType: String(row.event_type || ''),
+    fromStatus: row.from_status || null,
+    toStatus: row.to_status || null,
+    message: row.message || null,
+    metadata: row.metadata && typeof row.metadata === 'object' ? row.metadata : {},
+    createdAt: row.created_at || null,
+  };
+}
+
+export async function createMissionForUser(userId, state) {
+  if (!validUuid(userId)) throw new Error('Invalid JARVIS user id.');
+  const mission = {
+    ...state,
+    id: String(state?.id || crypto.randomUUID()),
+    userId,
+    createdAt: state?.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  const storage = normalizeMissionForStorage(mission);
+  if (!configured) {
+    const local = missionStateFromRow({ id: mission.id, user_id: userId, ...storage });
+    memory.missions.set(userId + ':' + mission.id, local);
+    memory.missionEvents.set(userId + ':' + mission.id, [{
+      id: crypto.randomUUID(), missionId: mission.id, userId,
+      eventType: 'mission.created', fromStatus: null, toStatus: local.status,
+      message: 'Mission created.', metadata: {}, createdAt: new Date().toISOString(),
+    }]);
+    return local;
+  }
+  const rows = await request('jarvis_missions', {
+    method: 'POST',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify({
+      id: mission.id, user_id: userId, goal: storage.goal, autonomy: storage.autonomy,
+      status: storage.status, current_step: storage.current_step, steps: storage.steps,
+      approval: storage.approval, last_evidence: storage.last_evidence, metadata: storage.metadata,
+      created_at: storage.created_at, updated_at: storage.updated_at, completed_at: storage.completed_at,
+    }),
+  });
+  const created = missionStateFromRow(rows?.[0] || { id: mission.id, user_id: userId, ...storage });
+  await recordMissionEventForUser(userId, created.id, {
+    eventType: 'mission.created', toStatus: created.status, message: 'Mission created.',
+  });
+  return created;
+}
+
+export async function getMissionForUser(userId, missionId) {
+  if (!validUuid(userId) || !validUuid(missionId)) throw new Error('Invalid mission identity.');
+  if (!configured) return memory.missions.get(userId + ':' + missionId) || null;
+  const rows = await request(
+    'jarvis_missions?select=*&id=eq.' + encodeURIComponent(missionId) +
+    '&user_id=eq.' + encodeURIComponent(userId) + '&limit=1'
+  );
+  return missionStateFromRow(rows?.[0] || null);
+}
+
+export async function listMissionsForUser(userId, limit = 20) {
+  if (!validUuid(userId)) throw new Error('Invalid JARVIS user id.');
+  const safeLimit = Math.min(100, Math.max(1, Number(limit) || 20));
+  if (!configured) {
+    return [...memory.missions.values()]
+      .filter(mission => mission.userId === userId)
+      .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)))
+      .slice(0, safeLimit);
+  }
+  const rows = await request(
+    'jarvis_missions?select=*&user_id=eq.' + encodeURIComponent(userId) +
+    '&order=updated_at.desc&limit=' + safeLimit
+  );
+  return (rows || []).map(missionStateFromRow).filter(Boolean);
+}
+
+export async function updateMissionForUser(userId, missionId, state, event = {}) {
+  if (!validUuid(userId) || !validUuid(missionId)) throw new Error('Invalid mission identity.');
+  const existing = await getMissionForUser(userId, missionId);
+  if (!existing) throw Object.assign(new Error('Mission not found.'), { statusCode: 404 });
+  const mission = { ...state, id: missionId, userId, createdAt: existing.createdAt, updatedAt: new Date().toISOString() };
+  const storage = normalizeMissionForStorage(mission);
+  if (!configured) {
+    const local = missionStateFromRow({ id: missionId, user_id: userId, ...storage });
+    memory.missions.set(userId + ':' + missionId, local);
+    if (event?.eventType) await recordMissionEventForUser(userId, missionId, {
+      ...event, fromStatus: event.fromStatus ?? existing.status, toStatus: event.toStatus ?? local.status,
+    });
+    return local;
+  }
+  const rows = await request(
+    'jarvis_missions?id=eq.' + encodeURIComponent(missionId) + '&user_id=eq.' + encodeURIComponent(userId),
+    {
+      method: 'PATCH',
+      headers: { Prefer: 'return=representation' },
+      body: JSON.stringify({
+        goal: storage.goal, autonomy: storage.autonomy, status: storage.status, current_step: storage.current_step,
+        steps: storage.steps, approval: storage.approval, last_evidence: storage.last_evidence, metadata: storage.metadata,
+        updated_at: storage.updated_at, completed_at: storage.completed_at,
+      }),
+    }
+  );
+  const updated = missionStateFromRow(rows?.[0] || { id: missionId, user_id: userId, ...storage });
+  if (event?.eventType) await recordMissionEventForUser(userId, missionId, {
+    ...event, fromStatus: event.fromStatus ?? existing.status, toStatus: event.toStatus ?? updated.status,
+  });
+  return updated;
+}
+
+export async function recordMissionEventForUser(userId, missionId, {
+  eventType, fromStatus = null, toStatus = null, message = null, metadata = {},
+} = {}) {
+  if (!validUuid(userId) || !validUuid(missionId)) throw new Error('Invalid mission identity.');
+  const event = {
+    id: crypto.randomUUID(), missionId, userId,
+    eventType: String(eventType || 'mission.event'),
+    fromStatus: fromStatus ? String(fromStatus) : null,
+    toStatus: toStatus ? String(toStatus) : null,
+    message: message ? String(message).slice(0, 2000) : null,
+    metadata: metadata && typeof metadata === 'object' && !Array.isArray(metadata) ? metadata : {},
+    createdAt: new Date().toISOString(),
+  };
+  if (!configured) {
+    const key = userId + ':' + missionId;
+    const events = memory.missionEvents.get(key) || [];
+    events.push(event); memory.missionEvents.set(key, events.slice(-200));
+    return event;
+  }
+  const rows = await request('jarvis_mission_events', {
+    method: 'POST', headers: { Prefer: 'return=representation' },
+    body: JSON.stringify({
+      id: event.id, mission_id: missionId, user_id: userId, event_type: event.eventType,
+      from_status: event.fromStatus, to_status: event.toStatus, message: event.message,
+      metadata: event.metadata, created_at: event.createdAt,
+    }),
+  });
+  return missionEventFromRow(rows?.[0] || event);
+}
+
+export async function getMissionEventsForUser(userId, missionId, limit = 100) {
+  if (!validUuid(userId) || !validUuid(missionId)) throw new Error('Invalid mission identity.');
+  const mission = await getMissionForUser(userId, missionId);
+  if (!mission) return [];
+  const safeLimit = Math.min(200, Math.max(1, Number(limit) || 100));
+  if (!configured) return (memory.missionEvents.get(userId + ':' + missionId) || []).slice(-safeLimit).reverse();
+  const rows = await request(
+    'jarvis_mission_events?select=*&mission_id=eq.' + encodeURIComponent(missionId) +
+    '&user_id=eq.' + encodeURIComponent(userId) + '&order=created_at.desc&limit=' + safeLimit
+  );
+  return (rows || []).map(missionEventFromRow).filter(Boolean);
 }
