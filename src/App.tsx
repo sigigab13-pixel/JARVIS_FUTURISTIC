@@ -245,13 +245,15 @@ function App() {
         { role: 'assistant', content: answer },
       ]);
       if (voiceEnabled) void speak(answer);
-    } catch {
+    } catch (error: any) {
+      const detail = String(error?.response?.data?.error || error?.message || '').trim();
       setMessages(current => [
         ...current,
         {
           role: 'assistant',
-          content:
-            'My AI core is temporarily unavailable. I retried the connection; please try again in a moment.',
+          content: detail
+            ? `JARVIS AI core error: ${detail}`
+            : 'JARVIS AI core is temporarily unavailable. Please try again in a moment.',
         },
       ]);
     } finally {
