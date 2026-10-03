@@ -154,36 +154,48 @@ export async function runWorker({
 
   while (attempted < jobLimit && Date.now() - startedAt < runtimeLimit) {
     const claimed = [];
-    const claimCount = Math.min(maxConcurrency, jobLimit - attempted);
+    const firstJob = await claimOne(workerId).catch(error => {
+      logger.error?.('[JARVIS worker] claim failed:', error);
+      failureCount += 1;
+      if (once) throw error;
+      return null;
+    });
 
-    for (let i = 0; i < claimCount; i += 1) {
-      try {
-        const job = await claimOne(workerId);
-        if (!job) break;
-        claimed.push(job);
-        attempted += 1;
-      } catch (error) {
-        logger.error?.('[JARVIS worker] claim failed:', error);
-        failureCount += 1;
-        if (once && claimed.length === 0) throw error;
-        break;
-      }
+    if (!firstJob) {
+      if (once) return { workerId, processed, attempted, batches, concurrency: maxConcurrency };
+      await new Promise(resolve => setTimeout(resolve, nextWorkDelayMs({
+        queueEmpty: true,
+        failureCount,
+        baseMs: pollMs,
+      })));
+      continue;
     }
 
-    if (claimed.length === 0) {
-      if (once) return { workerId, processed, attempted, batches, concurrency: maxConcurrency };
-      await new Promise(resolve => setTimeout(resolve, nextWorkDelayMs({ queueEmpty: true, baseMs: pollMs })));
-      continue;
+    claimed.push(firstJob);
+    attempted += 1;
+
+    if (workloadClass(firstJob) !== 'heavy') {
+      for (let i = 1; i < maxConcurrency && claimed.length < jobLimit; i += 1) {
+        if (Date.now() - startedAt >= runtimeLimit) break;
+        try {
+          const job = await claimOne(workerId);
+          if (!job) break;
+          if (workloadClass(job) === 'heavy') {
+            logger.info?.(`[JARVIS worker] heavy job ${job.id} held for the next isolated batch.`);
+            break;
+          }
+          claimed.push(job);
+          attempted += 1;
+        } catch (error) {
+          logger.error?.('[JARVIS worker] additional claim failed:', error);
+          failureCount += 1;
+          break;
+        }
+      }
     }
 
     const batch = groupWorkloadBatch(claimed, maxConcurrency);
     if (!batch.length) break;
-
-    if (claimed.length !== batch.length) {
-      logger.info?.(
-        `[JARVIS worker] workload governor isolated a heavy job batch: ${batch.map(job => workloadClass(job)).join(', ')}`
-      );
-    }
 
     const results = await Promise.all(batch.map(job => processJob(job, workerId, logger)));
     const successful = results.filter(result => result.ok).length;
@@ -203,6 +215,7 @@ export async function runWorker({
     elapsedMs: Date.now() - startedAt,
     runtimeLimitMs: runtimeLimit,
   };
+}
 }
 
 if (process.argv[1] && process.argv[1].endsWith('/worker.mjs')) {
