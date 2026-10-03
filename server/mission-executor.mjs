@@ -56,6 +56,7 @@ async function executeImageGeneration(job) {
       source: 'mission_image_generate',
       sha256,
     },
+    upsert: true,
   });
 
   const consumed = await consumeImageGeneration(String(job.user_id), {
