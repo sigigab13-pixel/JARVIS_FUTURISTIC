@@ -252,6 +252,103 @@ JARVIS should not only expose generic automation. It should package repeatable, 
 - [ ] Track setup, usage, outcomes, and measurable value such as time saved, response time, leads processed, or content produced.
 - [ ] Support reusable client-specific templates so JARVIS can manage multiple businesses without mixing data.
 
+
+
+## P0 — AI Reliability, Integration & Business Transformation
+
+### AI Project Rescue / Autopsy
+- [ ] Audit failed or stalled AI pilots and implementations.
+- [ ] Identify root causes across model quality, data, workflow design, integrations, permissions, latency, cost, and user adoption.
+- [ ] Produce a salvage / rebuild / retire recommendation with evidence.
+- [ ] Create a tracked remediation mission with owners, milestones, risks, and verification.
+
+### AI Output Verification Layer
+- [ ] Verify important AI outputs before delivery using source retrieval, rules, structured checks, consistency checks, and confidence signals.
+- [ ] Flag unsupported claims, missing citations, policy violations, unsafe outputs, and suspicious inconsistencies.
+- [ ] Route low-confidence or high-impact outputs to human review.
+- [ ] Maintain an audit trail of verification decisions and evidence.
+
+### Human-in-the-Loop Workflows
+- [ ] AI drafts; authorized humans approve, edit, reject, or escalate.
+- [ ] Approval inbox with priority, context, evidence, and requested action.
+- [ ] Role-based approval requirements for different business workflows.
+- [ ] Learn from approved corrections without bypassing human control.
+
+### Legacy System Integration
+- [ ] Connect approved modern AI workflows to legacy systems through safe APIs, adapters, browser automation, file exchange, or other supported interfaces.
+- [ ] Add compatibility checks, retries, idempotency, logging, and rollback paths.
+- [ ] Keep secrets and credentials isolated from model prompts.
+
+### AI Cost Optimization
+- [ ] Monitor model usage, token/compute cost, latency, cache hit rate, and task success.
+- [ ] Recommend cheaper models or workflows when quality is maintained.
+- [ ] Use caching, batching, routing, summarization, and context reduction where appropriate.
+- [ ] Provide per-user, per-workspace, and per-mission cost visibility.
+
+### Boring Business Automation
+- [ ] Automate repetitive back-office workflows such as document processing, reconciliation, inventory updates, report preparation, and routine compliance/admin tasks where authorized.
+- [ ] Provide measurable before/after metrics such as time saved, processing volume, error rate, and turnaround time.
+- [ ] Keep high-impact decisions subject to human approval.
+
+### AI Reliability Center
+- [ ] Production dashboard for accuracy proxies, latency, failures, retries, provider health, cost, and mission success rate.
+- [ ] Regression tests and evaluations for critical agent workflows.
+- [ ] Alert on degraded performance before users notice where practical.
+- [ ] Incident timelines, root-cause notes, repair missions, and post-incident learning.
+- [ ] Version tracking for prompts, workflows, models, tools, and knowledge sources.
+
+### AI Readiness Assessment
+- [ ] Assess a business's data quality, process maturity, integrations, security, team readiness, and measurable use cases before large AI deployments.
+- [ ] Produce prioritized quick wins, risks, dependencies, and implementation roadmap.
+- [ ] Estimate expected effort and operating cost without guaranteeing financial outcomes.
+
+### Vertical AI Agents
+- [ ] Offer industry-specific agent templates rather than only generic agents.
+- [ ] Support configurable vocabulary, workflows, policies, knowledge bases, and approval rules.
+- [ ] Keep regulated professional decisions under qualified human oversight.
+- [ ] Build reusable vertical packs for sectors such as real estate, retail, education, service businesses, and other suitable domains.
+
+### AI Change & Adoption Assistant
+- [ ] Help organizations document processes, redesign workflows, train staff, create SOPs, and track adoption during AI transitions.
+- [ ] Provide communication plans, role/skill mapping, and human escalation support.
+- [ ] Avoid presenting JARVIS as a substitute for licensed counseling or professional employee-relations services.
+
+### AI Policy & Governance Assistant
+- [ ] Generate organization-specific AI usage policies, data-handling rules, disclosure guidance, access controls, and approval procedures from approved requirements.
+- [ ] Maintain policy versions, owners, review dates, and change history.
+- [ ] Flag when professional legal/regulatory review is appropriate.
+
+### Competitive Intelligence
+- [ ] Monitor authorized public sources for competitor pricing, products, campaigns, announcements, hiring signals, and other approved indicators.
+- [ ] Produce scheduled intelligence briefs with timestamps and citations.
+- [ ] Distinguish verified observations from interpretation or forecasts.
+- [ ] Keep monitoring scoped to lawful public/authorized sources.
+
+### Dead Data Resurrection
+- [ ] Connect authorized legacy datasets, archived documents, emails, and records.
+- [ ] Normalize and index historical information for search, reporting, and approved analysis.
+- [ ] Detect duplicates, missing fields, stale records, and conflicting data.
+- [ ] Preserve provenance and access controls throughout the pipeline.
+
+### Contract & Negotiation Assistant
+- [ ] Analyze authorized contracts and supplier/partnership terms.
+- [ ] Highlight unusual clauses, obligations, risks, and negotiation points.
+- [ ] Generate suggested questions and counterproposal drafts for human review.
+- [ ] Clearly distinguish document analysis from professional legal advice.
+
+### AI Exit / Migration Assistant
+- [ ] Help businesses migrate away from failing, discontinued, or unsuitable AI vendors.
+- [ ] Inventory dependencies, data, prompts, tools, workflows, and credentials.
+- [ ] Produce migration plans and test replacement workflows before cutover.
+- [ ] Preserve data portability and minimize lock-in.
+
+## P1 — AI Business Value Layer
+- [ ] Let JARVIS translate business problems into measurable AI opportunities.
+- [ ] Recommend the smallest useful automation before proposing a complex agent system.
+- [ ] Track outcome metrics for deployed workflows.
+- [ ] Compare expected vs. actual value and suggest iteration.
+- [ ] Package successful workflows as reusable templates for other authorized businesses.
+
 ## P0 — Advanced Agentic Capabilities
 
 ### Digital Hands / Computer Use
