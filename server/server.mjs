@@ -492,7 +492,7 @@ export async function handleApi(req, res, pathname, url) {
     const userId = authenticated?.jarvisUser?.id || null;
     const latestUserMessage = String(messages[messages.length - 1]?.content || '').trim();
 
-    const imageRequest = /\\b(generate|create|make|draw|illustrate|render)\\b[\\s\\S]{0,120}\\b(image|picture|photo|illustration)\\b|\\b(image|picture|photo|illustration)\\b[\\s\\S]{0,120}\\b(generate|create|make|draw|illustrate|render)\\b/i.test(latestUserMessage);
+    const imageRequest = /\b(generate|create|make|draw|illustrate|render)\b[\\s\\S]{0,120}\b(image|picture|photo|illustration)\b|\b(image|picture|photo|illustration)\b[\\s\\S]{0,120}\b(generate|create|make|draw|illustrate|render)\b/i.test(latestUserMessage);
     if (imageRequest) {
       if (!authenticated?.jarvisUser?.id) {
         return json(res, 401, { error: 'Sign in to generate images with JARVIS.' });
