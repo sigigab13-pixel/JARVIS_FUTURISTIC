@@ -45,8 +45,8 @@ const DIST = path.join(ROOT, 'dist');
 
 const HF_CHAT_URL = 'https://router.huggingface.co/v1/chat/completions';
 const HF_MODEL = 'openai/gpt-oss-120b:fastest';
-const HF_IMAGE_MODEL = process.env.HF_IMAGE_MODEL || 'black-forest-labs/FLUX.1-schnell';
-const HF_IMAGE_EDIT_MODEL = process.env.HF_IMAGE_EDIT_MODEL || 'black-forest-labs/FLUX.2-klein-9B';
+const HF_IMAGE_MODEL = 'black-forest-labs/FLUX.1-schnell';
+const HF_IMAGE_EDIT_MODEL = 'black-forest-labs/FLUX.2-klein-9B';
 const GOOGLE_TTS_URL = 'https://texttospeech.googleapis.com/v1/text:synthesize';
 const ELEVENLABS_TTS_URL = 'https://api.elevenlabs.io/v1/text-to-speech';
 const ELEVENLABS_VOICES_URL = 'https://api.elevenlabs.io/v2/voices';
@@ -67,7 +67,7 @@ async function generateHuggingFaceImage(prompt, model = HF_IMAGE_MODEL, inputIma
     return client.imageToImage({
       model,
       inputs: blob,
-      prompt,
+      parameters: { prompt },
       provider: 'auto',
     });
   }
@@ -655,8 +655,15 @@ export async function handleApi(req, res, pathname, url) {
     }
     const entitlement = await getJarvisEntitlement(jarvisUser.id) || await ensureJarvisEntitlement(jarvisUser.id);
     const remainingBefore = Number(entitlement?.credits_remaining ?? 0);
+    if (remainingBefore <= 0) {
+      return json(res, 402, { error: 'Your image-generation allowance is used up for this billing period.' });
+    }
     try {
-      const blob = await generateHuggingFaceImage(prompt, pathname.endsWith('/edit') ? HF_IMAGE_EDIT_MODEL : HF_IMAGE_MODEL, pathname.endsWith('/edit') ? reference : null);
+      const blob = await generateHuggingFaceImage(
+        prompt,
+        pathname.endsWith('/edit') ? HF_IMAGE_EDIT_MODEL : HF_IMAGE_MODEL,
+        pathname.endsWith('/edit') ? reference : null
+      );
       const consumed = await consumeImageGeneration(jarvisUser.id, { prompt: prompt.slice(0, 500), mode: pathname.endsWith('/edit') ? 'edit' : 'generate' });
       const buffer = Buffer.from(await blob.arrayBuffer());
       const mimeType = blob.type || 'image/png';
