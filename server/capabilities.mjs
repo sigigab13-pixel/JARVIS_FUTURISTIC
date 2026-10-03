@@ -4,6 +4,7 @@ const capabilities = [
     label: 'Conversation Core',
     category: 'core',
     description: 'General conversation, reasoning, planning, and natural-language assistance.',
+    keywords: ['chat', 'question', 'help', 'reason', 'plan'],
     available: () => Boolean(process.env.OPENAI_API_KEY || process.env.HUGGINGFACE_API_TOKEN || process.env.HF_TOKEN),
   },
   {
@@ -11,6 +12,7 @@ const capabilities = [
     label: 'Long-Term Memory',
     category: 'core',
     description: 'Persistent conversation and semantic memory for the authenticated user.',
+    keywords: ['memory', 'remember', 'history', 'previous', 'yesterday'],
     available: () => Boolean(process.env.SUPABASE_URL && (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)),
   },
   {
@@ -18,6 +20,7 @@ const capabilities = [
     label: 'Image Lab',
     category: 'creation',
     description: 'Generate and edit images from natural-language prompts and authorized reference images.',
+    keywords: ['image', 'picture', 'photo', 'illustration', 'draw', 'visual', 'poster', 'thumbnail'],
     available: () => Boolean(process.env.HUGGINGFACE_API_TOKEN || process.env.HF_TOKEN),
   },
   {
@@ -25,6 +28,7 @@ const capabilities = [
     label: 'Voice',
     category: 'multimodal',
     description: 'Speech input and voice output through supported browser and voice providers.',
+    keywords: ['voice', 'speak', 'audio', 'listen', 'microphone', 'call', 'talk'],
     available: () => Boolean(process.env.ELEVENLABS_API_KEY),
   },
   {
@@ -32,6 +36,7 @@ const capabilities = [
     label: 'Video Lab',
     category: 'creation',
     description: 'Plan and manage children's video production projects and pipeline jobs.',
+    keywords: ['video', 'animation', 'reel', 'short', 'storyboard', 'film', 'movie'],
     available: () => Boolean(process.env.SUPABASE_URL && (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)),
   },
   {
@@ -39,6 +44,7 @@ const capabilities = [
     label: 'Business Manager',
     category: 'business',
     description: 'Manage authorized business profiles, brand information, projects, and future business workflows.',
+    keywords: ['business', 'client', 'customer', 'crm', 'lead', 'company', 'sales', 'shop', 'brand'],
     available: () => Boolean(process.env.SUPABASE_URL && (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)),
   },
   {
@@ -46,6 +52,7 @@ const capabilities = [
     label: 'Web Intelligence',
     category: 'research',
     description: 'Real-time public-web research and current-information retrieval when a search provider is connected.',
+    keywords: ['search', 'web', 'latest', 'today', 'news', 'research', 'competitor', 'current', 'online'],
     available: () => Boolean(process.env.JARVIS_WEB_SEARCH_API_KEY || process.env.TAVILY_API_KEY || process.env.BRAVE_SEARCH_API_KEY),
   },
   {
@@ -53,6 +60,7 @@ const capabilities = [
     label: 'YouTube',
     category: 'publishing',
     description: 'Authorized YouTube channel connection and publishing workflows.',
+    keywords: ['youtube', 'channel', 'upload', 'publish', 'shorts'],
     available: () => Boolean(process.env.GOOGLE_YOUTUBE_CLIENT_ID && process.env.GOOGLE_YOUTUBE_CLIENT_SECRET && process.env.PUBLIC_URL),
   },
   {
@@ -60,6 +68,7 @@ const capabilities = [
     label: 'Durable Missions',
     category: 'orchestration',
     description: 'Long-running queued jobs with persistent state and worker processing.',
+    keywords: ['mission', 'automate', 'schedule', 'monitor', 'background', 'every', 'workflow'],
     available: () => Boolean(process.env.SUPABASE_URL && (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)),
   },
   {
@@ -67,6 +76,7 @@ const capabilities = [
     label: 'Upstash Queue',
     category: 'orchestration',
     description: 'Optional queue dispatch and background-work acceleration.',
+    keywords: ['queue', 'background', 'worker', 'job', 'async'],
     available: () => Boolean(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN),
   },
 ];
@@ -77,6 +87,7 @@ export function getCapabilityRegistry() {
     label,
     category,
     description,
+    keywords: Array.isArray(keywords) ? keywords : [],
     available: Boolean(available()),
   }));
 }
