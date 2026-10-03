@@ -1,0 +1,42 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { routeIntent, routeContextForPrompt } from '../server/intent-router.mjs';
+
+const caps = [
+  { id: 'image', description: 'Generate and edit images.' },
+  { id: 'youtube', description: 'Upload and publish videos to YouTube.' },
+  { id: 'web_intelligence', description: 'Search current information on the public web.' },
+  { id: 'business', description: 'Manage business clients and workflows.' },
+];
+
+test('routes create intent with candidate capabilities', () => {
+  const route = routeIntent({
+    messages: [{ role: 'user', content: 'Create a picture for my business' }],
+    availableCapabilities: caps,
+  });
+  assert.equal(route.mode, 'create');
+  assert.ok(route.candidateCapabilities.some(item => item.id === 'image'));
+});
+
+test('detects contextual references and avoids pretending to resolve them', () => {
+  const route = routeIntent({
+    messages: [
+      { role: 'assistant', content: 'I found your report.' },
+      { role: 'user', content: 'Check that and summarize it.' },
+    ],
+    availableCapabilities: caps,
+  });
+  assert.equal(route.mode, 'inspect');
+  assert.equal(route.references.some(item => item.type === 'contextual'), true);
+  assert.equal(route.needsClarification, false);
+});
+
+test('provides prompt-safe routing context', () => {
+  const context = routeContextForPrompt({
+    mode: 'search',
+    candidateCapabilities: [{ id: 'web_intelligence' }],
+    references: [],
+    needsClarification: false,
+  });
+  assert.match(context, /web_intelligence/);
+});
