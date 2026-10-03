@@ -41,6 +41,7 @@ import {
   updateMissionForUser,
   recordMissionEventForUser,
   getMissionEventsForUser,
+  queueMissionStepForUser,
   createRoutineForUser,
   getRoutineForUser,
   listRoutinesForUser,
@@ -51,6 +52,7 @@ import { createMediaKey, isSupabaseStorageConfigured, putMedia } from './media.m
 import { capabilityContextForPrompt, getCapabilityRegistry, getAvailableCapabilities, rankCapabilitiesForIntent } from './capabilities.mjs';
 import { routeContextForPrompt, routeIntent } from './intent-router.mjs';
 import { createMissionState, transitionMission, advanceMissionStep } from './mission-runtime.mjs';
+import { preflightMission, getMissionAdapters } from './mission-executor.mjs';
 
 const PORT = Number(process.env.PORT || 10000);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -496,19 +498,40 @@ export async function handleApi(req, res, pathname, url) {
     if (!current) return json(res, 404, { error: 'Mission not found.' });
 
     if (action === 'start') {
-      if (process.env.JARVIS_MISSION_EXECUTOR_ENABLED !== '1') {
+      const preflight = preflightMission(current);
+      if (!preflight.ok) {
         return json(res, 409, {
-          error: 'Mission persistence is ready, but the automatic mission executor is not enabled yet. This safety gate prevents JARVIS from falsely claiming that external work started.',
-          code: 'MISSION_EXECUTOR_NOT_ENABLED',
+          error: preflight.reason,
+          code: 'MISSION_PREFLIGHT_BLOCKED',
+          supportedAdapters: getMissionAdapters(),
+          preflight,
+          mission: current,
+        }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+      }
+      if (current.autonomy === 'execute_with_approval' && current.approval?.status !== 'approved') {
+        return json(res, 409, {
+          error: 'This mission requires approval before execution can start.',
+          code: 'MISSION_APPROVAL_REQUIRED',
           mission: current,
         }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
       }
       const next = transitionMission(current, 'queued');
+      const queuedJob = await queueMissionStepForUser(jarvisUser.id, next);
       const mission = await updateMissionForUser(jarvisUser.id, missionId, next, {
         eventType: 'mission.queued',
-        message: 'Mission queued for execution.',
+        message: 'Mission queued with its first durable execution step.',
+        metadata: { jobId: queuedJob?.id || null, stepIndex: next.currentStep },
       });
-      return json(res, 202, { mission }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+      let dispatch = { queued: false, provider: 'supabase' };
+      if (queuedJob?.id && isRedisConfigured()) {
+        try {
+          dispatch = { queued: true, provider: 'upstash_redis', message: await enqueueJob(queuedJob.id, queuedJob.type) };
+        } catch (queueError) {
+          console.error('JARVIS mission Redis dispatch error:', queueError);
+          dispatch = { queued: false, provider: 'supabase', fallback: 'redis_unavailable' };
+        }
+      }
+      return json(res, 202, { mission, job: queuedJob, dispatch }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
     }
 
     if (action === 'request-approval') {
