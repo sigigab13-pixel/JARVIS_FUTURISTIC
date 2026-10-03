@@ -44,7 +44,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = path.join(ROOT, 'dist');
 
 const HF_CHAT_URL = 'https://router.huggingface.co/v1/chat/completions';
-const HF_MODEL = process.env.HF_MODEL || 'openai/gpt-oss-120b:fastest';
+const HF_MODEL = 'openai/gpt-oss-120b:fastest';
 const HF_IMAGE_MODEL = process.env.HF_IMAGE_MODEL || 'black-forest-labs/FLUX.1-schnell';
 const HF_IMAGE_EDIT_MODEL = process.env.HF_IMAGE_EDIT_MODEL || 'black-forest-labs/FLUX.2-klein-9B';
 const GOOGLE_TTS_URL = 'https://texttospeech.googleapis.com/v1/text:synthesize';
