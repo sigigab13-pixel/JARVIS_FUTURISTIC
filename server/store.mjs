@@ -988,7 +988,7 @@ export async function updateRoutineForUser(userId, routineId, data = {}) {
 }
 
 export async function claimDueRoutines(workerId, limit = 10) {
-  if (!configured()) return [];
+  if (!configured) return [];
   const rows = await rpc('jarvis_claim_due_routines', { p_worker_id: String(workerId), p_limit: Math.min(50, Math.max(1, Number(limit) || 10)) });
   return (Array.isArray(rows) ? rows : rows ? [rows] : []).map(routineFromRow).filter(Boolean);
 }
