@@ -41,6 +41,10 @@ import {
   updateMissionForUser,
   recordMissionEventForUser,
   getMissionEventsForUser,
+  createRoutineForUser,
+  getRoutineForUser,
+  listRoutinesForUser,
+  updateRoutineForUser,
 } from './store.mjs';
 import { enqueueJob, isRedisConfigured } from './queue.mjs';
 import { createMediaKey, isSupabaseStorageConfigured, putMedia } from './media.mjs';
@@ -371,6 +375,63 @@ export async function handleApi(req, res, pathname, url) {
     }
 
     return json(res, 404, { error: 'Video Engine route not found.' });
+  }
+
+  if (req.method === 'GET' && pathname === '/api/routines') {
+    const { jarvisUser } = await requireAuthenticatedJarvisUser(req);
+    const limit = Number(url.searchParams.get('limit') || 50);
+    return json(res, 200, { routines: await listRoutinesForUser(jarvisUser.id, limit) }, {
+      'Set-Cookie': jarvisCookie(jarvisUser.id),
+    });
+  }
+
+  if (req.method === 'POST' && pathname === '/api/routines') {
+    const { jarvisUser } = await requireAuthenticatedJarvisUser(req);
+    const body = await parseBody(req);
+    try {
+      const routine = await createRoutineForUser(jarvisUser.id, {
+        name: body?.name,
+        description: body?.description,
+        schedule: body?.schedule,
+        timezone: body?.timezone,
+        status: body?.status,
+        priority: body?.priority,
+        maxParallelJobs: body?.maxParallelJobs,
+        jobTemplates: body?.jobTemplates || body?.jobs,
+        metadata: body?.metadata,
+      });
+      return json(res, 201, { routine }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+    } catch (error) {
+      return json(res, Number(error?.statusCode) || 400, {
+        error: error instanceof Error ? error.message : 'Routine could not be created.',
+      });
+    }
+  }
+
+  const routineMatch = pathname.match(/^\/api\/routines\/([0-9a-f-]{36})$/i);
+  if (routineMatch) {
+    const { jarvisUser } = await requireAuthenticatedJarvisUser(req);
+    const routineId = routineMatch[1];
+
+    if (req.method === 'GET') {
+      const routine = await getRoutineForUser(jarvisUser.id, routineId);
+      if (!routine) return json(res, 404, { error: 'Routine not found.' });
+      return json(res, 200, { routine }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+    }
+
+    if (req.method === 'PATCH') {
+      const body = await parseBody(req);
+      try {
+        const routine = await updateRoutineForUser(jarvisUser.id, routineId, body);
+        return json(res, 200, { routine }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+      } catch (error) {
+        return json(res, Number(error?.statusCode) || 400, {
+          error: error instanceof Error ? error.message : 'Routine could not be updated.',
+        });
+      }
+    }
+
+    return json(res, 405, { error: 'Method not allowed.' });
   }
 
   if (req.method === 'GET' && pathname === '/api/missions') {
