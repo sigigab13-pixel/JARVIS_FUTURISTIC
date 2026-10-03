@@ -46,14 +46,16 @@ const DIST = path.join(ROOT, 'dist');
 const HF_CHAT_URL = 'https://router.huggingface.co/v1/chat/completions';
 const HF_MODEL = 'openai/gpt-oss-120b:fastest';
 const HF_IMAGE_MODELS = [
-  'black-forest-labs/FLUX.1-schnell',
   'black-forest-labs/FLUX.1-dev',
+  'black-forest-labs/FLUX.1-schnell',
+  'black-forest-labs/FLUX.1-Krea-dev',
 ];
 const HF_IMAGE_EDIT_MODELS = [
-  'black-forest-labs/FLUX.2-dev',
   'black-forest-labs/FLUX.2-klein-9B',
   'black-forest-labs/FLUX.1-Kontext-dev',
+  'black-forest-labs/FLUX.2-dev',
 ];
+const HF_IMAGE_PROVIDERS = ['fal-ai', 'auto'];
 const GOOGLE_TTS_URL = 'https://texttospeech.googleapis.com/v1/text:synthesize';
 const ELEVENLABS_TTS_URL = 'https://api.elevenlabs.io/v1/text-to-speech';
 const ELEVENLABS_VOICES_URL = 'https://api.elevenlabs.io/v2/voices';
@@ -73,49 +75,49 @@ async function generateHuggingFaceImage(prompt, inputImage = null) {
 
   if (!inputImage) {
     for (const model of HF_IMAGE_MODELS) {
-      try {
-        return await client.textToImage({
-          model,
-          inputs: prompt,
-          provider: 'auto',
-        });
-      } catch (error) {
-        errors.push(`${model}: ${error instanceof Error ? error.message : String(error)}`);
+      for (const provider of HF_IMAGE_PROVIDERS) {
+        try {
+          const result = await client.textToImage({
+            model,
+            inputs: prompt,
+            provider,
+            outputType: 'blob',
+          });
+          if (!(result instanceof Blob)) throw new Error('Hugging Face returned an invalid image payload.');
+          return result;
+        } catch (error) {
+          errors.push(`${model} via ${provider}: ${error instanceof Error ? error.message : String(error)}`);
+        }
       }
     }
   } else {
     const binary = Buffer.from(String(inputImage.data || ''), 'base64');
+    if (!binary.length) throw Object.assign(new Error('The reference image is empty.'), { statusCode: 400 });
     const blob = new Blob([binary], { type: String(inputImage.mimeType || 'image/jpeg') });
 
     for (const model of HF_IMAGE_EDIT_MODELS) {
-      try {
-        return await client.imageTextToImage({
-          model,
-          inputs: blob,
-          parameters: { prompt },
-          provider: 'auto',
-        });
-      } catch (error) {
-        errors.push(`${model} image-text-to-image: ${error instanceof Error ? error.message : String(error)}`);
-      }
-
-      if (model === HF_IMAGE_EDIT_MODELS[1]) {
+      for (const provider of HF_IMAGE_PROVIDERS) {
         try {
-          return await client.imageToImage({
+          const result = await client.imageToImage({
             model,
             inputs: blob,
             parameters: { prompt },
-            provider: 'auto',
+            provider,
           });
+          if (!(result instanceof Blob)) throw new Error('Hugging Face returned an invalid edited-image payload.');
+          return result;
         } catch (error) {
-          errors.push(`${model} image-to-image: ${error instanceof Error ? error.message : String(error)}`);
+          errors.push(`${model} image-to-image via ${provider}: ${error instanceof Error ? error.message : String(error)}`);
         }
       }
     }
   }
 
-  const summary = errors.slice(-4).join(' | ');
-  throw new Error(summary || 'No Hugging Face image provider is currently available.');
+  const summary = errors.slice(-6).join(' | ');
+  throw Object.assign(
+    new Error(summary || 'No Hugging Face image provider is currently available.'),
+    { statusCode: 502 },
+  );
 }
 
 async function imageResponse(res, blob) {
