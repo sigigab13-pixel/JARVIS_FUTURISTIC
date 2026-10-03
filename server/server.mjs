@@ -492,6 +492,44 @@ export async function handleApi(req, res, pathname, url) {
     const userId = authenticated?.jarvisUser?.id || null;
     const latestUserMessage = String(messages[messages.length - 1]?.content || '').trim();
 
+    const imageRequest = /\\b(generate|create|make|draw|illustrate|render)\\b[\\s\\S]{0,120}\\b(image|picture|photo|illustration)\\b|\\b(image|picture|photo|illustration)\\b[\\s\\S]{0,120}\\b(generate|create|make|draw|illustrate|render)\\b/i.test(latestUserMessage);
+    if (imageRequest) {
+      if (!authenticated?.jarvisUser?.id) {
+        return json(res, 401, { error: 'Sign in to generate images with JARVIS.' });
+      }
+      const entitlement = await getJarvisEntitlement(authenticated.jarvisUser.id) || await ensureJarvisEntitlement(authenticated.jarvisUser.id);
+      const remainingBefore = Number(entitlement?.credits_remaining ?? 0);
+      if (remainingBefore <= 0) {
+        return json(res, 402, { error: 'Your image-generation allowance is used up for this billing period.' });
+      }
+      try {
+        const blob = await generateHuggingFaceImage(latestUserMessage);
+        const consumed = await consumeImageGeneration(authenticated.jarvisUser.id, {
+          prompt: latestUserMessage.slice(0, 500),
+          mode: 'chat-image',
+        });
+        const buffer = Buffer.from(await blob.arrayBuffer());
+        const mimeType = blob.type || 'image/png';
+        const responseText = 'Done, Saviour. I generated the image and opened it in Image Lab.';
+        await appendConversationMessages(authenticated.jarvisUser.id, [
+          { role: 'user', content: latestUserMessage },
+          { role: 'assistant', content: responseText },
+        ]);
+        return json(res, 200, {
+          text: responseText,
+          image: { data: buffer.toString('base64'), mimeType },
+          provider: 'Hugging Face Inference Providers',
+          model: 'automatic image provider routing',
+          persistent: true,
+          guest: false,
+          allowance: { remaining: Number(consumed?.credits_remaining ?? Math.max(0, remainingBefore - 1)) },
+        }, { 'Set-Cookie': jarvisCookie(authenticated.jarvisUser.id) });
+      } catch (error) {
+        console.error('JARVIS chat image generation error:', error);
+        return json(res, 502, { error: error instanceof Error ? error.message : 'Image generation failed.' });
+      }
+    }
+
     let semanticMemories = [];
     try {
       semanticMemories = userId ? await searchSemanticMemories(userId, latestUserMessage, {
@@ -513,6 +551,7 @@ export async function handleApi(req, res, pathname, url) {
       "Do not describe yourself as ChatGPT, Claude, Hugging Face, or another underlying model unless the user explicitly asks which model/provider is being used.",
       "Do not output generic capability lists or generic knowledge-cutoff disclaimers unless the user explicitly asks for them.",
       "Be accurate, concise, friendly, and honest about capabilities. Do not claim an external action happened unless the connected service confirms it.",
+      "Never claim that an image, file, video, or other external asset was generated unless JARVIS actually received and returned that asset from its connected generation service. Never invent image URLs or markdown image links.",
       "For security topics, stay defensive and educational. For NEXORA, keep trading simulated/paper-only.",
       memoryContext,
     ].filter(Boolean).join('\n\n');
