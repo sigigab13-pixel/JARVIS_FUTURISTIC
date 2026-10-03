@@ -380,10 +380,10 @@ function App() {
     setImageBusy(true);
     setImageError('');
     try {
-      const response = await api.post('/api/image/generate', {
-        prompt,
-        images: referenceImage ? [referenceImage] : [],
-      });
+      const endpoint = referenceImage ? '/api/image/edit' : '/api/image/generate';
+      const response = await api.post(endpoint, referenceImage
+        ? { prompt, referenceImage }
+        : { prompt });
       const generated = response.data?.image;
       if (!generated?.data || !generated?.mimeType) throw new Error('Invalid image response');
       setImageResult(`data:${generated.mimeType};base64,${generated.data}`);
