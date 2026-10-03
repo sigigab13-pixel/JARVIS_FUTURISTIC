@@ -177,11 +177,25 @@ mission checkpoint / completion
 
 ### Important limitation
 
-The source code now contains the adapter, but this milestone is **not yet claimed as production-live**. The canonical Vercel project currently has READY deployments on older commits, and the newly changed source has not yet received a verified production deployment in the target environment.
+The source code now contains the adapter, but this milestone is **not yet claimed as production-live**. The canonical Vercel project had been blocked by an ignored-build-step configuration, so the newly changed source had not yet received a verified production deployment in the target environment.
 
 The adapter therefore remains fail-closed until deployment and a real end-to-end image mission are verified.
 
 ### Next
 
 Verify the canonical Vercel deployment, then run one controlled end-to-end image mission before promoting the adapter as production-ready.
+
+### Entry 005 — Deployment gate repair
+
+**Status:** Configuration fixed; deployment verification pending
+
+The canonical Vercel project was inspected before deployment rather than deploying blindly.
+
+The latest canceled production deployment was tied to an **ignored build step**, which meant the Git-connected project could stop before the new source reached a usable production deployment.
+
+The project configuration was corrected by removing that ignored-build-step command.
+
+No production-live claim is being made yet. The next verification is to confirm that the current `main` commit produces a new READY deployment and then exercise the image mission end-to-end.
+
+This is intentionally documented as a configuration repair, not as a successful deployment.
 
