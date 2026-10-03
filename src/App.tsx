@@ -323,6 +323,7 @@ function App() {
 
     const closeAll = () => {
       setCommandOpen(false);
+      setMissionOpen(false);
       setCapabilityOpen(false);
       setBusinessOpen(false);
       setVideoOpen(false);
