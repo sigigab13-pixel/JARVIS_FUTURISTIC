@@ -181,6 +181,77 @@ This queue is intentionally ambitious; implementation should be staged so each p
 
 
 
+
+
+## P0 — Business AI Solution Templates
+
+JARVIS should not only expose generic automation. It should package repeatable, measurable business solutions that can be configured per customer or workspace.
+
+### AI Receptionist
+- [ ] Voice receptionist for businesses such as salons, clinics, studios, and service companies.
+- [ ] Answer common business questions, collect caller details, book/reschedule/cancel appointments, and send approved reminders.
+- [ ] Keep medical/health use administrative only; do not provide diagnosis or medical treatment advice.
+- [ ] Escalate urgent, sensitive, or unsupported requests to a human.
+
+### WhatsApp / Social Commerce Assistant
+- [ ] Handle common product questions, availability, delivery areas, pricing, and order-intake workflows for authorized sellers.
+- [ ] Convert conversations into structured leads/orders.
+- [ ] Support Instagram/social inbox workflows where official APIs and permissions allow.
+- [ ] Require confirmation before high-impact order changes, refunds, or other external side effects.
+
+### SaaS Onboarding Agent
+- [ ] Guide new customers through setup and product workflows.
+- [ ] Answer product-specific questions from an authorized knowledge base.
+- [ ] Detect onboarding blockers and create follow-up tasks or support tickets.
+- [ ] Track activation milestones and generate retention insights.
+
+### Real Estate Lead Qualification Agent
+- [ ] Capture and qualify inbound leads using configurable non-sensitive business criteria.
+- [ ] Record budget, timeline, preferred area, and contact preferences when voluntarily provided.
+- [ ] Schedule human follow-up and maintain lead status.
+- [ ] Keep high-impact or regulated decisions under human review.
+
+### Customer Support Triage
+- [ ] Read authorized incoming support tickets/messages.
+- [ ] Categorize, prioritize, summarize, route, and draft suggested responses.
+- [ ] Detect duplicate or related issues.
+- [ ] Measure response time, backlog, routing accuracy, and recurring problem categories.
+
+### Document Intelligence / Q&A
+- [ ] Securely index authorized company documents and let users ask questions in natural language.
+- [ ] Return answers with citations to the source document and relevant page/section.
+- [ ] Support contracts, policies, SOPs, manuals, reports, and accounting/business documents.
+- [ ] Clearly distinguish retrieval from professional legal/accounting advice and provide escalation paths when appropriate.
+
+### Meeting Follow-Up Agent
+- [ ] Turn authorized meeting transcripts/notes into summaries, action items, follow-up drafts, and tasks.
+- [ ] Update connected CRM/project records when authorized.
+- [ ] Prepare proposed follow-up meetings without silently sending or booking high-impact actions.
+
+### Multilingual Customer Support
+- [ ] Detect customer language and respond in supported languages.
+- [ ] Translate between customer and business teams when needed.
+- [ ] Preserve business terminology, product names, and brand voice.
+- [ ] Use clear fallback behavior when a requested language is unsupported.
+
+### AI Content Repurposing Pipeline
+- [ ] Transform one authorized long-form video/audio/article into platform-specific shorts, posts, captions, summaries, and newsletter drafts.
+- [ ] Adapt aspect ratio, hooks, length, tone, subtitles, and metadata per destination.
+- [ ] Queue drafts for approval and publish only through authorized connectors.
+
+### Internal Knowledge Assistant
+- [ ] Index authorized sources such as company docs, Google Drive, Notion/other connectors, and approved knowledge bases.
+- [ ] Answer employee questions with citations.
+- [ ] Respect role-based access and never retrieve information outside the user's workspace permissions.
+- [ ] Surface conflicting or outdated documents instead of silently choosing one.
+
+### Productized AI Business Builder
+- [ ] Let a business owner describe a problem in natural language.
+- [ ] JARVIS recommends a solution template, required integrations, expected workflow, and approval points.
+- [ ] Generate a deployable workflow/configuration from the selected template where supported.
+- [ ] Track setup, usage, outcomes, and measurable value such as time saved, response time, leads processed, or content produced.
+- [ ] Support reusable client-specific templates so JARVIS can manage multiple businesses without mixing data.
+
 ## P0 — Advanced Agentic Capabilities
 
 ### Digital Hands / Computer Use
