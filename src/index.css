@@ -841,3 +841,229 @@ button {
 .auth-card h1 { margin: 0; }
 .auth-card p { margin: 0; color: #9bb7c5; line-height: 1.6; }
 .auth-card small { color: #718c9a; line-height: 1.5; }
+
+
+/* JARVIS conversational redesign */
+:root {
+  --jarvis-hue: 195;
+  --jarvis-accent: hsl(var(--jarvis-hue) 55% 62%);
+  --jarvis-accent-soft: hsl(var(--jarvis-hue) 45% 72%);
+  --jarvis-accent-line: hsl(var(--jarvis-hue) 34% 34% / 0.72);
+  --jarvis-panel: #12171d;
+  --jarvis-panel-2: #171d24;
+  --jarvis-surface: #0d1116;
+  --jarvis-text: #edf1f4;
+  --jarvis-muted: #87919b;
+}
+
+html {
+  background: var(--jarvis-surface);
+}
+
+body {
+  background:
+    radial-gradient(circle at 50% 16%, hsl(var(--jarvis-hue) 42% 35% / 0.10), transparent 32%),
+    linear-gradient(160deg, #0c1015 0%, #10151b 52%, #0a0e13 100%);
+  transition: background 2s ease;
+}
+
+.jarvis-shell {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.018), transparent 28%),
+    linear-gradient(160deg, #0b0f14 0%, #11161c 52%, #0a0e12 100%);
+  background-size: auto, auto;
+}
+
+.jarvis-shell::before {
+  background: radial-gradient(circle, hsl(var(--jarvis-hue) 45% 45% / .10), transparent 68%);
+  transition: background 2s ease;
+}
+
+.jarvis-shell::after,
+.jarvis-shell .dashboard::after {
+  display: none;
+}
+
+.scanline {
+  display: none;
+}
+
+.topbar {
+  height: 68px;
+  padding: 0 24px;
+  border-bottom-color: hsl(var(--jarvis-hue) 28% 27% / .72);
+  background: rgba(11, 15, 20, .90);
+  box-shadow: 0 1px 0 hsl(var(--jarvis-hue) 40% 55% / .06);
+  transition: border-color 2s ease;
+}
+
+.brand strong,
+.chat-head h1,
+.bubble p {
+  color: var(--jarvis-text);
+}
+
+.brand span,
+.status,
+.head-actions span,
+.hint,
+.chat-subtitle {
+  color: var(--jarvis-muted);
+}
+
+.orb {
+  border-color: var(--jarvis-accent);
+  color: var(--jarvis-accent-soft);
+  box-shadow: 0 0 18px hsl(var(--jarvis-hue) 60% 60% / .18), inset 0 0 16px rgba(255,255,255,.06);
+  background: radial-gradient(circle, rgba(255,255,255,.92) 0 8%, hsl(var(--jarvis-hue) 64% 62% / .62) 9% 18%, rgba(0,0,0,.08) 19% 38%, transparent 60%);
+  transition: border-color 2s ease, color 2s ease, box-shadow 2s ease, background 2s ease;
+}
+
+.pulse {
+  background: var(--jarvis-accent);
+  box-shadow: 0 0 10px hsl(var(--jarvis-hue) 55% 62% / .55);
+  transition: background 2s ease, box-shadow 2s ease;
+}
+
+.dashboard.single-chat {
+  display: block;
+  width: min(1080px, 100%);
+  min-height: calc(100vh - 68px);
+}
+
+.chat-panel {
+  min-height: calc(100vh - 68px);
+  background: rgba(9, 13, 18, .50);
+}
+
+.chat-head {
+  padding: 34px 38px 20px;
+  background: rgba(13, 18, 24, .52);
+  border-bottom-color: hsl(var(--jarvis-hue) 24% 23% / .82);
+}
+
+.chat-subtitle {
+  margin: 8px 0 0;
+  max-width: 560px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.eyebrow,
+.bubble span {
+  color: var(--jarvis-accent);
+  transition: color 2s ease;
+}
+
+.head-actions button,
+.message-badge {
+  border-color: var(--jarvis-accent-line);
+  background: var(--jarvis-panel);
+  color: var(--jarvis-accent-soft);
+  transition: border-color 2s ease, color 2s ease, background .2s ease;
+}
+
+.head-actions button.active-control {
+  border-color: hsl(var(--jarvis-hue) 48% 52% / .8);
+  color: var(--jarvis-accent-soft);
+  box-shadow: 0 0 16px hsl(var(--jarvis-hue) 55% 55% / .12);
+}
+
+.messages {
+  max-height: calc(100vh - 300px);
+  padding: 28px 38px 18px;
+}
+
+.message-row {
+  max-width: 820px;
+}
+
+.bubble {
+  border-color: hsl(var(--jarvis-hue) 22% 25% / .9);
+  background: var(--jarvis-panel);
+  border-radius: 10px 14px 14px 14px;
+  box-shadow: 0 8px 28px rgba(0,0,0,.12);
+}
+
+.user .bubble {
+  background: var(--jarvis-panel-2);
+  border-color: hsl(var(--jarvis-hue) 25% 29% / .9);
+}
+
+.composer {
+  margin: 0 38px;
+  border-color: hsl(var(--jarvis-hue) 30% 34% / .82);
+  background: rgba(18, 23, 29, .96);
+  border-radius: 16px;
+  box-shadow: 0 14px 34px rgba(0,0,0,.28), 0 0 28px hsl(var(--jarvis-hue) 45% 45% / .05);
+  transition: border-color 2s ease, box-shadow 2s ease;
+}
+
+.composer input {
+  color: var(--jarvis-text);
+}
+
+.mic,
+.send {
+  border-color: var(--jarvis-accent-line);
+  background: #151b22;
+  color: var(--jarvis-accent-soft);
+  transition: border-color 2s ease, color 2s ease, background .2s ease;
+}
+
+.mic.active,
+.send:hover:not(:disabled) {
+  border-color: var(--jarvis-accent);
+  color: #fff;
+  background: hsl(var(--jarvis-hue) 24% 22%);
+  box-shadow: 0 0 18px hsl(var(--jarvis-hue) 55% 55% / .12);
+}
+
+.send {
+  background: hsl(var(--jarvis-hue) 25% 24%);
+}
+
+.chat-tools {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 2px 38px 14px;
+}
+
+.chat-tools button {
+  border: 1px solid hsl(var(--jarvis-hue) 26% 31% / .82);
+  background: #151a20;
+  color: #aab4bd;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 10px;
+  transition: border-color 2s ease, color 2s ease, background .2s ease, transform .15s ease;
+}
+
+.chat-tools button:hover:not(:disabled) {
+  border-color: var(--jarvis-accent);
+  color: var(--jarvis-accent-soft);
+  background: #1a2027;
+  transform: translateY(-1px);
+}
+
+.chat-tools button:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+.thinking {
+  color: var(--jarvis-muted);
+}
+
+.thinking span {
+  background: var(--jarvis-accent);
+}
+
+@media (max-width: 760px) {
+  .topbar { padding: 0 16px; }
+  .chat-head { padding: 24px 18px 18px; }
+  .messages { padding: 20px 18px 14px; max-height: calc(100vh - 320px); }
+  .composer { margin: 0 14px; }
+  .chat-tools { padding: 2px 14px 12px; }
+}
