@@ -124,6 +124,18 @@ function App() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
+    const updatePalette = () => {
+      const cycleMinutes = 120;
+      const minutes = ((Date.now() / 60000) % cycleMinutes + cycleMinutes) % cycleMinutes;
+      const hue = Math.round(188 + (minutes / cycleMinutes) * 128);
+      document.documentElement.style.setProperty('--jarvis-hue', String(hue));
+    };
+    updatePalette();
+    const paletteTimer = window.setInterval(updatePalette, 15000);
+    return () => window.clearInterval(paletteTimer);
+  }, []);
+
+  useEffect(() => {
     let active = true;
 
     if (!supabaseConfigured || !supabase) {
@@ -234,9 +246,87 @@ function App() {
     }
   };
 
+  const handleChatCommand = (clean: string) => {
+    const value = clean.toLowerCase().replace(/[!?.,]+$/g, '').trim();
+    let response = '';
+
+    const closeAll = () => {
+      setCommandOpen(false);
+      setCapabilityOpen(false);
+      setBusinessOpen(false);
+      setVideoOpen(false);
+      setImageLabOpen(false);
+      setSystemOpen(false);
+      setSecurityOpen(false);
+      setEmpireOpen(false);
+    };
+
+    if (/^(open|show|launch) (image lab|image studio)$/.test(value) || value === 'image lab') {
+      closeAll();
+      setImageLabOpen(true);
+      response = 'Image Lab is open. Describe the picture you want and I will generate it here.';
+    } else if (/^(open|show|launch) (video lab|video studio)$/.test(value) || value === 'video lab') {
+      closeAll();
+      void openVideoStudio();
+      response = 'Video Lab is ready. Tell me what children’s video you want to produce.';
+    } else if (/^(open|show|launch) business( center)?$/.test(value)) {
+      closeAll();
+      void openBusinessCenter();
+      response = 'Business Center is ready.';
+    } else if (/^(open|show|launch) (system center|system check)$/.test(value)) {
+      closeAll();
+      setSystemOpen(true);
+      void runSystemCheck();
+      response = 'System Center is running a browser-safe health check.';
+    } else if (/^(open|show|launch) security( center)?$/.test(value)) {
+      closeAll();
+      void openSecurityCenter();
+      response = 'Security Center is open.';
+    } else if (/^(open|show|launch) (capabilities|capability center)$/.test(value) || value === 'what can you do') {
+      closeAll();
+      setCapabilityOpen(true);
+      response = 'Here are JARVIS’s available capabilities.';
+    } else if (/^(open|show|launch) (command center|commands)$/.test(value)) {
+      closeAll();
+      setCommandOpen(true);
+      response = 'Command Center is open.';
+    } else if (/^(open|show|launch) empire command$/.test(value)) {
+      closeAll();
+      setEmpireOpen(true);
+      response = 'Empire Command is open.';
+    } else if (/^(export|download) (my )?memory$/.test(value)) {
+      exportMemory();
+      response = 'Your local JARVIS memory export has been prepared.';
+    } else if (/^(clear|delete) (my )?(local )?memory$/.test(value)) {
+      clearMemory();
+      response = 'Local JARVIS memory has been cleared from this browser.';
+    } else if (/^(turn|switch|set) voice (on|off)$/.test(value)) {
+      const enabled = value.endsWith('on');
+      setVoiceEnabled(enabled);
+      response = enabled ? 'Voice output is now on.' : 'Voice output is now off.';
+    } else if (/^(turn|switch|set) passive wake (on|off)$/.test(value)) {
+      const enabled = value.endsWith('on');
+      setPassiveWake(enabled);
+      if (enabled) startPassiveWake();
+      else stopPassiveWake();
+      response = enabled ? 'Passive wake is now on.' : 'Passive wake is now off.';
+    }
+
+    if (!response) return false;
+    setInput('');
+    setMessages(current => [
+      ...current,
+      { role: 'user', content: clean },
+      { role: 'assistant', content: response },
+    ]);
+    if (voiceEnabled) void speak(response);
+    return true;
+  };
+
   const sendMessage = async (text = input) => {
     const clean = text.trim();
     if (!clean || busy) return;
+    if (handleChatCommand(clean)) return;
     const next = [...messages, { role: 'user' as const, content: clean }];
     setMessages(next);
     setInput('');
@@ -308,8 +398,8 @@ function App() {
     recognition.onend = () => setListening(false);
     recognition.onerror = () => setListening(false);
     recognition.onresult = (event: any) => {
-      const text = event.results?.[0]?.[0]?.transcript || '';
-      if (text.trim()) void sendMessage(text);
+      const text = String(event.results?.[0]?.[0]?.transcript || '').trim();
+      if (text) setInput(current => current ? current + ' ' + text : text);
     };
     recognitionRef.current = recognition;
     recognition.start();
@@ -706,139 +796,31 @@ function App() {
         </div>
       </header>
 
-      <section className="dashboard">
-        <aside className="side-panel">
-          <div className="profile-card">
-            <div className="avatar">S</div>
-            <div>
-              <b>SAVIOUR</b>
-              <small>PRIMARY USER</small>
-            </div>
-          </div>
-          <div className="metric">
-            <Activity size={16} />
-            <span>Core status</span>
-            <b>ONLINE</b>
-          </div>
-          <div className="metric">
-            <Cpu size={16} />
-            <span>AI engine</span>
-            <b>READY</b>
-          </div>
-          <div className="metric">
-            <Shield size={16} />
-            <span>Mode</span>
-            <b>DEFENSIVE</b>
-          </div>
-          <div className="metric">
-            <Sparkles size={16} />
-            <span>Plan</span>
-            <b>{String(entitlement?.jarvis_plans?.name || entitlement?.plan_code || 'FREE').toUpperCase()}</b>
-          </div>
-          <div className="assistant-status-card">
-            <div><Sparkles size={14} /><span>IMAGE ALLOWANCE</span><b>{Number(entitlement?.credits_remaining ?? 0)}</b></div>
-            <small>Successful image generations remaining this period</small>
-          </div>
-          <div className="quick-title">ASSISTANT STATUS</div>
-          <div className="assistant-status-card">
-            <div><Radio size={14} /><span>PASSIVE WAKE</span><b>{passiveWake ? 'ON' : 'OFF'}</b></div>
-            <small>{passiveStatus}</small>
-          </div>
-          <div className="quick-title">QUICK COMMANDS</div>
-          {['Explain something', 'Help me study', 'Give me an idea'].map(
-            item => (
-              <button
-                className="quick"
-                key={item}
-                onClick={() => void sendMessage(item)}
-              >
-                {item}
-              </button>
-            )
-          )}
-          <button className="command-button" onClick={() => setCommandOpen(true)}>
-            <Terminal size={15} /> Command Center
-          </button>
-          <button className="empire-button" type="button" onClick={event => {
-            event.preventDefault();
-            event.stopPropagation();
-            setCommandOpen(false);
-            setCapabilityOpen(false);
-            setImageLabOpen(false);
-            setSystemOpen(false);
-            setSecurityOpen(false);
-            setEmpireOpen(true);
-          }}>
-            <Sparkles size={15} /> Empire Command
-          </button>
-          <button className="system-button" onClick={() => setCapabilityOpen(true)}>
-            <BrainCircuit size={15} /> Capability Center
-          </button>
-          <button className="system-button" onClick={() => void openBusinessCenter()}>
-            <BrainCircuit size={15} /> Business Center
-          </button>
-          <button className="system-button" onClick={() => void openVideoStudio()}>
-            <Sparkles size={15} /> Video Studio
-          </button>
-          <button className="system-button" onClick={() => setImageLabOpen(true)}>
-            <Sparkles size={15} /> Image Lab
-          </button>
-          <button className="system-button" onClick={() => { setSystemOpen(true); runSystemCheck(); }}>
-            <Monitor size={15} /> System Center
-          </button>
-          <button className="security-button" onClick={openSecurityCenter}>
-            <Shield size={15} /> Security Center
-          </button>
-          <button className="memory-button" onClick={exportMemory}>
-            <Download size={15} /> Export memory
-          </button>
-          <button className="danger" onClick={clearMemory}>
-            <Trash2 size={15} /> Clear local memory
-          </button>
-        </aside>
-
+      <section className="dashboard single-chat">
         <section className="chat-panel">
           <div className="chat-head">
             <div>
               <span className="eyebrow">CONVERSATION CORE</span>
               <h1>How can I assist?</h1>
+              <p className="chat-subtitle">One conversation for creation, tools, memory, system controls, and voice.</p>
             </div>
             <div className="head-actions">
-              <button
-                className={passiveWake ? 'active-control' : ''}
-                title="Toggle passive Hey wake mode"
-                onClick={togglePassiveWake}
-              >
+              <button className={passiveWake ? 'active-control' : ''} title="Toggle passive Hey wake mode" onClick={togglePassiveWake} aria-label="Toggle passive wake">
                 <Radio size={18} />
               </button>
-              <button
-                title="Toggle voice output"
-                onClick={() => setVoiceEnabled(v => !v)}
-              >
+              <button title="Toggle voice output" onClick={() => setVoiceEnabled(v => !v)} aria-label="Toggle voice output">
                 {voiceEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
               </button>
               <span>
-                {speaking
-                  ? 'SPEAKING'
-                  : listening
-                    ? 'LISTENING'
-                    : busy
-                      ? 'THINKING'
-                      : passiveWake
-                        ? 'PASSIVE'
-                        : 'STANDBY'}
+                {speaking ? 'SPEAKING' : listening ? 'LISTENING' : busy ? 'THINKING' : passiveWake ? 'PASSIVE' : 'STANDBY'}
               </span>
             </div>
           </div>
+
           <div className="messages">
             {messages.map((message, index) => (
-              <div
-                className={`message-row ${message.role}`}
-                key={`${index}-${message.content.slice(0, 8)}`}
-              >
-                <div className="message-badge">
-                  {message.role === 'user' ? 'S' : 'J'}
-                </div>
+              <div className={'message-row ' + message.role} key={index + '-' + message.content.slice(0, 8)}>
+                <div className="message-badge">{message.role === 'user' ? 'S' : 'J'}</div>
                 <div className="bubble">
                   <span>{message.role === 'user' ? 'YOU' : 'JARVIS'}</span>
                   <p>{message.content}</p>
@@ -854,33 +836,39 @@ function App() {
             )}
             <div ref={endRef} />
           </div>
+
+          <div className="chat-tools" aria-label="JARVIS chat actions">
+            {[
+              ['Create image', 'Create an image of a cute storybook animal in a magical forest.'],
+              ['Make video', 'Make a children’s storytelling video about a brave little fox.'],
+              ['Voice mode', 'Turn voice on'],
+              ['System check', 'Open system center'],
+              ['Security', 'Open security center'],
+              ['Capabilities', 'Open capabilities'],
+              ['Memory', 'Export memory'],
+            ].map(([label, command]) => (
+              <button key={label} onClick={() => void sendMessage(command)} disabled={busy}>{label}</button>
+            ))}
+          </div>
+
           <div className="composer">
-            <button
-              className={`mic ${listening ? 'active' : ''}`}
-              onClick={startListening}
-              title="Voice input"
-            >
+            <button className={'mic ' + (listening ? 'active' : '')} onClick={startListening} title="Dictate into the message box" aria-label="Start speech to text">
               {listening ? <MicOff size={20} /> : <Mic size={20} />}
             </button>
             <input
               value={input}
               onChange={e => setInput(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter') void sendMessage();
-              }}
-              placeholder="Speak or type a command..."
+              onKeyDown={e => { if (e.key === 'Enter') void sendMessage(); }}
+              placeholder={listening ? 'Listening… speak now' : 'Speak or type to JARVIS…'}
+              aria-label="Message JARVIS"
             />
-            <button
-              className="send"
-              onClick={() => void sendMessage()}
-              disabled={busy || !input.trim()}
-            >
+            <button className="send" onClick={() => void sendMessage()} disabled={busy || !input.trim()} aria-label="Send message">
               <Send size={18} />
             </button>
           </div>
           <div className="hint">
             {passiveWake ? 'Passive wake is listening for “Hey” • ' : ''}
-            Local memory • Voice input is browser-controlled • Voice output is {voiceEnabled ? 'ON' : 'OFF'}
+            Tap the mic to turn speech into editable text • Voice output {voiceEnabled ? 'ON' : 'OFF'}
           </div>
         </section>
       </section>
