@@ -87,7 +87,7 @@ export function getCapabilityRegistry() {
     label,
     category,
     description,
-    keywords: Array.isArray(keywords) ? keywords : [],
+    keywords: Array.isArray(capability.keywords) ? capability.keywords : [],
     available: Boolean(available()),
   }));
 }
