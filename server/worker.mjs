@@ -226,7 +226,6 @@ export async function runWorker({
     runtimeLimitMs: runtimeLimit,
   };
 }
-}
 
 if (process.argv[1] && process.argv[1].endsWith('/worker.mjs')) {
   const once = process.env.JARVIS_WORKER_ONCE === '1' || process.env.JARVIS_WORKER_ONCE === 'true';
