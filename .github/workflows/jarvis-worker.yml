@@ -30,5 +30,6 @@ jobs:
           JARVIS_WORKER_CONCURRENCY: "4"
           JARVIS_WORKER_MAX_JOBS_PER_RUN: "24"
           JARVIS_WORKER_MAX_RUNTIME_MS: "210000"
+          JARVIS_ROUTINE_BATCH_LIMIT: "10"
         run: |
           npm run worker
