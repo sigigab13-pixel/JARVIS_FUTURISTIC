@@ -415,6 +415,16 @@ export async function handleApi(req, res, pathname, url) {
     return json(res, 200, { messages: history, persistent: true }, { 'Set-Cookie': jarvisCookie(authenticated.jarvisUser.id) });
   }
 
+  if (req.method === 'GET' && pathname === '/api/chat') {
+    return json(res, 200, {
+      service: 'JARVIS chat',
+      openaiConfigured: Boolean(process.env.OPENAI_API_KEY),
+      openaiModel: process.env.OPENAI_MODEL || 'gpt-6-luna',
+      huggingFaceConfigured: Boolean(process.env.HUGGINGFACE_API_TOKEN || process.env.HF_TOKEN),
+      fallbackAvailable: Boolean(process.env.HUGGINGFACE_API_TOKEN || process.env.HF_TOKEN),
+    });
+  }
+
   if (req.method === 'POST' && pathname === '/api/chat') {
     const input = await parseBody(req);
     const messages = Array.isArray(input.messages)
