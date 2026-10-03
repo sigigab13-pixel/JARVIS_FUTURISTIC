@@ -876,6 +876,49 @@ function safeTemplates(value) {
   })).filter(template => template.type);
 }
 
+export async function queueMissionStepForUser(userId, mission) {
+  if (!validUuid(userId) || !validUuid(String(mission?.id || ''))) {
+    throw new Error('Invalid mission identity.');
+  }
+  const stepIndex = Number(mission.currentStep);
+  const step = mission.steps?.[stepIndex];
+  if (!step || stepIndex < 0) return null;
+  const adapter = String(step?.executorType || step?.executor_type || step?.type || '').trim();
+  if (!adapter) throw new Error('Mission step has no execution adapter.');
+
+  const job = {
+    id: crypto.randomUUID(),
+    user_id: userId,
+    parent_job_id: null,
+    type: 'mission_step',
+    status: 'queued',
+    priority: Math.min(100, Math.max(0, Number(step?.priority ?? mission?.metadata?.priority ?? 50))),
+    payload: {
+      mission_id: mission.id,
+      mission_goal: mission.goal,
+      user_id: userId,
+      step_index: stepIndex,
+      adapter,
+      step,
+    },
+    attempts: 0,
+    max_attempts: Math.min(8, Math.max(1, Number(step?.maxAttempts ?? 3))),
+    idempotency_key: 'mission:' + mission.id + ':step:' + String(step.id || stepIndex),
+    scheduled_at: new Date().toISOString(),
+  };
+
+  if (!configured) return job;
+  const rows = await request('jobs', {
+    method: 'POST',
+    headers: { Prefer: 'resolution=ignore-duplicates,return=representation' },
+    body: JSON.stringify(job),
+  });
+  return rows?.[0] || (await request(
+    'jobs?select=*&user_id=eq.' + encodeURIComponent(userId) +
+    '&idempotency_key=eq.' + encodeURIComponent(job.idempotency_key) + '&limit=1'
+  ))?.[0] || null;
+}
+
 export async function createRoutineForUser(userId, data = {}) {
   if (!validUuid(userId)) throw new Error('Invalid JARVIS user id.');
   const name = String(data.name || '').trim().slice(0, 200);
