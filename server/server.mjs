@@ -181,6 +181,16 @@ export async function handleApi(req, res, pathname, url) {
     return json(res, 200, { message: 'Success', service: 'JARVIS', deployment: 'vercel' });
   }
 
+  if (req.method === 'GET' && pathname === '/api/chat') {
+    return json(res, 200, {
+      ok: true,
+      route: '/api/chat',
+      method: 'POST',
+      providerConfigured: Boolean(process.env.HUGGINGFACE_API_TOKEN || process.env.HF_TOKEN),
+      model: HF_MODEL,
+    });
+  }
+
   if (req.method === 'GET' && pathname === '/api/business') {
     const { jarvisUser } = await requireAuthenticatedJarvisUser(req);
     const business = await getBusinessForUser(jarvisUser.id);
