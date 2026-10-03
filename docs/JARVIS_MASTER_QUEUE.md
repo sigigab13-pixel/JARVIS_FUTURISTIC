@@ -179,6 +179,99 @@ This queue is intentionally ambitious; implementation should be staged so each p
 - [x] Multi-user identity isolation fix: display names, greetings, and browser-local history are scoped to the authenticated account.
 
 
+
+
+## P0 — Advanced Agentic Capabilities
+
+### Digital Hands / Computer Use
+- [ ] Secure cloud computer/browser environment JARVIS can operate for authorized tasks.
+- [ ] Navigate websites, click controls, type, fill forms, download/upload files, and complete multi-step digital workflows.
+- [ ] Screenshot/observe-and-act loop with verification after important steps.
+- [ ] Approval gates for sensitive actions such as account changes, purchases, publishing, sending messages, or submitting forms.
+- [ ] Sandboxed execution, least-privilege permissions, time limits, and action audit trail.
+
+### Teach JARVIS Once
+- [ ] Teach-by-demonstration workflow recording.
+- [ ] Convert a demonstrated workflow into a reusable JARVIS skill.
+- [ ] Let users review, rename, edit, pause, and delete learned skills.
+- [ ] Re-run learned workflows with fresh inputs while respecting permissions.
+- [ ] Detect when a learned workflow no longer matches a website/app and request a safe update.
+
+### Live Vision / Screen Understanding
+- [ ] Real-time or near-real-time understanding of an authorized shared screen/camera feed.
+- [ ] Answer questions about what is currently visible.
+- [ ] Software/UI troubleshooting and guided navigation.
+- [ ] Identify relevant visual changes and use them as mission context.
+- [ ] Clear indicator when vision/camera/screen access is active.
+
+### Mission Watch
+- [ ] Background mission status dashboard and notifications.
+- [ ] Step-by-step progress, retries, blockers, and completion reporting.
+- [ ] Pause/resume/cancel missions safely.
+- [ ] Automatic recovery for transient failures and escalation when a human decision is required.
+- [ ] Mission history with logs and reproducible run state.
+
+### Evolving Memory / Personalization
+- [ ] Separate durable memories, preferences, habits, corrections, goals, and temporary context.
+- [ ] Learn from explicit user corrections and approved feedback.
+- [ ] Detect outdated memories and ask before replacing important information.
+- [ ] Personalize responses, workflows, content style, and recommendations.
+- [ ] Keep personal, business, and shared-workspace memories strictly isolated.
+
+### JARVIS AI Team
+- [ ] Specialist agents for Research, Story, Image, Video, Voice, Business, Personal, Publishing, Analytics, Security, and Systems.
+- [ ] Director/orchestrator agent that decomposes goals and delegates subtasks.
+- [ ] Parallel execution where tasks are independent.
+- [ ] Agent handoffs with structured context and verified outputs.
+- [ ] Human approval checkpoints for external side effects.
+
+### Cross-Device Continuity
+- [ ] Resume conversations and missions across phone, tablet, desktop, and future JARVIS clients.
+- [ ] Server-side mission state and memory independent of any one browser/device.
+- [ ] Device-aware notifications and active-session controls.
+- [ ] Secure session management and remote sign-out.
+
+### Natural Voice Conversation
+- [ ] Low-friction conversational turn taking.
+- [ ] User interruption/barge-in handling.
+- [ ] Natural pauses and end-of-turn detection.
+- [ ] Voice mode that can use the same intent, memory, tools, and missions as text chat.
+- [ ] Reliable wake/recovery behavior with explicit microphone controls.
+
+### JARVIS Visual Identity
+- [ ] Recognizable JARVIS avatar and status indicators.
+- [ ] Contextual visual states for thinking, listening, working, waiting for approval, success, and error.
+- [ ] User-selectable themes/brand identity in supported plans.
+- [ ] Preserve the simple evolving accent system rather than returning to an overloaded interface.
+
+### Intelligence Watchdog
+- [ ] Scheduled monitoring of approved websites, keywords, companies, competitors, products, topics, and public sources.
+- [ ] Detect meaningful changes and summarize what changed.
+- [ ] Business alerts for market/competitor developments.
+- [ ] Personal alerts for selected topics.
+- [ ] Children-content trend alerts with age-appropriate filtering.
+- [ ] Respect source permissions, rate limits, robots/access restrictions, and privacy boundaries.
+
+### Interactive Workspaces / Artifacts
+- [ ] Turn answers into usable outputs such as reports, tables, charts, checklists, planners, calculators, storybooks, and lightweight interactive tools.
+- [ ] Preview and iterate on generated artifacts within JARVIS.
+- [ ] Save versions to the user's authorized workspace.
+- [ ] Export/share outputs using approved connectors.
+- [ ] Track provenance and source evidence for research-derived artifacts.
+
+### Intelligence Layer — Unified Intent & Context
+- [ ] Understand natural-language goals without requiring exact commands or tool names.
+- [ ] Resolve references such as “that,” “it,” “the person we discussed,” and “yesterday's report.”
+- [ ] Automatically select and chain the correct capabilities and agents.
+- [ ] Use conversation, memory, files, and active mission context when authorized.
+- [ ] Ask one focused clarification only when ambiguity materially affects the action.
+- [ ] Verify tool results before reporting success.
+
+### Global Assistant Principle
+- [ ] Make complexity invisible to the user: users describe the goal, JARVIS chooses the tools.
+- [ ] Never imply that a capability or action is available unless the connected service can actually perform it.
+- [ ] Keep permissions, privacy, workspace isolation, and approval controls ahead of convenience.
+
 ## P0 — Multimodal Input & Visual Problem Solving
 - [ ] Upload pictures, screenshots, scanned documents, and PDFs directly in the central JARVIS chat.
 - [ ] Let users ask JARVIS to inspect an uploaded image/PDF and explain what is wrong, unusual, missing, or unclear.
