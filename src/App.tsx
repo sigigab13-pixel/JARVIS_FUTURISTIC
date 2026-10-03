@@ -840,7 +840,7 @@ function App() {
           <div className="chat-tools" aria-label="JARVIS chat actions">
             {[
               ['Create image', 'Create an image of a cute storybook animal in a magical forest.'],
-              ['Make video', 'Make a children’s storytelling video about a brave little fox.'],
+              ['Video Lab', 'Open video lab'],
               ['Voice mode', 'Turn voice on'],
               ['System check', 'Open system center'],
               ['Security', 'Open security center'],
