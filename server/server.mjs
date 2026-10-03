@@ -491,6 +491,8 @@ export async function handleApi(req, res, pathname, url) {
     const authenticated = await getOptionalAuthenticatedJarvisUser(req);
     const userId = authenticated?.jarvisUser?.id || null;
     const latestUserMessage = String(messages[messages.length - 1]?.content || '').trim();
+    const displayName = String(authenticated?.jarvisUser?.name || authenticated?.jarvisUser?.email || '').trim();
+    const userIdentity = displayName ? `${displayName}'s` : 'the current user';
 
     const imageRequest = /\b(generate|create|make|draw|illustrate|render)\b[\\s\\S]{0,120}\b(image|picture|photo|illustration)\b|\b(image|picture|photo|illustration)\b[\\s\\S]{0,120}\b(generate|create|make|draw|illustrate|render)\b/i.test(latestUserMessage);
     if (imageRequest) {
@@ -510,7 +512,7 @@ export async function handleApi(req, res, pathname, url) {
         });
         const buffer = Buffer.from(await blob.arrayBuffer());
         const mimeType = blob.type || 'image/png';
-        const responseText = 'Done, Saviour. I generated the image and opened it in Image Lab.';
+        const responseText = `Done, ${displayName || 'there'}. I generated the image and opened it in Image Lab.`;
         await appendConversationMessages(authenticated.jarvisUser.id, [
           { role: 'user', content: latestUserMessage },
           { role: 'assistant', content: responseText },
@@ -545,7 +547,7 @@ export async function handleApi(req, res, pathname, url) {
       : '';
 
     const systemMessage = [
-      "You are JARVIS FUTURISTIC, Saviour's AI assistant.",
+      `You are JARVIS FUTURISTIC, the AI assistant for ${userIdentity}.`,
       "The JARVIS application provides you with the current conversation messages and, when available, relevant long-term memories retrieved from its persistent memory system.",
       "Use the supplied conversation and memory context to maintain continuity. Do not claim that you cannot remember previous conversations when relevant history or memory is supplied.",
       "Do not describe yourself as ChatGPT, Claude, Hugging Face, or another underlying model unless the user explicitly asks which model/provider is being used.",
