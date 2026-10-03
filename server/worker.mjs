@@ -74,6 +74,10 @@ export async function executeJob(job) {
   const type = String(job?.type || '');
   const payload = job?.payload && typeof job.payload === 'object' ? job.payload : {};
 
+  if (type === 'routine_fanout') {
+    return fanOutRoutineRun(job);
+  }
+
   if (type === 'video_pipeline') {
     return {
       accepted: true,
