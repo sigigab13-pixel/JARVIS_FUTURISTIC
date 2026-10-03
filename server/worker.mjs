@@ -7,6 +7,7 @@ import {
   fanOutRoutineRun,
   updateRoutineRunFromChildren,
 } from './store.mjs';
+import { executeMissionStep } from './mission-executor.mjs';
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
 const SUPABASE_SERVER_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -76,6 +77,10 @@ export async function executeJob(job) {
 
   if (type === 'routine_fanout') {
     return fanOutRoutineRun(job);
+  }
+
+  if (type === 'mission_step') {
+    return executeMissionStep(job);
   }
 
   if (type === 'video_pipeline') {
@@ -150,13 +155,21 @@ async function processJob(job, workerId, logger) {
 
   try {
     const result = await executeJob(job);
-    if (job?.type === 'routine_fanout' && result?.childJobIds?.length && isRedisConfigured()) {
+    const nextJobId = result?.nextJobId || null;
+    if ((job?.type === 'routine_fanout' && result?.childJobIds?.length) && isRedisConfigured()) {
       for (const childJobId of result.childJobIds) {
         try {
           await enqueueJob(childJobId, 'routine_step');
         } catch (queueError) {
           logger.warn?.(`[JARVIS worker] child Redis dispatch failed ${childJobId}; Supabase remains the fallback queue:`, queueError);
         }
+      }
+    }
+    if (nextJobId && isRedisConfigured()) {
+      try {
+        await enqueueJob(nextJobId, 'mission_step');
+      } catch (queueError) {
+        logger.warn?.(`[JARVIS worker] next mission step Redis dispatch failed ${nextJobId}; Supabase remains the fallback queue:`, queueError);
       }
     }
     await finishJob(job.id, workerId, result);
