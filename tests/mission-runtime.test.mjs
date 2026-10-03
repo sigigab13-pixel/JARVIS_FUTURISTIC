@@ -43,9 +43,17 @@ test('mission advances by verified step completion', () => {
   assert.equal(done.status, 'succeeded');
 });
 
-test('storage normalization excludes runtime-only nesting', () => {
-  const state = createMissionState({ missionId: 'm4', goal: 'x' });
+test('storage normalization preserves approval, evidence, and metadata without user identity nesting', () => {
+  const state = {
+    ...createMissionState({ missionId: 'm4', goal: 'x' }),
+    approval: { required: true, status: 'approved' },
+    lastEvidence: { kind: 'receipt', verified: true },
+    metadata: { source: 'test' },
+  };
   const normalized = normalizeMissionForStorage(state);
   assert.equal(normalized.mission_id, 'm4');
+  assert.deepEqual(normalized.approval, { required: true, status: 'approved' });
+  assert.deepEqual(normalized.last_evidence, { kind: 'receipt', verified: true });
+  assert.deepEqual(normalized.metadata, { source: 'test' });
   assert.ok(!('userId' in normalized));
 });
