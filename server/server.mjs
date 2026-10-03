@@ -411,7 +411,7 @@ export async function handleApi(req, res, pathname, url) {
     return json(res, 201, { mission }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
   }
 
-  const missionMatch = pathname.match(/^\/api\/missions\/([0-9a-f-]{36})(?:\/(start|request-approval|approve|pause|cancel|checkpoint|events))?$/i);
+  const missionMatch = pathname.match(/^\/api\/missions\/([0-9a-f-]{36})(?:\/(start|request-approval|approve|pause|resume|retry|cancel|checkpoint|events))?$/i);
   if (missionMatch) {
     const { jarvisUser } = await requireAuthenticatedJarvisUser(req);
     const missionId = missionMatch[1];
@@ -493,6 +493,28 @@ export async function handleApi(req, res, pathname, url) {
         message: 'Mission paused by the user.',
       });
       return json(res, 200, { mission }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+    }
+
+    if (action === 'resume' || action === 'retry') {
+      if (action === 'resume' && current.status !== 'paused') {
+        return json(res, 409, { error: 'Only a paused mission can be resumed.', code: 'MISSION_NOT_PAUSED' });
+      }
+      if (action === 'retry' && current.status !== 'failed') {
+        return json(res, 409, { error: 'Only a failed mission can be retried.', code: 'MISSION_NOT_FAILED' });
+      }
+      if (process.env.JARVIS_MISSION_EXECUTOR_ENABLED !== '1') {
+        return json(res, 409, {
+          error: 'The mission executor is not enabled yet, so JARVIS will not pretend to resume or retry external work.',
+          code: 'MISSION_EXECUTOR_NOT_ENABLED',
+          mission: current,
+        }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+      }
+      const next = transitionMission(current, 'queued');
+      const mission = await updateMissionForUser(jarvisUser.id, missionId, next, {
+        eventType: action === 'resume' ? 'mission.resumed' : 'mission.retried',
+        message: action === 'resume' ? 'Mission resumed and queued for execution.' : 'Failed mission retried and queued for execution.',
+      });
+      return json(res, 202, { mission }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
     }
 
     if (action === 'cancel') {
