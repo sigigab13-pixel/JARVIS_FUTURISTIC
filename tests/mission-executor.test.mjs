@@ -20,7 +20,7 @@ function mission(steps, overrides = {}) {
 }
 
 test('mission executor advertises only real adapters', () => {
-  assert.deepEqual(getMissionAdapters(), ['routine_fanout']);
+  assert.deepEqual(getMissionAdapters(), ['routine_fanout', 'image_generation']);
 });
 
 test('mission preflight accepts supported non-side-effect work', () => {
@@ -36,6 +36,25 @@ test('mission preflight blocks unsupported adapters', () => {
   ]));
   assert.equal(result.ok, false);
   assert.equal(result.unsupported[0].adapter, 'video_pipeline');
+});
+
+test('mission preflight accepts image generation with explicit approval', () => {
+  const result = preflightMission(mission([
+    { id: 'step-image', executorType: 'image_generation', sideEffect: true, prompt: 'A friendly illustrated lion for a children\'s rhyme.' },
+  ], {
+    autonomy: 'execute_with_approval',
+    approval: { required: true, status: 'approved' },
+  }));
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.adapters, ['image_generation']);
+});
+
+test('mission preflight blocks image generation without approval', () => {
+  const result = preflightMission(mission([
+    { id: 'step-image', executorType: 'image_generation', sideEffect: true, prompt: 'A friendly illustrated lion.' },
+  ]));
+  assert.equal(result.ok, false);
+  assert.match(result.unsafeWithoutApproval[0].reason, /advise mode/);
 });
 
 test('mission preflight blocks side effects in advise mode', () => {
