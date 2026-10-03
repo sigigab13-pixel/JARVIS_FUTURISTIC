@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { routeIntent, routeContextForPrompt } from '../server/intent-router.mjs';
 
 const caps = [
-  { id: 'image', description: 'Generate and edit images.' },
-  { id: 'youtube', description: 'Upload and publish videos to YouTube.' },
-  { id: 'web_intelligence', description: 'Search current information on the public web.' },
-  { id: 'business', description: 'Manage business clients and workflows.' },
+  { id: 'image', description: 'Generate and edit images.', keywords: ['image', 'picture', 'photo'] },
+  { id: 'youtube', description: 'Upload and publish videos to YouTube.', keywords: ['youtube', 'upload', 'publish'] },
+  { id: 'web_intelligence', description: 'Search current information on the public web.', keywords: ['search', 'current', 'web'] },
+  { id: 'business', description: 'Manage business clients and workflows.', keywords: ['business', 'client', 'customer'] },
 ];
 
 test('routes create intent with candidate capabilities', () => {
