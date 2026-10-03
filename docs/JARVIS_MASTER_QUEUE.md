@@ -476,6 +476,132 @@ JARVIS should not only expose generic automation. It should package repeatable, 
 
 
 
+
+
+# MYTHOS CONTROL & DEFENSE LAYER — Bounded Autonomy Architecture
+
+## P0 — Intent Lock
+- [ ] Establish the user's approved objective, constraints, destination, and allowed actions at mission start.
+- [ ] Treat instructions found inside webpages, emails, PDFs, documents, images, or tool results as untrusted data unless the user explicitly authorizes them as instructions.
+- [ ] Prevent external content from silently changing the mission objective, permissions, or approval requirements.
+- [ ] Detect attempts to redirect JARVIS away from the user's stated goal.
+
+## P0 — Prompt Injection Firewall
+- [ ] Detect and isolate malicious or manipulative instructions embedded in external content.
+- [ ] Maintain separate trust levels for user instructions, system policy, trusted tools, and untrusted retrieved content.
+- [ ] Sanitize or structurally extract relevant fields from untrusted sources before they can influence tool calls.
+- [ ] Block data-exfiltration patterns and suspicious tool arguments.
+- [ ] Log injection attempts and show a useful warning without exposing unnecessary attacker content.
+
+## P0 — Secret & Credential Firewall
+- [ ] Keep API keys, OAuth refresh tokens, cookies, passwords, and sensitive credentials outside model-visible prompts wherever possible.
+- [ ] Prevent tools from returning secrets to unrelated agents or workspaces.
+- [ ] Detect and redact secrets before they enter logs, memories, reports, or generated content.
+- [ ] Support short-lived, scoped credentials for agent missions.
+- [ ] Revoke credentials immediately when a connector or mission is disabled.
+
+## P0 — Least-Privilege Mission Sandbox
+- [ ] Give each mission only the minimum tools, files, accounts, scopes, and network access it needs.
+- [ ] Create isolated execution contexts for browser/computer tasks and risky transformations.
+- [ ] Separate read permissions from write permissions.
+- [ ] Expire mission permissions automatically when the mission ends.
+- [ ] Fail closed when required authorization cannot be verified.
+
+## P0 — Action Risk Engine
+- [ ] Classify actions by impact, reversibility, data sensitivity, financial consequence, audience, and external reach.
+- [ ] Automatically choose advise / draft / approval / execute-within-policy based on risk.
+- [ ] Increase verification requirements as risk increases.
+- [ ] Require explicit confirmation for sensitive or irreversible actions.
+- [ ] Never let a model-generated confidence score alone authorize a consequential action.
+
+## P0 — Two-Key Approval for Critical Actions
+- [ ] Support optional second-factor or second-person approval for high-impact business workflows.
+- [ ] Show the exact action, target, data shared, and expected external effect before approval.
+- [ ] Bind approval to the exact action payload so it cannot be silently changed afterward.
+- [ ] Expire stale approvals and require re-approval when material details change.
+
+## P0 — Safe Mode / Lockdown Mode
+- [ ] Provide a conservative mode that disables or limits selected external connectors, computer control, publishing, and other high-risk actions.
+- [ ] Allow users or workspace owners to activate safe mode immediately.
+- [ ] Make safe mode visible in the UI and active across all subagents.
+- [ ] Support automatic escalation into safer mode when anomaly or security thresholds are crossed.
+
+## P0 — Emergency Stop & Capability Revocation
+- [ ] One-click stop for active missions.
+- [ ] Revoke specific tools, connectors, sessions, credentials, or agent identities without deleting unrelated data.
+- [ ] Stop queued work that has not passed its authorization checkpoint.
+- [ ] Record why a mission was stopped and what was successfully completed before the stop.
+
+## P0 — Agent Behavior Monitor
+- [ ] Continuously compare actual agent behavior to the mission objective, permissions, and policy.
+- [ ] Detect unusual tool sequences, unexpected destinations, excessive retries, suspicious data movement, or scope expansion.
+- [ ] Pause or reduce autonomy when behavior drifts materially from the approved plan.
+- [ ] Send the event to the audit and evaluation systems.
+
+## P0 — Independent Policy Judge
+- [ ] Use a separate policy/validation component for consequential tool calls instead of relying only on the acting agent.
+- [ ] Validate target, arguments, scope, permissions, evidence, and approval state at the action boundary.
+- [ ] Fail closed if the policy check is unavailable or contradictory.
+- [ ] Preserve a signed/immutable decision record where supported.
+
+## P0 — Action Receipt / Proof-of-Completion
+- [ ] Record a structured receipt for consequential actions containing actor identity, target, timestamp, authorization, inputs, result status, and evidence.
+- [ ] Distinguish “requested,” “started,” “completed,” “verified,” and “failed.”
+- [ ] Never mark a mission complete from model text alone.
+- [ ] Let users inspect the evidence behind important completion claims.
+
+## P1 — Agent Drift Detector
+- [ ] Detect when a model, prompt, skill, tool schema, or policy update materially changes behavior.
+- [ ] Run regression tests and canary missions before broad rollout.
+- [ ] Compare new and previous versions on safety, accuracy, cost, latency, and tool-use behavior.
+- [ ] Automatically halt promotion when critical regression thresholds are exceeded.
+
+## P1 — Adversarial Mission Lab
+- [ ] Run authorized red-team simulations against JARVIS workflows before production activation.
+- [ ] Test prompt injection, data leakage, permission confusion, tool misuse, hallucinated completion, and recovery behavior.
+- [ ] Turn discovered failures into regression tests.
+- [ ] Maintain separate test environments and synthetic data.
+
+## P1 — Multi-Model Cross-Check
+- [ ] For selected high-impact tasks, use an independent model or deterministic validator to challenge critical outputs.
+- [ ] Compare evidence and structured results rather than asking models to “vote” on unsupported claims.
+- [ ] Escalate unresolved disagreement to human review.
+- [ ] Optimize cross-check cost according to mission risk.
+
+## P1 — Data Boundary Firewall
+- [ ] Tag information by workspace, sensitivity, provenance, and allowed destination.
+- [ ] Prevent personal data from entering business contexts and vice versa.
+- [ ] Prevent confidential source material from being forwarded to public destinations without authorization.
+- [ ] Apply data-loss prevention checks before external sharing.
+
+## P1 — Policy Conflict Resolver
+- [ ] When user goals, workspace rules, connector restrictions, or system policies conflict, resolve them using a documented priority order.
+- [ ] Never hide the conflict or silently weaken a higher-priority constraint.
+- [ ] Explain the blocking rule in plain language and offer a compliant alternative.
+
+## P1 — Safe Delegation Protocol
+- [ ] Every delegated subtask carries its objective, context, allowed tools, data scope, deadline, and completion criteria.
+- [ ] Prevent subagents from expanding their own permissions through delegation.
+- [ ] Require the parent orchestrator to verify delegated outputs before consequential use.
+
+## P1 — Recovery Without Escalation
+- [ ] Prefer safe recovery that stays inside existing permissions.
+- [ ] Do not solve a blocked task by automatically requesting broader credentials or permissions.
+- [ ] If recovery requires materially more authority, pause and request approval.
+
+## P2 — Trust Dashboard
+- [ ] User-visible view of active missions, permissions, connectors, agent identities, risk levels, approvals, recent actions, and security events.
+- [ ] Simple “why JARVIS did this” explanations for important actions.
+- [ ] Exportable audit history for business workspaces.
+
+## Core Safety Doctrine
+- [ ] More capability must always be paired with more precise controls.
+- [ ] Untrusted content can inform a mission but cannot redefine the mission.
+- [ ] No agent may grant itself authority.
+- [ ] No model may declare its own success.
+- [ ] Critical actions must be authorized at the tool boundary.
+- [ ] When safety state is uncertain, JARVIS pauses or reduces capability rather than improvising with greater authority.
+
 # MYTHOS DEEP SKILL LAYER II — World Model, Autonomy & Strategic Intelligence
 
 ## P0 — JARVIS World Model
