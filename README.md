@@ -1,35 +1,69 @@
-# JARVIS — Futureristic AI Platform
+# JARVIS Futuristic
 
 > An independent AI platform being built by Saviour, with GPT-5.6 Luna as the AI development partner.
 
-JARVIS is being built as a broader AI operating platform — not just a chatbot and not just a content generator. The long-term goal is to bring conversation, memory, business management, offices, automation, image generation, video production, voice, publishing, and reliability systems into one product.
+JARVIS is being built as a broader AI operating platform — not just a chatbot and not just a content generator. The long-term goal is to bring conversation, memory, business management, specialized offices, missions, automation, image generation, video production, voice, publishing, research, and reliability systems into one product.
 
 ## 🚀 What we are building
 
-- 💬 AI conversation and command handling
+- 💬 Natural AI conversation and command handling
 - 🧠 Persistent memory and personalization
 - 🔐 Google sign-in and authenticated user accounts
-- 🏢 Business management and Brand Kit
-- 🎙️ Voice/TTS with ElevenLabs
-- 🖼️ Image Lab and image editing
+- 🧭 Intent, context, capability routing, and mission orchestration
+- 🎯 Durable missions with checkpoints, approvals, pause/resume, retry, and cancellation
+- ⏱️ Recurring routines and background job scheduling
+- 🖼️ Image Lab and image generation
 - 🎬 Video Studio / Video Engine
-- 🌲 Forest autonomous content-production system
-- 🧰 Specialized JARVIS offices
-- ⚙️ Background jobs, scheduling, repair and recovery
-- 📊 Usage, plans and entitlements
+- 🎙️ Voice and text-to-speech with connected providers
+- 🌲 Forest content-production workflows
+- 🏢 Specialized JARVIS offices
+- 💼 Business management and Brand Kit
+- 🔎 Web intelligence and research
+- 🛡️ Security, permissions, health checks, recovery, and observability
 - 🎨 User customization and branding
 - 📣 Future publishing and analytics integrations
 - ☁️ Multi-cloud architecture for scalable production
 
+## 📌 Naming
+
+The canonical project name is **JARVIS Futuristic**.
+
+The canonical GitHub repository is:
+
+`sigigab13-pixel/JARVIS_FUTURISTIC`
+
+Older references may still appear in historical GitHub traffic or redirected URLs. New documentation and code references should use **JARVIS Futuristic** and **JARVIS_FUTURISTIC** only.
+
+## 🧭 Current implementation status
+
+JARVIS is being developed incrementally from verified foundations rather than treating planned features as completed.
+
+Implemented foundations currently include:
+
+- authenticated per-user JARVIS identity
+- capability registry and intent/context routing
+- durable mission state and mission events
+- mission approval and autonomy gates
+- mission checkpoints and recovery states
+- recurring routines and routine-run tracking
+- worker leases, heartbeats, concurrency limits, and workload governance
+- fail-closed handling for unsupported worker job types
+- persistent video project, character, asset, and scene foundations
+
+The mission runtime currently has a real adapter for `routine_fanout`. Additional real capability adapters are being added one vertical slice at a time. The next major adapter milestone is Image Generation.
+
+Planned or partially connected services must not be described as production-ready until they are verified in the target environment.
+
 ## 🏗️ Current architecture
 
-JARVIS is being rebuilt around a multi-cloud foundation:
+JARVIS is being built around a cloud-first foundation:
 
 ```text
 GitHub
    │
    ├── Source control
-   │
+   └── CI / automation
+        │
 Vercel
    ├── Frontend / web application
    └── API deployment
@@ -38,20 +72,18 @@ Vercel
         │          ├── Auth
         │          ├── PostgreSQL
         │          ├── Memory
-        │          ├── Jobs / state
-        │          └── Vector memory
+        │          ├── Missions / events
+        │          ├── Routines / runs
+        │          └── Durable application state
         │
-        ├──────── Oracle Cloud
-        │          └── Long-running workers / rendering / automation
+        ├──────── Upstash Redis
+        │          └── Queues / cache / dispatch
         │
-        ├──────── Cloudflare R2
-        │          └── Media/object storage
-        │
-        └──────── Upstash Redis
-                   └── Queues / cache
+        └──────── Cloudflare R2
+                   └── Planned media/object storage layer
 ```
 
-Not every planned cloud component is connected yet. The repository is being developed toward this architecture incrementally.
+Long-running external compute such as Oracle Cloud workers remains part of the target architecture, but it should not be treated as connected until verified.
 
 ## 🎬 Video Engine
 
@@ -88,7 +120,7 @@ Its architecture includes:
 - Publishing
 - Performance memory
 
-The current repository already contains the foundation for persistent video projects, characters, assets and scenes, plus Video Studio editing and production-planning flows.
+The repository contains the foundation for persistent video projects, characters, assets and scenes, plus Video Studio planning and editing flows. Production adapters and rendering services are being connected incrementally.
 
 ## 💼 Business platform
 
@@ -107,15 +139,38 @@ JARVIS is also being designed to help users manage businesses:
 - Automation
 - Specialized AI offices
 
-The Brand Kit is intended to become a shared source of truth for generated images, videos, documents and marketing content.
+The Brand Kit is intended to become a shared source of truth for generated images, videos, documents, and marketing content.
 
-## 💰 Product direction
+## 👧🏽 Children's Content Factory
 
-The intended business model includes free and paid plans with different access levels, generation allowances and advanced capabilities.
+Children's rhymes, stories, educational content, and other age-appropriate media are a flagship JARVIS workflow.
 
-Planned premium capabilities include advanced video, larger image allowances, advanced offices, automation, customization, API access and other business features.
+The planned content loop is:
 
-Prices and limits are subject to change as real operating costs and user demand become clearer.
+```text
+Idea / Trend
+    ↓
+Age-appropriate research
+    ↓
+Story / rhyme / script
+    ↓
+Character + world consistency
+    ↓
+Image / video / voice production
+    ↓
+Quality + continuity checks
+    ↓
+Approval
+    ↓
+Publishing
+    ↓
+Analytics
+    ↓
+Learning
+    ↺
+```
+
+Production claims should reflect only the providers and adapters that are actually connected and verified.
 
 ## 🌲 Forest
 
@@ -146,9 +201,28 @@ Learning
 
 Forest is one part of JARVIS, not the entire product.
 
-## 🔐 Security
+## 💰 Product direction
 
-Sensitive credentials belong in deployment environment variables or managed secrets.
+The intended business model includes free and paid plans with different access levels, generation allowances, and advanced capabilities.
+
+Planned premium capabilities may include advanced video, larger image allowances, advanced offices, automation, customization, API access, team features, and other business capabilities.
+
+Prices and limits are subject to change as real operating costs and user demand become clearer.
+
+## 🔐 Security and trust
+
+Security is a product requirement, not an afterthought.
+
+JARVIS is designed around:
+
+- per-user and workspace data isolation
+- least-privilege access
+- explicit permission scopes
+- approval gates for consequential actions
+- mission checkpoints and audit events
+- fail-closed behavior when an adapter is unavailable
+- evidence-backed completion rather than model-declared success
+- secure deployment-side secrets
 
 Never commit:
 
@@ -165,7 +239,7 @@ The public repository should contain source code and documentation, not private 
 
 This project is being built publicly so people can follow the real journey.
 
-Every major milestone can become:
+Major milestones can become:
 
 - a development journal entry
 - a technical write-up
@@ -196,6 +270,6 @@ Development is being done with limited hardware, so legitimate support such as d
 
 **Saviour** — Creator and developer of JARVIS.
 
-**GPT-5.6 Luna** — AI development partner helping build, debug, document and evolve the platform.
+**GPT-5.6 Luna** — AI development partner helping build, debug, document, and evolve the platform.
 
-> **JARVIS is being built in public — one capability at a time.**
+> **JARVIS Futuristic is being built in public — one verified capability at a time.**
