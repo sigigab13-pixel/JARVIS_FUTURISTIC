@@ -42,7 +42,24 @@ Every capability should be reachable from the central JARVIS chat and governed b
 - [ ] A/B-ready thumbnails/titles where the destination platform permits it.
 - [ ] Channel-specific formats: long-form, Shorts/Reels, 16:9, 9:16, 1:1.
 
-### P0 — Business Manager
+#
+## P0 — Web Intelligence / Research Mode
+- [ ] Real-time web search for current information, news, products, companies, people, trends, and public data.
+- [ ] Research Mode that gathers and synthesizes multiple independent sources before answering complex questions.
+- [ ] Source-backed answers with citations and clear source links.
+- [ ] Freshness awareness: distinguish live/current information from JARVIS's stored knowledge and memory.
+- [ ] Browser/search fallback ladder so one provider failure does not make research unavailable.
+- [ ] Multi-step research missions: search -> compare -> analyze -> summarize -> recommend -> save findings.
+- [ ] Business research: competitor monitoring, market research, pricing/trend checks, industry briefs, and opportunity discovery.
+- [ ] Personal research: trip planning, product comparisons, learning/research, and current-event lookups.
+- [ ] Children's content research: age-appropriate trend discovery, topic research, title ideas, and content gap analysis.
+- [ ] Scheduled monitoring for approved topics, competitors, keywords, or websites with change alerts.
+- [ ] Research workspace with saved reports, source history, timestamps, and reusable findings.
+- [ ] Claim/source matching so JARVIS does not present unsupported facts as verified.
+- [ ] Privacy controls so private workspace data is never exposed as public web-search context.
+- [ ] User approval before external side effects triggered from research, such as publishing, messaging, or record changes.
+
+## P0 — Business Manager
 - [ ] Business workspaces with separate memory, permissions, brand settings, and data.
 - [ ] Business dashboard: tasks, projects, goals, deadlines, KPIs, content calendar, and alerts.
 - [ ] Customer / client management: contacts, notes, follow-ups, status, and history.
