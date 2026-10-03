@@ -83,6 +83,11 @@ function App() {
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [passiveWake, setPassiveWake] = useState(true);
   const [commandOpen, setCommandOpen] = useState(false);
+  const [missionOpen, setMissionOpen] = useState(false);
+  const [missions, setMissions] = useState<any[]>([]);
+  const [missionPrompt, setMissionPrompt] = useState('');
+  const [missionBusy, setMissionBusy] = useState(false);
+  const [missionError, setMissionError] = useState('');
   const [empireOpen, setEmpireOpen] = useState(false);
   const [capabilityOpen, setCapabilityOpen] = useState(false);
   const [systemOpen, setSystemOpen] = useState(false);
@@ -255,6 +260,63 @@ function App() {
     }
   };
 
+  const loadMissions = async () => {
+    if (!session?.user?.id) return;
+    setMissionBusy(true);
+    setMissionError('');
+    try {
+      const response = await api.missions.list();
+      setMissions(Array.isArray(response.data?.missions) ? response.data.missions : []);
+    } catch (error: any) {
+      setMissionError(String(error?.response?.data?.error || error?.message || 'Could not load missions.'));
+    } finally {
+      setMissionBusy(false);
+    }
+  };
+
+  const createImageMission = async () => {
+    const prompt = missionPrompt.trim();
+    if (!prompt || missionBusy) return;
+    setMissionBusy(true);
+    setMissionError('');
+    try {
+      await api.missions.createImage(prompt);
+      setMissionPrompt('');
+      await loadMissions();
+    } catch (error: any) {
+      setMissionError(String(error?.response?.data?.error || error?.message || 'Could not create mission.'));
+    } finally {
+      setMissionBusy(false);
+    }
+  };
+
+  const requestMissionApproval = async (id: string) => {
+    setMissionBusy(true);
+    setMissionError('');
+    try {
+      await api.missions.requestApproval(id);
+      await loadMissions();
+    } catch (error: any) {
+      setMissionError(String(error?.response?.data?.error || error?.message || 'Could not request approval.'));
+    } finally {
+      setMissionBusy(false);
+    }
+  };
+
+  const approveAndStartMission = async (id: string) => {
+    setMissionBusy(true);
+    setMissionError('');
+    try {
+      await api.missions.approve(id);
+      await api.missions.start(id);
+      await loadMissions();
+    } catch (error: any) {
+      setMissionError(String(error?.response?.data?.error || error?.message || 'Could not start mission.'));
+    } finally {
+      setMissionBusy(false);
+    }
+  };
+
   const handleChatCommand = (clean: string) => {
     const value = clean.toLowerCase().replace(/[!?.,]+$/g, '').trim();
     let response = '';
@@ -270,7 +332,12 @@ function App() {
       setEmpireOpen(false);
     };
 
-    if (/^(open|show|launch) (image lab|image studio)$/.test(value) || value === 'image lab') {
+    if (/^(open|show|launch) (mission center|missions)$/.test(value) || value === 'mission center') {
+      closeAll();
+      setMissionOpen(true);
+      void loadMissions();
+      response = 'Mission Center is open.';
+    } else if (/^(open|show|launch) (image lab|image studio)$/.test(value) || value === 'image lab') {
       closeAll();
       setImageLabOpen(true);
       response = 'Image Lab is open. Describe the picture you want and I will generate it here.';
@@ -916,6 +983,59 @@ function App() {
                 <button className="command-card" key={title} onClick={() => openCommand(prompt)}>
                   <BrainCircuit size={18} /><b>{title}</b><span>{prompt}</span>
                 </button>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {missionOpen && (
+        <div className="security-overlay" role="dialog" aria-modal="true" aria-label="JARVIS Mission Center">
+          <section className="security-panel" style={{ maxWidth: 960 }}>
+            <div className="security-head">
+              <div>
+                <span className="eyebrow">MISSION RUNTIME</span>
+                <h2>JARVIS Mission Center</h2>
+                <p>Durable missions with explicit approval before image-generation side effects.</p>
+              </div>
+              <button className="close-security" onClick={() => setMissionOpen(false)} aria-label="Close mission center"><X size={18} /></button>
+            </div>
+
+            <div style={{ display:'grid', gap:10, marginBottom:18 }}>
+              <textarea
+                value={missionPrompt}
+                onChange={e => setMissionPrompt(e.target.value)}
+                placeholder="Describe the image mission you want JARVIS to run..."
+                rows={3}
+              />
+              <button className="security-primary" onClick={() => { void createImageMission(); }} disabled={missionBusy || !missionPrompt.trim()}>
+                <Sparkles size={16} /> Create Image Mission
+              </button>
+            </div>
+
+            {missionError && <div className="lock-note"><AlertTriangle size={16} /> <span>{missionError}</span></div>}
+            {missionBusy && <div className="security-status"><p>Mission Center is updating…</p></div>}
+
+            <div style={{ display:'grid', gap:10 }}>
+              {missions.length === 0 && !missionBusy && <div className="lock-note"><Radio size={16} /><span>No missions yet.</span></div>}
+              {missions.map(mission => (
+                <article key={mission.id} className="security-card" style={{ alignItems:'flex-start' }}>
+                  <Activity size={20} />
+                  <div style={{ flex:1 }}>
+                    <b>{mission.goal}</b>
+                    <span>Status: {mission.status} · Step {Number(mission.currentStep ?? 0) + 1}</span>
+                    {mission.approval?.status && <span>Approval: {mission.approval.status}</span>}
+                    <div style={{ display:'flex', gap:8, marginTop:10, flexWrap:'wrap' }}>
+                      {mission.status === 'draft' && mission.autonomy === 'execute_with_approval' && mission.approval?.status === 'not_requested' && (
+                        <button className="security-secondary" onClick={() => { void requestMissionApproval(mission.id); }} disabled={missionBusy}>Request approval</button>
+                      )}
+                      {mission.status === 'draft' && mission.autonomy === 'execute_with_approval' && mission.approval?.status === 'requested' && (
+                        <button className="security-primary" onClick={() => { void approveAndStartMission(mission.id); }} disabled={missionBusy}>Approve & Start</button>
+                      )}
+                      <button className="security-secondary" onClick={() => { void loadMissions(); }} disabled={missionBusy}>Refresh</button>
+                    </div>
+                  </div>
+                </article>
               ))}
             </div>
           </section>
