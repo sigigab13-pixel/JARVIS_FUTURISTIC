@@ -33,6 +33,32 @@ import {
 
 type Message = { role: 'user' | 'assistant'; content: string };
 
+function safeText(value: unknown, fallback = ''): string {
+  if (typeof value === 'string') return value;
+  if (value == null) return fallback;
+  if (value instanceof Error) return value.message || fallback;
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    const message = typeof record.message === 'string' ? record.message : '';
+    const code = typeof record.code === 'string' ? record.code : '';
+    if (message && code) return `[${code}] ${message}`;
+    if (message) return message;
+    try { return JSON.stringify(value); } catch { return fallback; }
+  }
+  return String(value);
+}
+
+function normalizeMessages(value: unknown): Message[] {
+  if (!Array.isArray(value)) return starter;
+  return value
+    .map((item: any) => {
+      if (item?.role !== 'user' && item?.role !== 'assistant') return null;
+      const content = safeText(item?.content).trim();
+      return content ? { role: item.role, content } : null;
+    })
+    .filter(Boolean) as Message[];
+}
+
 const starter: Message[] = [
   {
     role: 'assistant',
@@ -49,7 +75,7 @@ function App() {
   const [messages, setMessages] = useState<Message[]>(() => {
     try {
       const saved = localStorage.getItem('jarvis-history');
-      return saved ? JSON.parse(saved) : starter;
+      return saved ? normalizeMessages(JSON.parse(saved)) : starter;
     } catch {
       return starter;
     }
@@ -174,7 +200,7 @@ function App() {
     void api.get('/api/chat/history').then(response => {
       const cloudMessages = Array.isArray(response.data?.messages) ? response.data.messages : [];
       if (!active || cloudMessages.length === 0) return;
-      setMessages(cloudMessages.filter((m: any) => m?.role === 'user' || m?.role === 'assistant'));
+      setMessages(normalizeMessages(cloudMessages));
     }).catch(() => {
       // Local memory remains available if the cloud memory service is temporarily unavailable.
     });
@@ -237,9 +263,12 @@ function App() {
         setImageError('');
         setImageLabOpen(true);
       }
-      const answer =
-        response.data?.text ||
-        (generatedImage ? 'Done, Saviour. Your image is ready in Image Lab.' : 'I could not complete that request. Please try again.');
+      const answer = safeText(
+        response.data?.text,
+        generatedImage
+          ? 'Done, Saviour. Your image is ready in Image Lab.'
+          : 'I could not complete that request. Please try again.',
+      );
       setMessages(current => [
         ...current,
         { role: 'assistant', content: answer },
