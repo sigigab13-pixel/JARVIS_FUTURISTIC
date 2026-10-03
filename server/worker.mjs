@@ -83,32 +83,16 @@ export async function executeJob(job) {
     return executeMissionStep(job);
   }
 
-  if (type === 'video_pipeline') {
-    return {
-      accepted: true,
-      type,
-      operation: String(payload.operation || 'unknown'),
-      projectId: payload.project_id || null,
-      status: 'worker_received',
-      message: 'Durable worker received the video job. Generation/rendering adapters remain a later pipeline milestone.',
-    };
-  }
-
-  if (type === 'memory_maintenance') {
-    return {
-      accepted: true,
-      type,
-      status: 'worker_received',
-      message: 'Durable worker received the memory maintenance job.',
-    };
-  }
-
-  return {
-    accepted: true,
-    type: type || 'unknown',
-    status: 'worker_received',
-    message: 'Durable worker recorded the job without executing an unregistered job type.',
-  };
+  throw Object.assign(
+    new Error(`No verified worker adapter is registered for job type "${type || 'unknown'}".`),
+    {
+      code: 'JOB_ADAPTER_UNAVAILABLE',
+      jobType: type || 'unknown',
+      safeToRetry: false,
+      payloadKeys: Object.keys(payload).slice(0, 20),
+    },
+  );
+}
 }
 
 async function dispatchDueRoutines(workerId, logger) {
