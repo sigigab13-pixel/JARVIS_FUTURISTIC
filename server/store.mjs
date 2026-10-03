@@ -1,4 +1,5 @@
 import { normalizeMissionForStorage } from './mission-runtime.mjs';
+import { nextRunAt } from './routine-scheduler.mjs';
 const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
 const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || '';
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -819,4 +820,372 @@ export async function getMissionEventsForUser(userId, missionId, limit = 100) {
     '&user_id=eq.' + encodeURIComponent(userId) + '&order=created_at.desc&limit=' + safeLimit
   );
   return (rows || []).map(missionEventFromRow).filter(Boolean);
+}
+
+function routineFromRow(row) {
+  if (!row) return null;
+  return {
+    id: String(row.id || ''),
+    userId: row.user_id ? String(row.user_id) : null,
+    name: String(row.name || ''),
+    description: row.description || null,
+    schedule: String(row.schedule || ''),
+    timezone: String(row.timezone || 'Africa/Lagos'),
+    status: String(row.status || 'active'),
+    priority: Number(row.priority ?? 50),
+    maxParallelJobs: Number(row.max_parallel_jobs ?? 4),
+    jobTemplates: Array.isArray(row.job_templates) ? row.job_templates : [],
+    nextRunAt: row.next_run_at || null,
+    lastRunAt: row.last_run_at || null,
+    lastRunStatus: row.last_run_status || null,
+    consecutiveFailures: Number(row.consecutive_failures || 0),
+    metadata: row.metadata && typeof row.metadata === 'object' ? row.metadata : {},
+    createdAt: row.created_at || null,
+    updatedAt: row.updated_at || null,
+    leaseUntil: row.lease_until || null,
+    leasedBy: row.leased_by || null,
+  };
+}
+
+function routineRunFromRow(row) {
+  if (!row) return null;
+  return {
+    id: String(row.id || ''),
+    routineId: String(row.routine_id || ''),
+    userId: String(row.user_id || ''),
+    scheduledFor: row.scheduled_for || null,
+    status: String(row.status || 'queued'),
+    childJobIds: Array.isArray(row.child_job_ids) ? row.child_job_ids : [],
+    summary: row.summary && typeof row.summary === 'object' ? row.summary : {},
+    startedAt: row.started_at || null,
+    completedAt: row.completed_at || null,
+    createdAt: row.created_at || null,
+  };
+}
+
+function safeTemplates(value) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 30).map((template, index) => ({
+    id: String(template?.id || `job-${index + 1}`).slice(0, 100),
+    type: String(template?.type || '').trim().slice(0, 120),
+    priority: Math.min(100, Math.max(0, Number(template?.priority ?? 50))),
+    maxAttempts: Math.min(8, Math.max(1, Number(template?.maxAttempts ?? 3))),
+    payload: template?.payload && typeof template.payload === 'object' && !Array.isArray(template.payload)
+      ? template.payload
+      : {},
+  })).filter(template => template.type);
+}
+
+export async function createRoutineForUser(userId, data = {}) {
+  if (!validUuid(userId)) throw new Error('Invalid JARVIS user id.');
+  const name = String(data.name || '').trim().slice(0, 200);
+  if (!name) throw new Error('Routine name is required.');
+  const schedule = String(data.schedule || '').trim().slice(0, 100);
+  if (!schedule) throw new Error('Routine schedule is required.');
+  const timezone = String(data.timezone || 'Africa/Lagos').trim().slice(0, 100);
+  const templates = safeTemplates(data.jobTemplates);
+  if (!templates.length) throw new Error('A routine needs at least one job template.');
+  const firstRun = data.nextRunAt ? new Date(data.nextRunAt) : nextRunAt(schedule, { timezone });
+  if (Number.isNaN(firstRun.getTime())) throw new Error('Invalid next run time.');
+
+  const routine = {
+    id: crypto.randomUUID(),
+    userId,
+    name,
+    description: String(data.description || '').trim().slice(0, 2000) || null,
+    schedule,
+    timezone,
+    status: ['active','paused','disabled'].includes(String(data.status)) ? String(data.status) : 'active',
+    priority: Math.min(100, Math.max(0, Number(data.priority ?? 50))),
+    maxParallelJobs: Math.min(8, Math.max(1, Number(data.maxParallelJobs ?? 4))),
+    jobTemplates: templates,
+    nextRunAt: firstRun.toISOString(),
+    metadata: data.metadata && typeof data.metadata === 'object' && !Array.isArray(data.metadata) ? data.metadata : {},
+  };
+  if (!configured) {
+    const local = { ...routine, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), consecutiveFailures: 0 };
+    memory.missions.set('routine:' + userId + ':' + routine.id, local);
+    return local;
+  }
+  const rows = await request('jarvis_routines', {
+    method: 'POST',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify({
+      id: routine.id, user_id: userId, name: routine.name, description: routine.description,
+      schedule: routine.schedule, timezone: routine.timezone, status: routine.status,
+      priority: routine.priority, max_parallel_jobs: routine.maxParallelJobs,
+      job_templates: routine.jobTemplates, next_run_at: routine.nextRunAt,
+      metadata: routine.metadata,
+    }),
+  });
+  return routineFromRow(rows?.[0] || { id: routine.id, user_id: userId, ...routine });
+}
+
+export async function getRoutineForUser(userId, routineId) {
+  if (!validUuid(userId) || !validUuid(routineId)) throw new Error('Invalid routine identity.');
+  if (!configured) return memory.missions.get('routine:' + userId + ':' + routineId) || null;
+  const rows = await request(
+    'jarvis_routines?select=*&id=eq.' + encodeURIComponent(routineId) +
+    '&user_id=eq.' + encodeURIComponent(userId) + '&limit=1'
+  );
+  return routineFromRow(rows?.[0] || null);
+}
+
+export async function listRoutinesForUser(userId, limit = 50) {
+  if (!validUuid(userId)) throw new Error('Invalid JARVIS user id.');
+  const safeLimit = Math.min(100, Math.max(1, Number(limit) || 50));
+  if (!configured) {
+    return [...memory.missions.values()]
+      .filter(routine => routine?.userId === userId && routine?.schedule)
+      .sort((a, b) => String(a.nextRunAt).localeCompare(String(b.nextRunAt)))
+      .slice(0, safeLimit);
+  }
+  const rows = await request(
+    'jarvis_routines?select=*&user_id=eq.' + encodeURIComponent(userId) +
+    '&order=next_run_at.asc&limit=' + safeLimit
+  );
+  return (rows || []).map(routineFromRow).filter(Boolean);
+}
+
+export async function updateRoutineForUser(userId, routineId, data = {}) {
+  const existing = await getRoutineForUser(userId, routineId);
+  if (!existing) throw Object.assign(new Error('Routine not found.'), { statusCode: 404 });
+  const schedule = data.schedule !== undefined ? String(data.schedule).trim().slice(0, 100) : existing.schedule;
+  const timezone = data.timezone !== undefined ? String(data.timezone).trim().slice(0, 100) : existing.timezone;
+  const templates = data.jobTemplates !== undefined ? safeTemplates(data.jobTemplates) : existing.jobTemplates;
+  const next = data.nextRunAt ? new Date(data.nextRunAt) : (data.schedule !== undefined || data.timezone !== undefined ? nextRunAt(schedule, { timezone }) : new Date(existing.nextRunAt));
+  if (Number.isNaN(next.getTime())) throw new Error('Invalid routine next run time.');
+  const status = data.status !== undefined && ['active','paused','disabled'].includes(String(data.status)) ? String(data.status) : existing.status;
+  const updated = {
+    ...existing,
+    name: data.name !== undefined ? String(data.name).trim().slice(0, 200) : existing.name,
+    description: data.description !== undefined ? String(data.description).trim().slice(0, 2000) || null : existing.description,
+    schedule,
+    timezone,
+    status,
+    priority: data.priority !== undefined ? Math.min(100, Math.max(0, Number(data.priority))) : existing.priority,
+    maxParallelJobs: data.maxParallelJobs !== undefined ? Math.min(8, Math.max(1, Number(data.maxParallelJobs))) : existing.maxParallelJobs,
+    jobTemplates: templates,
+    nextRunAt: next.toISOString(),
+    metadata: data.metadata !== undefined && data.metadata && typeof data.metadata === 'object' && !Array.isArray(data.metadata) ? data.metadata : existing.metadata,
+    updatedAt: new Date().toISOString(),
+  };
+  if (!configured) {
+    memory.missions.set('routine:' + userId + ':' + routineId, updated);
+    return updated;
+  }
+  const rows = await request('jarvis_routines?id=eq.' + encodeURIComponent(routineId) + '&user_id=eq.' + encodeURIComponent(userId), {
+    method: 'PATCH',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify({
+      name: updated.name, description: updated.description, schedule: updated.schedule, timezone: updated.timezone,
+      status: updated.status, priority: updated.priority, max_parallel_jobs: updated.maxParallelJobs,
+      job_templates: updated.jobTemplates, next_run_at: updated.nextRunAt, metadata: updated.metadata,
+      updated_at: updated.updatedAt,
+    }),
+  });
+  return routineFromRow(rows?.[0] || { id: routineId, user_id: userId, ...updated });
+}
+
+export async function claimDueRoutines(workerId, limit = 10) {
+  if (!configured()) return [];
+  const rows = await rpc('jarvis_claim_due_routines', { p_worker_id: String(workerId), p_limit: Math.min(50, Math.max(1, Number(limit) || 10)) });
+  return (Array.isArray(rows) ? rows : rows ? [rows] : []).map(routineFromRow).filter(Boolean);
+}
+
+export async function dispatchRoutineForUser(routine, workerId) {
+  if (!routine?.id || !validUuid(routine.userId)) throw new Error('Invalid routine for dispatch.');
+  const scheduledFor = new Date(routine.nextRunAt);
+  if (Number.isNaN(scheduledFor.getTime())) throw new Error('Routine has an invalid next run time.');
+  const idempotencyKey = 'routine:' + routine.id + ':' + scheduledFor.toISOString();
+
+  let run = null;
+  if (configured) {
+    const existingRun = await request(
+      'jarvis_routine_runs?select=*&routine_id=eq.' + encodeURIComponent(routine.id) +
+      '&scheduled_for=eq.' + encodeURIComponent(scheduledFor.toISOString()) + '&limit=1'
+    );
+    run = routineRunFromRow(existingRun?.[0] || null);
+  } else {
+    run = null;
+  }
+
+  if (!run) {
+    const rows = await request('jarvis_routine_runs', {
+      method: 'POST',
+      headers: { Prefer: 'return=representation' },
+      body: JSON.stringify({
+        routine_id: routine.id, user_id: routine.userId, scheduled_for: scheduledFor.toISOString(), status: 'queued',
+      }),
+    });
+    run = routineRunFromRow(rows?.[0] || null);
+    if (!run) {
+      const existingRun = await request(
+        'jarvis_routine_runs?select=*&routine_id=eq.' + encodeURIComponent(routine.id) +
+        '&scheduled_for=eq.' + encodeURIComponent(scheduledFor.toISOString()) + '&limit=1'
+      );
+      run = routineRunFromRow(existingRun?.[0] || null);
+    }
+  }
+
+  const jobRows = await request('jobs', {
+    method: 'POST',
+    headers: { Prefer: 'resolution=ignore-duplicates,return=representation' },
+    body: JSON.stringify({
+      user_id: routine.userId,
+      type: 'routine_fanout',
+      status: 'queued',
+      priority: routine.priority,
+      payload: {
+        routine_id: routine.id,
+        routine_run_id: run?.id || null,
+        routine_name: routine.name,
+        max_parallel_jobs: routine.maxParallelJobs,
+        template_count: routine.jobTemplates.length,
+      },
+      attempts: 0,
+      max_attempts: 3,
+      idempotency_key: idempotencyKey,
+      scheduled_at: new Date().toISOString(),
+    }),
+  });
+  const parentJob = jobRows?.[0] || (await request(
+    'jobs?select=*&user_id=eq.' + encodeURIComponent(routine.userId) +
+    '&idempotency_key=eq.' + encodeURIComponent(idempotencyKey) + '&limit=1'
+  ))?.[0] || null;
+
+  const next = nextRunAt(routine.schedule, { from: scheduledFor, timezone: routine.timezone });
+  await request(
+    'jarvis_routines?id=eq.' + encodeURIComponent(routine.id) + '&user_id=eq.' + encodeURIComponent(routine.userId),
+    {
+      method: 'PATCH',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        next_run_at: next.toISOString(),
+        last_run_at: scheduledFor.toISOString(),
+        last_run_status: 'queued',
+        consecutive_failures: 0,
+        lease_until: null,
+        leased_by: workerId,
+        updated_at: new Date().toISOString(),
+      }),
+    }
+  );
+  return { routine, run, parentJob, nextRunAt: next.toISOString() };
+}
+
+export async function fanOutRoutineRun(job) {
+  const payload = job?.payload && typeof job.payload === 'object' ? job.payload : {};
+  const userId = String(job?.user_id || payload.user_id || '');
+  const routineId = String(payload.routine_id || '');
+  if (!validUuid(userId) || !validUuid(routineId)) throw new Error('Routine dispatch job has invalid identity.');
+  const routine = await getRoutineForUser(userId, routineId);
+  if (!routine) throw new Error('Routine no longer exists.');
+  const runId = String(payload.routine_run_id || '');
+  let run = runId ? await request('jarvis_routine_runs?select=*&id=eq.' + encodeURIComponent(runId) + '&user_id=eq.' + encodeURIComponent(userId) + '&limit=1') : [];
+  let runRow = routineRunFromRow(run?.[0] || null);
+  if (!runRow) throw new Error('Routine run not found.');
+
+  const existingChildren = Array.isArray(runRow.childJobIds) ? runRow.childJobIds : [];
+  const childJobIds = [...existingChildren];
+
+  if (!childJobIds.length) {
+    for (const template of routine.jobTemplates) {
+      const idempotencyKey = 'routine-run:' + runRow.id + ':' + template.id;
+      const rows = await request('jobs', {
+        method: 'POST',
+        headers: { Prefer: 'resolution=ignore-duplicates,return=representation' },
+        body: JSON.stringify({
+          user_id: userId,
+          parent_job_id: job.id,
+          type: template.type,
+          status: 'queued',
+          priority: template.priority,
+          payload: {
+            ...template.payload,
+            routine_id: routine.id,
+            routine_run_id: runRow.id,
+            routine_template_id: template.id,
+            routine_name: routine.name,
+          },
+          attempts: 0,
+          max_attempts: template.maxAttempts,
+          idempotency_key: idempotencyKey,
+          scheduled_at: new Date().toISOString(),
+        }),
+      });
+      const child = rows?.[0] || (await request(
+        'jobs?select=id&user_id=eq.' + encodeURIComponent(userId) +
+        '&idempotency_key=eq.' + encodeURIComponent(idempotencyKey) + '&limit=1'
+      ))?.[0] || null;
+      if (child?.id) childJobIds.push(String(child.id));
+    }
+  }
+
+  const updated = await request('jarvis_routine_runs?id=eq.' + encodeURIComponent(runRow.id) + '&user_id=eq.' + encodeURIComponent(userId), {
+    method: 'PATCH',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify({
+      status: 'running',
+      child_job_ids: childJobIds,
+      summary: { templateCount: routine.jobTemplates.length, childCount: childJobIds.length },
+      started_at: runRow.startedAt || new Date().toISOString(),
+    }),
+  });
+  return {
+    accepted: true,
+    type: 'routine_fanout',
+    status: 'fanout_complete',
+    routineId: routine.id,
+    routineRunId: runRow.id,
+    childJobIds,
+    message: 'Routine expanded into manageable child jobs. Child jobs remain individually tracked.',
+    record: routineRunFromRow(updated?.[0] || null),
+  };
+}
+
+export async function updateRoutineRunFromChildren(job) {
+  const payload = job?.payload && typeof job.payload === 'object' ? job.payload : {};
+  const userId = String(job?.user_id || payload.user_id || '');
+  const runId = String(payload.routine_run_id || '');
+  if (!validUuid(userId) || !validUuid(runId)) return null;
+  const runRows = await request('jarvis_routine_runs?select=*&id=eq.' + encodeURIComponent(runId) + '&user_id=eq.' + encodeURIComponent(userId) + '&limit=1');
+  const run = routineRunFromRow(runRows?.[0] || null);
+  if (!run || !run.childJobIds.length) return null;
+
+  const ids = run.childJobIds.map(encodeURIComponent).join(',');
+  const children = await request('jobs?select=id,status,result,error&id=in.(' + ids + ')&user_id=eq.' + encodeURIComponent(userId));
+  if (!Array.isArray(children) || !children.length) return null;
+  const terminal = new Set(['succeeded','failed','cancelled']);
+  if (!children.every(child => terminal.has(String(child.status)))) return { status: run.status, complete: false };
+
+  const failed = children.filter(child => String(child.status) === 'failed').length;
+  const canceled = children.filter(child => String(child.status) === 'cancelled').length;
+  const status = failed === 0 && canceled === 0 ? 'succeeded' : failed < children.length ? 'partial' : 'failed';
+  const completedAt = new Date().toISOString();
+  const summary = {
+    childCount: children.length,
+    succeeded: children.filter(child => String(child.status) === 'succeeded').length,
+    failed,
+    canceled,
+    completedAt,
+  };
+  await request('jarvis_routine_runs?id=eq.' + encodeURIComponent(run.id) + '&user_id=eq.' + encodeURIComponent(userId), {
+    method: 'PATCH',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({ status, summary, completed_at: completedAt }),
+  });
+  const routine = await getRoutineForUser(userId, run.routineId);
+  if (routine) {
+    await request('jarvis_routines?id=eq.' + encodeURIComponent(routine.id) + '&user_id=eq.' + encodeURIComponent(userId), {
+      method: 'PATCH',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        last_run_status: status,
+        consecutive_failures: status === 'succeeded' ? 0 : Number(routine.consecutiveFailures || 0) + 1,
+        updated_at: completedAt,
+      }),
+    });
+  }
+  return { status, complete: true, summary };
 }
