@@ -158,3 +158,5 @@ Every capability should be reachable from the central JARVIS chat and governed b
 7. Premium/team/white-label capabilities.
 
 This queue is intentionally ambitious; implementation should be staged so each phase remains testable and safe.
+
+- [x] Multi-user identity isolation fix: display names, greetings, and browser-local history are scoped to the authenticated account.
