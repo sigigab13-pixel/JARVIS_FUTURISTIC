@@ -154,14 +154,33 @@ export async function runWorker({
 
   while (attempted < jobLimit && Date.now() - startedAt < runtimeLimit) {
     const claimed = [];
-    const firstJob = await claimOne(workerId).catch(error => {
-      logger.error?.('[JARVIS worker] claim failed:', error);
-      failureCount += 1;
-      if (once) throw error;
-      return null;
-    });
+    const deferredHeavy = [];
+    const claimCount = Math.min(maxConcurrency, jobLimit - attempted);
 
-    if (!firstJob) {
+    for (let i = 0; i < claimCount; i += 1) {
+      if (Date.now() - startedAt >= runtimeLimit) break;
+      try {
+        const job = await claimOne(workerId);
+        if (!job) break;
+
+        attempted += 1;
+        if (workloadClass(job) === 'heavy' && claimed.length > 0) {
+          deferredHeavy.push(job);
+          logger.info?.(`[JARVIS worker] heavy job ${job.id} deferred until the routine batch completes.`);
+          break;
+        }
+        claimed.push(job);
+
+        if (workloadClass(job) === 'heavy') break;
+      } catch (error) {
+        logger.error?.('[JARVIS worker] claim failed:', error);
+        failureCount += 1;
+        if (once && claimed.length === 0 && deferredHeavy.length === 0) throw error;
+        break;
+      }
+    }
+
+    if (!claimed.length && !deferredHeavy.length) {
       if (once) return { workerId, processed, attempted, batches, concurrency: maxConcurrency };
       await new Promise(resolve => setTimeout(resolve, nextWorkDelayMs({
         queueEmpty: true,
@@ -171,37 +190,28 @@ export async function runWorker({
       continue;
     }
 
-    claimed.push(firstJob);
-    attempted += 1;
+    const routineJobs = claimed.filter(job => workloadClass(job) !== 'heavy');
+    const heavyJobs = [
+      ...claimed.filter(job => workloadClass(job) === 'heavy'),
+      ...deferredHeavy,
+    ];
 
-    if (workloadClass(firstJob) !== 'heavy') {
-      for (let i = 1; i < maxConcurrency && claimed.length < jobLimit; i += 1) {
-        if (Date.now() - startedAt >= runtimeLimit) break;
-        try {
-          const job = await claimOne(workerId);
-          if (!job) break;
-          if (workloadClass(job) === 'heavy') {
-            logger.info?.(`[JARVIS worker] heavy job ${job.id} held for the next isolated batch.`);
-            break;
-          }
-          claimed.push(job);
-          attempted += 1;
-        } catch (error) {
-          logger.error?.('[JARVIS worker] additional claim failed:', error);
-          failureCount += 1;
-          break;
-        }
-      }
+    if (routineJobs.length) {
+      const routineBatch = groupWorkloadBatch(routineJobs, maxConcurrency);
+      const results = await Promise.all(routineBatch.map(job => processJob(job, workerId, logger)));
+      const successful = results.filter(result => result.ok).length;
+      processed += successful;
+      batches += 1;
+      failureCount = results.length - successful > 0 ? failureCount + 1 : 0;
     }
 
-    const batch = groupWorkloadBatch(claimed, maxConcurrency);
-    if (!batch.length) break;
-
-    const results = await Promise.all(batch.map(job => processJob(job, workerId, logger)));
-    const successful = results.filter(result => result.ok).length;
-    processed += successful;
-    batches += 1;
-    failureCount = results.length - successful > 0 ? failureCount + 1 : 0;
+    for (const heavyJob of heavyJobs) {
+      if (Date.now() - startedAt >= runtimeLimit) break;
+      const result = await processJob(heavyJob, workerId, logger);
+      processed += result.ok ? 1 : 0;
+      batches += 1;
+      failureCount = result.ok ? 0 : failureCount + 1;
+    }
 
     if (once && attempted >= jobLimit) break;
   }
