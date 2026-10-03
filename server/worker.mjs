@@ -1,6 +1,12 @@
 import crypto from 'node:crypto';
-import { dequeueJob, isRedisConfigured } from './queue.mjs';
+import { dequeueJob, enqueueJob, isRedisConfigured } from './queue.mjs';
 import { groupWorkloadBatch, nextWorkDelayMs, workloadClass } from './workload-governor.mjs';
+import {
+  claimDueRoutines,
+  dispatchRoutineForUser,
+  fanOutRoutineRun,
+  updateRoutineRunFromChildren,
+} from './store.mjs';
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
 const SUPABASE_SERVER_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -96,6 +102,39 @@ export async function executeJob(job) {
   };
 }
 
+async function dispatchDueRoutines(workerId, logger) {
+  const routines = await claimDueRoutines(workerId, Number(process.env.JARVIS_ROUTINE_BATCH_LIMIT || 10));
+  const dispatched = [];
+
+  for (const routine of routines) {
+    try {
+      const result = await dispatchRoutineForUser(routine, workerId);
+      const parentJobId = result?.parentJob?.id;
+      if (parentJobId && isRedisConfigured()) {
+        try {
+          await enqueueJob(parentJobId, 'routine_fanout');
+        } catch (queueError) {
+          logger.warn?.('[JARVIS worker] routine Redis dispatch failed; Supabase will remain the fallback queue:', queueError);
+        }
+      }
+      dispatched.push({
+        routineId: routine.id,
+        runId: result?.run?.id || null,
+        parentJobId: parentJobId || null,
+        nextRunAt: result?.nextRunAt || routine.nextRunAt,
+      });
+    } catch (error) {
+      logger.error?.(`[JARVIS worker] routine dispatch failed ${routine.id}:`, error);
+      dispatched.push({
+        routineId: routine.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return dispatched;
+}
+
 async function processJob(job, workerId, logger) {
   await heartbeatJob(job.id, workerId);
   const heartbeatMs = Math.max(15_000, Number(process.env.JARVIS_WORKER_HEARTBEAT_MS || 60_000));
@@ -107,7 +146,19 @@ async function processJob(job, workerId, logger) {
 
   try {
     const result = await executeJob(job);
+    if (job?.type === 'routine_fanout' && result?.childJobIds?.length && isRedisConfigured()) {
+      for (const childJobId of result.childJobIds) {
+        try {
+          await enqueueJob(childJobId, 'routine_step');
+        } catch (queueError) {
+          logger.warn?.(`[JARVIS worker] child Redis dispatch failed ${childJobId}; Supabase remains the fallback queue:`, queueError);
+        }
+      }
+    }
     await finishJob(job.id, workerId, result);
+    await updateRoutineRunFromChildren(job).catch(error =>
+      logger.warn?.(`[JARVIS worker] routine completion check failed ${job.id}:`, error)
+    );
     logger.info?.(`[JARVIS worker] completed ${job.id} (${job.type})`);
     return { ok: true, jobId: job.id };
   } catch (error) {
@@ -117,6 +168,9 @@ async function processJob(job, workerId, logger) {
     } catch (failureError) {
       logger.error?.('[JARVIS worker] failed to persist failure:', failureError);
     }
+    await updateRoutineRunFromChildren(job).catch(failureCheckError =>
+      logger.warn?.(`[JARVIS worker] routine failure check failed ${job.id}:`, failureCheckError)
+    );
     return { ok: false, jobId: job.id, error };
   } finally {
     clearInterval(heartbeatTimer);
@@ -149,10 +203,19 @@ export async function runWorker({
   const startedAt = Date.now();
   let processed = 0;
   let attempted = 0;
+  let routineDispatches = [];
   let failureCount = 0;
   let batches = 0;
 
   while (attempted < jobLimit && Date.now() - startedAt < runtimeLimit) {
+    if (Date.now() - startedAt < runtimeLimit) {
+      try {
+        routineDispatches.push(...await dispatchDueRoutines(workerId, logger));
+      } catch (error) {
+        logger.warn?.('[JARVIS worker] routine scheduler tick failed:', error);
+      }
+    }
+
     const claimed = [];
     const deferredHeavy = [];
     const claimCount = Math.min(maxConcurrency, jobLimit - attempted);
@@ -224,6 +287,7 @@ export async function runWorker({
     concurrency: maxConcurrency,
     elapsedMs: Date.now() - startedAt,
     runtimeLimitMs: runtimeLimit,
+    routineDispatches,
   };
 }
 
