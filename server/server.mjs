@@ -35,11 +35,18 @@ import {
   updateVideoSceneForUser,
   getVideoScenesForUser,
   queueVideoJobForUser,
+  createMissionForUser,
+  getMissionForUser,
+  listMissionsForUser,
+  updateMissionForUser,
+  recordMissionEventForUser,
+  getMissionEventsForUser,
 } from './store.mjs';
 import { enqueueJob, isRedisConfigured } from './queue.mjs';
 import { createMediaKey, isSupabaseStorageConfigured, putMedia } from './media.mjs';
 import { capabilityContextForPrompt, getCapabilityRegistry, getAvailableCapabilities, rankCapabilitiesForIntent } from './capabilities.mjs';
 import { routeContextForPrompt, routeIntent } from './intent-router.mjs';
+import { createMissionState, transitionMission, advanceMissionStep } from './mission-runtime.mjs';
 
 const PORT = Number(process.env.PORT || 10000);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -364,6 +371,168 @@ export async function handleApi(req, res, pathname, url) {
     }
 
     return json(res, 404, { error: 'Video Engine route not found.' });
+  }
+
+  if (req.method === 'GET' && pathname === '/api/missions') {
+    const { jarvisUser } = await requireAuthenticatedJarvisUser(req);
+    const limit = Number(url.searchParams.get('limit') || 20);
+    return json(res, 200, { missions: await listMissionsForUser(jarvisUser.id, limit) }, {
+      'Set-Cookie': jarvisCookie(jarvisUser.id),
+    });
+  }
+
+  if (req.method === 'POST' && pathname === '/api/missions') {
+    const { jarvisUser } = await requireAuthenticatedJarvisUser(req);
+    const body = await parseBody(req);
+    const goal = String(body?.goal || '').trim();
+    if (!goal) return json(res, 400, { error: 'A mission goal is required.' });
+
+    const autonomy = String(body?.autonomy || 'advise');
+    const allowedAutonomy = new Set(['advise', 'prepare', 'execute_with_approval', 'execute_within_policy']);
+    if (!allowedAutonomy.has(autonomy)) {
+      return json(res, 400, { error: 'Invalid mission autonomy level.' });
+    }
+
+    const steps = Array.isArray(body?.steps) ? body.steps.slice(0, 30) : [];
+    const state = createMissionState({
+      missionId: crypto.randomUUID(),
+      userId: jarvisUser.id,
+      goal,
+      autonomy,
+      steps,
+    });
+    state.approval = autonomy === 'execute_with_approval'
+      ? { required: true, status: 'not_requested', requestedAt: null, approvedAt: null }
+      : { required: false, status: 'not_required' };
+    state.metadata = body?.metadata && typeof body.metadata === 'object' && !Array.isArray(body.metadata)
+      ? body.metadata
+      : {};
+    const mission = await createMissionForUser(jarvisUser.id, state);
+    return json(res, 201, { mission }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+  }
+
+  const missionMatch = pathname.match(/^\/api\/missions\/([0-9a-f-]{36})(?:\/(start|request-approval|approve|pause|cancel|checkpoint|events))?$/i);
+  if (missionMatch) {
+    const { jarvisUser } = await requireAuthenticatedJarvisUser(req);
+    const missionId = missionMatch[1];
+    const action = missionMatch[2] || '';
+
+    if (req.method === 'GET' && !action) {
+      const mission = await getMissionForUser(jarvisUser.id, missionId);
+      if (!mission) return json(res, 404, { error: 'Mission not found.' });
+      return json(res, 200, { mission }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+    }
+
+    if (req.method === 'GET' && action === 'events') {
+      const events = await getMissionEventsForUser(jarvisUser.id, missionId, Number(url.searchParams.get('limit') || 100));
+      if (!(await getMissionForUser(jarvisUser.id, missionId))) return json(res, 404, { error: 'Mission not found.' });
+      return json(res, 200, { events }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+    }
+
+    if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed.' });
+
+    const current = await getMissionForUser(jarvisUser.id, missionId);
+    if (!current) return json(res, 404, { error: 'Mission not found.' });
+
+    if (action === 'start') {
+      if (process.env.JARVIS_MISSION_EXECUTOR_ENABLED !== '1') {
+        return json(res, 409, {
+          error: 'Mission persistence is ready, but the automatic mission executor is not enabled yet. This safety gate prevents JARVIS from falsely claiming that external work started.',
+          code: 'MISSION_EXECUTOR_NOT_ENABLED',
+          mission: current,
+        }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+      }
+      const next = transitionMission(current, 'queued');
+      const mission = await updateMissionForUser(jarvisUser.id, missionId, next, {
+        eventType: 'mission.queued',
+        message: 'Mission queued for execution.',
+      });
+      return json(res, 202, { mission }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+    }
+
+    if (action === 'request-approval') {
+      const next = transitionMission(current, 'waiting_approval');
+      next.approval = {
+        ...(current.approval || {}),
+        required: true,
+        status: 'pending',
+        requestedAt: new Date().toISOString(),
+      };
+      const mission = await updateMissionForUser(jarvisUser.id, missionId, next, {
+        eventType: 'mission.approval_requested',
+        message: 'Mission is waiting for user approval.',
+      });
+      return json(res, 200, { mission }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+    }
+
+    if (action === 'approve') {
+      if (current.status !== 'waiting_approval') {
+        return json(res, 409, { error: 'Mission is not waiting for approval.', code: 'MISSION_NOT_WAITING_FOR_APPROVAL' });
+      }
+      const next = transitionMission(current, 'running');
+      next.approval = {
+        ...(current.approval || {}),
+        required: true,
+        status: 'approved',
+        approvedAt: new Date().toISOString(),
+      };
+      const mission = await updateMissionForUser(jarvisUser.id, missionId, next, {
+        eventType: 'mission.approved',
+        message: 'Mission approval recorded. Execution remains subject to tool-boundary authorization.',
+      });
+      return json(res, 200, { mission }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+    }
+
+    if (action === 'pause') {
+      if (!['queued', 'running', 'waiting_approval'].includes(current.status)) {
+        return json(res, 409, { error: 'Mission cannot be paused from its current state.', code: 'MISSION_CANNOT_PAUSE' });
+      }
+      const next = transitionMission(current, 'paused');
+      const mission = await updateMissionForUser(jarvisUser.id, missionId, next, {
+        eventType: 'mission.paused',
+        message: 'Mission paused by the user.',
+      });
+      return json(res, 200, { mission }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+    }
+
+    if (action === 'cancel') {
+      if (['succeeded', 'canceled'].includes(current.status)) {
+        return json(res, 409, { error: 'Mission is already finished.', code: 'MISSION_TERMINAL' });
+      }
+      const next = transitionMission(current, 'canceled');
+      const mission = await updateMissionForUser(jarvisUser.id, missionId, next, {
+        eventType: 'mission.canceled',
+        message: 'Mission canceled by the user.',
+      });
+      return json(res, 200, { mission }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+    }
+
+    if (action === 'checkpoint') {
+      if (current.status !== 'running') {
+        return json(res, 409, { error: 'Mission must be running before a checkpoint can be recorded.', code: 'MISSION_NOT_RUNNING' });
+      }
+      const body = await parseBody(req);
+      const evidence = body?.evidence && typeof body.evidence === 'object' && !Array.isArray(body.evidence)
+        ? body.evidence
+        : null;
+      if (!evidence) return json(res, 400, { error: 'Verified evidence is required to complete a mission step.' });
+      const next = advanceMissionStep({ ...current, lastEvidence: evidence });
+      next.lastEvidence = evidence;
+      next.metadata = {
+        ...(current.metadata || {}),
+        lastCheckpointResult: body?.result && typeof body.result === 'object' ? body.result : { message: String(body?.result || '') },
+      };
+      const mission = await updateMissionForUser(jarvisUser.id, missionId, next, {
+        eventType: next.status === 'succeeded' ? 'mission.completed' : 'mission.checkpoint',
+        message: next.status === 'succeeded'
+          ? 'Mission completed from a verified final checkpoint.'
+          : 'Verified mission step completed and checkpoint persisted.',
+        metadata: { stepIndex: current.currentStep, evidence },
+      });
+      return json(res, 200, { mission }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+    }
+
+    return json(res, 404, { error: 'Mission action not found.' });
   }
 
   if (req.method === 'GET' && pathname === '/api/plans') {
