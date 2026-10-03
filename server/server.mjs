@@ -38,7 +38,8 @@ import {
 } from './store.mjs';
 import { enqueueJob, isRedisConfigured } from './queue.mjs';
 import { createMediaKey, isSupabaseStorageConfigured, putMedia } from './media.mjs';
-import { capabilityContextForPrompt, getCapabilityRegistry, rankCapabilitiesForIntent } from './capabilities.mjs';
+import { capabilityContextForPrompt, getCapabilityRegistry, getAvailableCapabilities, rankCapabilitiesForIntent } from './capabilities.mjs';
+import { routeContextForPrompt, routeIntent } from './intent-router.mjs';
 
 const PORT = Number(process.env.PORT || 10000);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -504,6 +505,11 @@ export async function handleApi(req, res, pathname, url) {
     const displayName = String(authenticated?.jarvisUser?.name || authenticated?.jarvisUser?.email || '').trim();
     const userIdentity = displayName ? `${displayName}'s` : 'the current user';
     const intentCandidates = rankCapabilitiesForIntent(latestUserMessage, 4);
+    const route = routeIntent({
+      messages,
+      availableCapabilities: getAvailableCapabilities(),
+      user: authenticated?.jarvisUser || null,
+    });
 
     const imageRequest = /\b(generate|create|make|draw|illustrate|render)\b[\\s\\S]{0,120}\b(image|picture|photo|illustration)\b|\b(image|picture|photo|illustration)\b[\\s\\S]{0,120}\b(generate|create|make|draw|illustrate|render)\b/i.test(latestUserMessage);
     if (imageRequest) {
@@ -564,6 +570,7 @@ export async function handleApi(req, res, pathname, url) {
       intentCandidates.length
         ? `Likely capabilities for the current request (hints, not execution): ${intentCandidates.map(item => item.id).join(', ')}`
         : 'No capability was confidently identified from simple routing hints; use reasoning and available tools rather than inventing a capability.',
+      routeContextForPrompt(route),
       "The JARVIS application provides you with the current conversation messages and, when available, relevant long-term memories retrieved from its persistent memory system.",
       "Use the supplied conversation and memory context to maintain continuity. Do not claim that you cannot remember previous conversations when relevant history or memory is supplied.",
       "Do not describe yourself as ChatGPT, Claude, Hugging Face, or another underlying model unless the user explicitly asks which model/provider is being used.",
@@ -671,7 +678,12 @@ export async function handleApi(req, res, pathname, url) {
     return json(
       res,
       200,
-      { text, provider, model, persistent: Boolean(userId), guest: !userId },
+      { text, provider, model, persistent: Boolean(userId), guest: !userId, routing: {
+        mode: route.mode,
+        candidateCapabilities: route.candidateCapabilities.map(item => item.id),
+        referencesDetected: route.references.length,
+        needsClarification: route.needsClarification,
+      } },
       userId ? { 'Set-Cookie': jarvisCookie(userId) } : {},
     );
   }
