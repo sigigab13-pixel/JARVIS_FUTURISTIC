@@ -71,7 +71,10 @@ export function routeIntent({ messages = [], availableCapabilities = [], user = 
 
   const capabilityScores = availableCapabilities.map(capability => {
     const descriptionTokens = tokens(capability.description || '');
-    const overlap = descriptionTokens.filter(token => wordSet.has(token)).length;
+    const keywordTokens = Array.isArray(capability.keywords) ? capability.keywords.flatMap(tokens) : [];
+    const descriptionOverlap = descriptionTokens.filter(token => wordSet.has(token)).length;
+    const keywordOverlap = keywordTokens.filter(token => wordSet.has(token)).length;
+    const overlap = (keywordOverlap * 3) + descriptionOverlap;
     return { ...capability, routeScore: overlap };
   }).sort((a, b) => b.routeScore - a.routeScore);
 
