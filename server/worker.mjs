@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { dequeueJob, isRedisConfigured } from './queue.mjs';
+import { groupWorkloadBatch, nextWorkDelayMs, workloadClass } from './workload-governor.mjs';
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
 const SUPABASE_SERVER_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -137,46 +138,71 @@ export async function runWorker({
   pollMs = 5000,
   logger = console,
   concurrency = Number(process.env.JARVIS_WORKER_CONCURRENCY || 4),
+  maxJobsPerRun = Number(process.env.JARVIS_WORKER_MAX_JOBS_PER_RUN || 24),
+  maxRuntimeMs = Number(process.env.JARVIS_WORKER_MAX_RUNTIME_MS || 210000),
 } = {}) {
   if (!configured()) throw new Error('SUPABASE_URL and SUPABASE_SECRET_KEY/SUPABASE_SERVICE_ROLE_KEY are required.');
 
   const maxConcurrency = Math.min(8, Math.max(1, Math.floor(Number(concurrency) || 4)));
+  const jobLimit = Math.min(100, Math.max(1, Math.floor(Number(maxJobsPerRun) || 24)));
+  const runtimeLimit = Math.min(240000, Math.max(30000, Number(maxRuntimeMs) || 210000));
+  const startedAt = Date.now();
   let processed = 0;
+  let attempted = 0;
+  let failureCount = 0;
+  let batches = 0;
 
-  while (true) {
-    const jobs = [];
-    for (let i = 0; i < maxConcurrency; i += 1) {
+  while (attempted < jobLimit && Date.now() - startedAt < runtimeLimit) {
+    const claimed = [];
+    const claimCount = Math.min(maxConcurrency, jobLimit - attempted);
+
+    for (let i = 0; i < claimCount; i += 1) {
       try {
         const job = await claimOne(workerId);
         if (!job) break;
-        jobs.push(job);
+        claimed.push(job);
+        attempted += 1;
       } catch (error) {
         logger.error?.('[JARVIS worker] claim failed:', error);
-        if (once && jobs.length === 0) throw error;
+        failureCount += 1;
+        if (once && claimed.length === 0) throw error;
         break;
       }
     }
 
-    if (jobs.length === 0) {
-      if (once) return { workerId, processed, concurrency: maxConcurrency };
-      await new Promise(resolve => setTimeout(resolve, pollMs));
+    if (claimed.length === 0) {
+      if (once) return { workerId, processed, attempted, batches, concurrency: maxConcurrency };
+      await new Promise(resolve => setTimeout(resolve, nextWorkDelayMs({ queueEmpty: true, baseMs: pollMs })));
       continue;
     }
 
-    const results = await Promise.all(jobs.map(job => processJob(job, workerId, logger)));
-    processed += results.filter(result => result.ok).length;
+    const batch = groupWorkloadBatch(claimed, maxConcurrency);
+    if (!batch.length) break;
 
-    // GitHub Actions runs the worker with JARVIS_WORKER_ONCE=1. Process one
-    // bounded batch per invocation so scheduled runs remain predictable.
-    if (once) {
-      return {
-        workerId,
-        processed,
-        attempted: jobs.length,
-        concurrency: maxConcurrency,
-      };
+    if (claimed.length !== batch.length) {
+      logger.info?.(
+        `[JARVIS worker] workload governor isolated a heavy job batch: ${batch.map(job => workloadClass(job)).join(', ')}`
+      );
     }
+
+    const results = await Promise.all(batch.map(job => processJob(job, workerId, logger)));
+    const successful = results.filter(result => result.ok).length;
+    processed += successful;
+    batches += 1;
+    failureCount = results.length - successful > 0 ? failureCount + 1 : 0;
+
+    if (once && attempted >= jobLimit) break;
   }
+
+  return {
+    workerId,
+    processed,
+    attempted,
+    batches,
+    concurrency: maxConcurrency,
+    elapsedMs: Date.now() - startedAt,
+    runtimeLimitMs: runtimeLimit,
+  };
 }
 
 if (process.argv[1] && process.argv[1].endsWith('/worker.mjs')) {
