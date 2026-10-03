@@ -1,6 +1,60 @@
 # JARVIS FUTURISTIC — Master Build Queue
 
 
+# ROADMAP LOCK — MYTHOS EXECUTION PHASE
+
+**Status:** FROZEN FOR IMPLEMENTATION  
+**Locked:** 2026-10-03
+
+The current master queue is the approved JARVIS blueprint. New feature ideas should not be added to the implementation roadmap by default. They should be captured separately as research/backlog candidates and only promoted if they materially improve the core product.
+
+## Execution doctrine
+1. Build foundations before surface features.
+2. Implement one vertical slice at a time.
+3. Verify every layer in a real environment before promoting it.
+4. Do not introduce new dependencies without a clear need.
+5. Preserve current working capabilities while adding new ones.
+6. Treat identity, permissions, workspace isolation, truthfulness, observability, and recovery as first-class requirements.
+7. Prefer reversible, testable changes over broad rewrites.
+8. No feature is considered complete because code exists; it is complete only after successful verification.
+
+## Implementation gates
+**Gate 1 — Identity & Data Isolation**  
+Authentication, per-user identity, personal/business workspace boundaries, memory isolation.
+
+**Gate 2 — Intelligence Substrate**  
+Goal graph, capability registry, intent/context routing, evidence/truth, policy engine, memory, world model.
+
+**Gate 3 — Mission Runtime**  
+Durable missions, state checkpoints, permissions, approvals, transactions, recovery, monitoring.
+
+**Gate 4 — Multimodal Assistant**  
+Images, PDFs, vision, voice, multilingual interaction, cross-device continuity.
+
+**Gate 5 — Business & Personal Operating Systems**  
+Business Manager, Personal Assistant, universal inbox, routines, decision support, process intelligence.
+
+**Gate 6 — Content Factory**  
+Children's content production, image/video/voice pipelines, QA, storage, publishing, analytics.
+
+**Gate 7 — Strategic Intelligence**  
+Web intelligence, monitoring, foresight, opportunity scouting, simulation, outcome learning.
+
+**Gate 8 — Scale & Productization**  
+Skill factory, templates, premium/team features, cost optimization, reliability center, skill marketplace.
+
+## Definition of done
+Every production capability must have:
+- a clear user outcome
+- explicit permissions
+- failure handling
+- observable status
+- tests/evaluation
+- verified completion evidence
+- documented limits
+
+
+
 # MYTHOS DEEP SKILL LAYER — Strategic JARVIS Capabilities
 
 These are cross-cutting skills that make the rest of JARVIS smarter, more reliable, more proactive, and easier to use.
