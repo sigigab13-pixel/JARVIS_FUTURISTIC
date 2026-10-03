@@ -478,7 +478,7 @@ export async function handleApi(req, res, pathname, url) {
     const token = openaiKey || huggingFaceToken;
     const response = await fetch(endpoint, {
       method: 'POST',
-      headers: { Authorization: \`Bearer \${token}\`, 'Content-Type': 'application/json' },
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model,
         messages: [
