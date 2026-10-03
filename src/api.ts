@@ -99,3 +99,25 @@ async function blobToBase64(blob: Blob): Promise<string> {
   }
   return btoa(binary);
 }
+
+
+export const missions = {
+  list: async () => api.get('/api/missions?limit=20'),
+  createImage: async (prompt: string) => api.post('/api/missions', {
+    goal: 'Generate an image: ' + prompt,
+    autonomy: 'execute_with_approval',
+    steps: [{
+      id: 'image-1',
+      title: 'Generate image',
+      capability: 'image',
+      executorType: 'image_generation',
+      sideEffect: true,
+      prompt,
+      priority: 50,
+      maxAttempts: 3,
+    }],
+  }),
+  requestApproval: async (id: string) => api.post('/api/missions/' + encodeURIComponent(id) + '/request-approval', {}),
+  approve: async (id: string) => api.post('/api/missions/' + encodeURIComponent(id) + '/approve', {}),
+  start: async (id: string) => api.post('/api/missions/' + encodeURIComponent(id) + '/start', {}),
+};
