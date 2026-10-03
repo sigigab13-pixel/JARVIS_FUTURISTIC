@@ -59,12 +59,15 @@ function normalizeMessages(value: unknown): Message[] {
     .filter(Boolean) as Message[];
 }
 
-const starter: Message[] = [
-  {
+function makeStarter(displayName = 'there'): Message[] {
+  const safeName = String(displayName || 'there').trim() || 'there';
+  return [{
     role: 'assistant',
-    content: 'Hello, Saviour. JARVIS is online. How can I help you?',
-  },
-];
+    content: `Hello, ${safeName}. JARVIS is online. How can I help you?`,
+  }];
+}
+
+const starter: Message[] = makeStarter();
 
 function App() {
   const [session, setSession] = useState<any>(null);
@@ -72,14 +75,7 @@ function App() {
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState('');
   const [entitlement, setEntitlement] = useState<any>(null);
-  const [messages, setMessages] = useState<Message[]>(() => {
-    try {
-      const saved = localStorage.getItem('jarvis-history');
-      return saved ? normalizeMessages(JSON.parse(saved)) : starter;
-    } catch {
-      return starter;
-    }
-  });
+  const [messages, setMessages] = useState<Message[]>(starter);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
@@ -173,6 +169,18 @@ function App() {
   useEffect(() => {
     if (!session) { setEntitlement(null); return; }
     let active = true;
+    const authUser = session.user || {};
+    const metadata = authUser.user_metadata || {};
+    const displayName = String(metadata.full_name || metadata.name || authUser.email || 'there').trim() || 'there';
+    const historyKey = `jarvis-history:${String(authUser.id || authUser.email || 'user')}`;
+    try {
+      const saved = localStorage.getItem(historyKey);
+      setMessages(saved ? normalizeMessages(JSON.parse(saved)) : makeStarter(displayName));
+      if (session?.user?.id) localStorage.removeItem(`jarvis-history:${session.user.id}`);
+    localStorage.removeItem('jarvis-history');
+    } catch {
+      setMessages(makeStarter(displayName));
+    }
     void api.get('/api/plans').then(response => {
       if (active) setEntitlement(response.data?.entitlement || null);
     }).catch(() => {
@@ -199,10 +207,12 @@ function App() {
   const signOut = async () => {
     if (supabase) await supabase.auth.signOut();
     setSession(null);
+    setMessages(starter);
   };
 
   useEffect(() => {
-    localStorage.setItem('jarvis-history', JSON.stringify(messages));
+    if (!session?.user?.id) return;
+    localStorage.setItem(`jarvis-history:${session.user.id}`, JSON.stringify(messages));
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, busy]);
 
@@ -356,7 +366,7 @@ function App() {
       const answer = safeText(
         response.data?.text,
         generatedImage
-          ? 'Done, Saviour. Your image is ready in Image Lab.'
+          ? `Done, ${String(session?.user?.user_metadata?.full_name || session?.user?.user_metadata?.name || session?.user?.email || 'there').trim() || 'there'}. Your image is ready in Image Lab.`
           : 'I could not complete that request. Please try again.',
       );
       setMessages(current => [
