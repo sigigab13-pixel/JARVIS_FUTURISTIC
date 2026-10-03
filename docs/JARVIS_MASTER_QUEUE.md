@@ -478,6 +478,101 @@ JARVIS should not only expose generic automation. It should package repeatable, 
 
 
 
+
+
+# MYTHOS DEEP SKILL LAYER III — Living Intelligence & Long-Horizon Operation
+
+## P0 — State Continuity Engine
+- [ ] Maintain a canonical mission/workspace state across interruptions, retries, deploys, devices, and agent handoffs.
+- [ ] Distinguish proposed state, observed state, verified state, and committed state.
+- [ ] Resume from the last verified checkpoint rather than replaying everything blindly.
+- [ ] Detect stale assumptions before resuming a long mission.
+
+## P0 — Standing Goals & Autonomous Routines
+- [ ] Let users create standing instructions such as “watch this,” “keep this organized,” or “prepare this every Monday.”
+- [ ] Evaluate conditions on a schedule or event trigger.
+- [ ] Run only within the user's configured autonomy and notification policies.
+- [ ] Pause routines when their underlying goal, authorization, or data becomes stale.
+- [ ] Provide an easy way to inspect and cancel every standing routine.
+
+## P0 — Context Compiler
+- [ ] Convert messy inputs from chat, voice, images, PDFs, webpages, emails, calendars, and connected apps into structured task context.
+- [ ] Deduplicate repeated information and preserve provenance.
+- [ ] Separate instructions from evidence and background context.
+- [ ] Compress large context into a useful state representation without losing critical evidence.
+- [ ] Reconstruct relevant context automatically for long-running missions.
+
+## P0 — Multimodal Fusion Engine
+- [ ] Combine text, speech, images, PDFs, screen state, web evidence, and structured business data in one reasoning context.
+- [ ] Resolve contradictions between modalities.
+- [ ] Track which modality supports each important observation.
+- [ ] Avoid treating an ambiguous visual or transcription error as a confirmed fact.
+
+## P0 — Foresight & Early-Warning Engine
+- [ ] Detect leading indicators of missed deadlines, workflow failures, cost spikes, content underperformance, connector degradation, and business risks.
+- [ ] Produce early warnings before a problem becomes an incident where evidence supports the prediction.
+- [ ] Show the signals behind a warning and distinguish prediction from observation.
+- [ ] Recommend reversible preventive actions first.
+
+## P0 — Adaptive Playbook Engine
+- [ ] Maintain reusable playbooks for recurring tasks and business processes.
+- [ ] Adapt a playbook to current conditions without changing its safety boundaries.
+- [ ] Track which steps are stable and which require fresh verification.
+- [ ] Version playbook changes and test them before broad reuse.
+
+## P0 — Safe Compensation & Rollback Engine
+- [ ] When a multi-step mission partially succeeds, determine how to safely continue, compensate, or roll back.
+- [ ] Prefer idempotent operations and reversible steps.
+- [ ] Track side effects so JARVIS knows what has already happened.
+- [ ] Never claim rollback success without verifying the resulting state.
+
+## P1 — Priority Arbitration Engine
+- [ ] Resolve competing tasks using deadlines, importance, user preferences, business impact, risk, and available resources.
+- [ ] Explain why one task was prioritized over another when useful.
+- [ ] Prevent low-value work from consuming resources needed for higher-priority missions.
+- [ ] Respect user-defined “never interrupt” and “always escalate” rules.
+
+## P1 — Personal & Business Chief-of-Staff Mode
+- [ ] Combine planning, research, communication preparation, meetings, follow-ups, metrics, and task coordination into a single operating view.
+- [ ] Prepare daily/weekly briefs around decisions and exceptions rather than raw activity.
+- [ ] Surface what deserves human attention next.
+- [ ] Keep recommendations grounded in current workspace evidence.
+
+## P1 — Change Impact Analyzer
+- [ ] When a document, API, policy, product, price, schedule, or business process changes, identify potentially affected missions, automations, reports, memories, and playbooks.
+- [ ] Prioritize impacted items by severity and confidence.
+- [ ] Trigger re-verification or repair missions where appropriate.
+
+## P1 — Reality Check Engine
+- [ ] Periodically verify that important stored assumptions still match the current world.
+- [ ] Detect outdated contacts, prices, policies, schedules, integrations, and business information.
+- [ ] Mark stale knowledge and schedule refreshes when authorized.
+- [ ] Avoid silently overwriting important historical records.
+
+## P1 — Learning From Failure Library
+- [ ] Store structured failure patterns, causes, mitigations, and successful recovery strategies.
+- [ ] Match new incidents against known patterns.
+- [ ] Turn repeated failures into preventive tests or playbook updates.
+- [ ] Keep failure knowledge separated from ordinary user memory.
+
+## P1 — Resource-Aware Planner
+- [ ] Plan around available compute, API quotas, provider limits, storage, time windows, and mission budgets.
+- [ ] Queue or defer work when resources are constrained.
+- [ ] Select cheaper or lighter execution paths when they satisfy the mission.
+- [ ] Avoid runaway retries and unbounded background work.
+
+## P2 — JARVIS Strategic Review
+- [ ] Periodically review goals, active routines, completed missions, failures, costs, and outcomes.
+- [ ] Identify patterns humans may have missed.
+- [ ] Recommend which routines, skills, integrations, and goals should be kept, changed, paused, or removed.
+- [ ] Require user approval before making material strategic changes.
+
+## P2 — JARVIS Simulation Chamber
+- [ ] Provide a dedicated environment for testing new skills, connectors, playbooks, and agent teams against synthetic or sandboxed data.
+- [ ] Compare candidate versions against baseline behavior.
+- [ ] Include adversarial, failure, timeout, and recovery scenarios.
+- [ ] Promote changes only after required tests pass.
+
 # MYTHOS CONTROL & DEFENSE LAYER — Bounded Autonomy Architecture
 
 ## P0 — Intent Lock
