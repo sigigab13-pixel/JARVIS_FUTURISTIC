@@ -33,6 +33,35 @@ export const api = {
     if (!response.ok) throw Object.assign(new Error(data?.error || `Request failed with status ${response.status}`), { response: { data } });
     return { data };
   },
+  patch: async (path: string, body: unknown) => {
+    const response = await fetch(path, {
+      method: 'PATCH',
+      headers: await authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(body),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw Object.assign(new Error(data?.error || `Request failed with status ${response.status}`), { response: { data } });
+    return { data };
+  },
+  put: async (path: string, body: unknown) => {
+    const response = await fetch(path, {
+      method: 'PUT',
+      headers: await authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(body),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw Object.assign(new Error(data?.error || `Request failed with status ${response.status}`), { response: { data } });
+    return { data };
+  },
+  delete: async (path: string) => {
+    const response = await fetch(path, {
+      method: 'DELETE',
+      headers: await authHeaders(),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw Object.assign(new Error(data?.error || `Request failed with status ${response.status}`), { response: { data } });
+    return { data };
+  },
 };
 
 export const image = {
