@@ -425,6 +425,15 @@ export async function handleApi(req, res, pathname, url) {
     return json(res, 200, { messages: history, persistent: true }, { 'Set-Cookie': jarvisCookie(authenticated.jarvisUser.id) });
   }
 
+  if (req.method === 'GET' && pathname === '/api/chat') {
+    return json(res, 200, {
+      ok: true,
+      route: '/api/chat',
+      method: 'POST',
+      providerConfigured: Boolean(process.env.HUGGINGFACE_API_TOKEN || process.env.HF_TOKEN),
+    });
+  }
+
   if (req.method === 'POST' && pathname === '/api/chat') {
     const input = await parseBody(req);
     const messages = Array.isArray(input.messages)
