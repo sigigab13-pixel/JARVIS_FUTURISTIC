@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { CheckCircle2, CircleDashed, LockKeyhole, Radio, X } from 'lucide-react';
+import ChildrenProductionStudio from './ChildrenProductionStudio';
 import './capability-center.css';
 
 type CapabilityStatus = 'READY' | 'AUTH REQUIRED' | 'PLANNED' | 'DEMO ONLY';
@@ -36,6 +37,7 @@ const capabilities: Capability[] = [
   { name: 'Voice Input + Passive Hey Wake', description: 'Browser-controlled voice input and passive wake workflow.', status: 'READY' },
   { name: 'AI Image Lab', description: 'Generate and edit images through the connected AI image service.', status: 'READY' },
   { name: 'AI Story Director', description: 'Creates structured stories with English-only fictional names and persistent character IDs.', status: 'READY' },
+  { name: 'Children Production Studio', description: 'Builds original children-safe stories into reusable production packs, clips, rhymes and educational outputs.', status: 'READY' },
   { name: 'Character Continuity', description: 'Carries character identity, appearance and voice direction across scenes.', status: 'READY' },
   { name: 'Voice Engine', description: 'Google Cloud TTS pipeline with browser fallback when configured.', status: 'READY' },
   { name: 'Lip-Sync Video Layer', description: 'Designed for external video/lip-sync providers; provider availability must be verified before claiming final video.', status: 'PLANNED' },
@@ -58,9 +60,31 @@ const statusIcon = (status: CapabilityStatus) => {
 
 export default function CapabilityCenter({ onClose }: { onClose: () => void }) {
   const [filter, setFilter] = useState<'all' | 'ready' | 'attention'>('all');
+  const [childrenStudioOpen, setChildrenStudioOpen] = useState(false);
   const readyCount = capabilities.filter(item => item.status === 'READY').length;
   const attentionCount = capabilities.filter(item => item.status !== 'READY').length;
-  const visibleCapabilities = useMemo(() => capabilities.filter(item => filter === 'all' || (filter === 'ready' ? item.status === 'READY' : item.status !== 'READY')), [filter]);
+  const visibleCapabilities = useMemo(
+    () => capabilities.filter(item => filter === 'all' || (filter === 'ready' ? item.status === 'READY' : item.status !== 'READY')),
+    [filter]
+  );
+
+  if (childrenStudioOpen) {
+    return (
+      <div className="capability-overlay" role="dialog" aria-modal="true" aria-label="JARVIS Children's Production Studio">
+        <section className="capability-panel">
+          <header className="capability-head">
+            <div>
+              <span className="eyebrow">JARVIS CREATIVE SYSTEM</span>
+              <h2>Children's Production Studio</h2>
+              <p>Build the master story and production plan without claiming that rendering or publishing has happened.</p>
+            </div>
+            <button onClick={() => setChildrenStudioOpen(false)} aria-label="Close children's production studio"><X size={18} /></button>
+          </header>
+          <ChildrenProductionStudio />
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="capability-overlay" role="dialog" aria-modal="true" aria-label="JARVIS Capability Center">
@@ -90,14 +114,25 @@ export default function CapabilityCenter({ onClose }: { onClose: () => void }) {
         <div className="capability-grid">
           {visibleCapabilities.map(item => (
             <article className="capability-card" key={item.name}>
-              <div className="capability-card-top"><b>{item.name}</b><span className={`capability-status ${item.status.toLowerCase().replaceAll(' ', '-')}`}>{statusIcon(item.status)} {item.status}</span></div>
+              <div className="capability-card-top">
+                <b>{item.name}</b>
+                <span className={`capability-status ${item.status.toLowerCase().replaceAll(' ', '-')}`}>{statusIcon(item.status)} {item.status}</span>
+              </div>
               <p>{item.description}</p>
+              {item.name === 'Children Production Studio' && (
+                <button className="capability-open-button" onClick={() => setChildrenStudioOpen(true)}>
+                  Open Production Studio
+                </button>
+              )}
             </article>
           ))}
         </div>
 
         <div className="office-registry">
-          <div className="office-registry-head"><div><span className="eyebrow">18-OFFICE REGISTRY</span><h3>Every office has a defined job</h3></div><span className="registry-live">SERIAL WORKFLOW MAP</span></div>
+          <div className="office-registry-head">
+            <div><span className="eyebrow">18-OFFICE REGISTRY</span><h3>Every office has a defined job</h3></div>
+            <span className="registry-live">SERIAL WORKFLOW MAP</span>
+          </div>
           <div className="office-registry-grid">
             {offices.map((office, index) => (
               <div className="office-registry-item" key={office.name}>
