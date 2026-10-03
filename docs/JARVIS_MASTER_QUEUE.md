@@ -573,6 +573,97 @@ JARVIS should not only expose generic automation. It should package repeatable, 
 - [ ] Include adversarial, failure, timeout, and recovery scenarios.
 - [ ] Promote changes only after required tests pass.
 
+
+
+# MYTHOS DEEP SKILL LAYER IV — Intelligence Substrate & Strategic Leverage
+
+## P0 — Goal Graph
+- [ ] Represent user and business goals as a connected graph of outcomes, sub-goals, tasks, dependencies, deadlines, metrics, and decisions.
+- [ ] Detect when one action advances or conflicts with multiple goals.
+- [ ] Surface the highest-leverage next action rather than simply the next task.
+- [ ] Preserve goal history so JARVIS can distinguish abandoned, completed, changed, and recurring goals.
+
+## P0 — Capability Registry & Self-Knowledge
+- [ ] Maintain a live registry of every available tool, connector, model, agent, skill, permission, limit, cost profile, and health state.
+- [ ] Know the difference between “I can do this,” “I can prepare this,” and “I need another approved capability.”
+- [ ] Automatically choose the best current capability based on quality, latency, cost, permissions, and reliability.
+- [ ] Detect missing capabilities and propose the smallest safe addition.
+- [ ] Prevent JARVIS from claiming a capability merely because a model says it can do it.
+
+## P0 — Policy Compiler
+- [ ] Compile user, workspace, connector, platform, and mission rules into a machine-checkable authorization policy.
+- [ ] Resolve policy conflicts deterministically.
+- [ ] Re-check policy at every consequential tool boundary, not only when a mission begins.
+- [ ] Explain blocked actions in plain language and identify what permission or safer alternative would resolve them.
+- [ ] Keep policy changes versioned and auditable.
+
+## P0 — Trust Graph
+- [ ] Track trust and provenance relationships between users, agents, tools, data sources, documents, web pages, connectors, and outputs.
+- [ ] Distinguish trusted instructions from untrusted content throughout an entire mission.
+- [ ] Reduce trust when sources conflict, credentials change, or anomalous behavior is detected.
+- [ ] Propagate provenance into downstream reports, decisions, and generated content.
+
+## P0 — Mission Transaction Engine
+- [ ] Treat consequential multi-step workflows as transactions with checkpoints, side-effect records, compensating actions, and verified completion states.
+- [ ] Make safe operations idempotent where possible.
+- [ ] Detect partial completion and choose continue, compensate, pause, or rollback.
+- [ ] Prevent duplicate external side effects after retries or interrupted execution.
+
+## P0 — Self-Diagnostic & Self-Repair Brain
+- [ ] Distinguish model failure, tool failure, data failure, permission failure, policy failure, and product bugs.
+- [ ] Run targeted diagnostics before attempting repairs.
+- [ ] Prefer minimal fixes that preserve current behavior.
+- [ ] Verify the repaired component with regression tests and a real health check.
+- [ ] Escalate rather than repeatedly retrying when confidence is low.
+
+## P1 — Leverage Finder
+- [ ] Search the goal graph and business operating model for actions that unlock multiple downstream benefits.
+- [ ] Recommend system-level improvements over isolated task automation when the evidence supports them.
+- [ ] Rank opportunities by expected impact, effort, reversibility, and confidence.
+- [ ] Track whether high-leverage recommendations actually produced results.
+
+## P1 — Resource Allocation Brain
+- [ ] Allocate model calls, agent workers, queues, storage, and tool usage according to mission value and deadlines.
+- [ ] Reserve capacity for critical missions.
+- [ ] Prevent noisy background routines from starving user-requested work.
+- [ ] Rebalance work when quotas, prices, or provider health change.
+
+## P1 — Continuous Evaluation Fabric
+- [ ] Maintain a living evaluation suite covering core intents, tool selection, memory retrieval, permissions, safety, cost, latency, and end-to-end outcomes.
+- [ ] Run targeted evaluations after relevant code, model, connector, skill, or policy changes.
+- [ ] Compare new behavior against baseline and block unsafe regressions.
+- [ ] Use real failures as anonymized/safe test cases where appropriate.
+
+## P1 — Agent Learning Curriculum
+- [ ] Organize learning from simple tasks to more complex missions.
+- [ ] Identify recurring weak skills and create targeted practice/evaluation scenarios.
+- [ ] Promote an improvement only after it beats baseline on the relevant tests.
+- [ ] Separate experimentation from production behavior.
+
+## P1 — User Intent Prediction with Restraint
+- [ ] Predict likely next needs from current context only when evidence is strong.
+- [ ] Offer proactive suggestions without silently executing unrelated work.
+- [ ] Prefer one useful suggestion over a stream of interruptions.
+- [ ] Learn user acceptance/rejection patterns without inferring sensitive traits.
+
+## P2 — Strategic Memory Compression
+- [ ] Compress long histories into durable state while preserving important evidence, decisions, exceptions, and unresolved questions.
+- [ ] Retain multiple levels of memory: event, episode, procedure, preference, goal, and outcome.
+- [ ] Rehydrate only the context needed for the current mission.
+- [ ] Let users inspect, correct, export, and delete durable memory.
+
+## P2 — JARVIS Mission Replay
+- [ ] Reproduce past missions in a sandbox with captured inputs, tool versions, policies, and expected outcomes.
+- [ ] Compare old and new behavior after system changes.
+- [ ] Explain why a replay diverged.
+- [ ] Use replay for debugging, evaluation, and safe optimization.
+
+## P2 — Capability Negotiation
+- [ ] Let JARVIS negotiate task requirements with compatible external agents/services instead of assuming capabilities.
+- [ ] Exchange supported modalities, limits, authentication requirements, deadlines, and output formats.
+- [ ] Select a collaborator based on verified capability and policy scope.
+- [ ] Preserve authority boundaries across the full delegation chain.
+
 # MYTHOS CONTROL & DEFENSE LAYER — Bounded Autonomy Architecture
 
 ## P0 — Intent Lock
