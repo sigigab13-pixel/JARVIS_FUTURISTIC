@@ -910,7 +910,7 @@ function App() {
               {[
                 ['Explain something', 'Explain a topic clearly.'],
                 ['Help me study', 'Help me study a topic with a simple plan.'],
-                ['Engineering mode', 'Help me with an aeronautical engineering concept.'],
+                ['Children\'s Content Studio', 'Help me create a children\'s rhyme, story, or learning video.'],
                 ['Plan my day', 'Help me make a practical plan for today.'],
                 ['Give me an idea', 'Give me a useful creative idea.'],
                 ['Remember this', 'Remember the important information I am about to give you.'],
