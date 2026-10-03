@@ -65,6 +65,10 @@ const YOUTUBE_CLIENT_ID = process.env.GOOGLE_YOUTUBE_CLIENT_ID || '';
 const YOUTUBE_CLIENT_SECRET = process.env.GOOGLE_YOUTUBE_CLIENT_SECRET || '';
 const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/$/, '');
 
+function isImageBlob(value) {
+  return Boolean(value && typeof value.arrayBuffer === 'function');
+}
+
 async function generateHuggingFaceImage(prompt, inputImage = null) {
   const token = process.env.HUGGINGFACE_API_TOKEN || process.env.HF_TOKEN || '';
   if (!token) throw Object.assign(new Error('Hugging Face image generation is not configured.'), { statusCode: 503 });
@@ -83,10 +87,11 @@ async function generateHuggingFaceImage(prompt, inputImage = null) {
             provider,
             outputType: 'blob',
           });
-          if (!(result instanceof Blob)) throw new Error('Hugging Face returned an invalid image payload.');
+          if (!isImageBlob(result)) throw new Error('Hugging Face returned an invalid image payload.');
           return result;
         } catch (error) {
-          errors.push(`${model} via ${provider}: ${error instanceof Error ? error.message : String(error)}`);
+          const status = Number(error?.status || error?.httpResponse?.status || 0);
+          errors.push(`${model} via ${provider}${status ? ` [${status}]` : ''}: ${error instanceof Error ? error.message : String(error)}`);
         }
       }
     }
@@ -104,10 +109,11 @@ async function generateHuggingFaceImage(prompt, inputImage = null) {
             parameters: { prompt },
             provider,
           });
-          if (!(result instanceof Blob)) throw new Error('Hugging Face returned an invalid edited-image payload.');
+          if (!isImageBlob(result)) throw new Error('Hugging Face returned an invalid edited-image payload.');
           return result;
         } catch (error) {
-          errors.push(`${model} image-to-image via ${provider}: ${error instanceof Error ? error.message : String(error)}`);
+          const status = Number(error?.status || error?.httpResponse?.status || 0);
+          errors.push(`${model} image-to-image via ${provider}${status ? ` [${status}]` : ''}: ${error instanceof Error ? error.message : String(error)}`);
         }
       }
     }
@@ -688,6 +694,41 @@ export async function handleApi(req, res, pathname, url) {
       console.error('YouTube OAuth callback error:', error);
       return redirect(res, `/?youtube=error&message=${encodeURIComponent(error instanceof Error ? error.message : 'YouTube connection failed.')}`);
     }
+  }
+
+  if (req.method === 'GET' && pathname === '/api/image/diagnostics') {
+    const token = process.env.HUGGINGFACE_API_TOKEN || process.env.HF_TOKEN || '';
+    const modelChecks = await Promise.all(HF_IMAGE_MODELS.map(async model => {
+      try {
+        const response = await fetch('https://huggingface.co/api/models/' + model);
+        return { model, available: response.ok, status: response.status };
+      } catch (error) {
+        return { model, available: false, status: 0, error: error instanceof Error ? error.message : String(error) };
+      }
+    }));
+    let tokenValid = false;
+    let tokenStatus = token ? 0 : null;
+    if (token) {
+      try {
+        const response = await fetch('https://huggingface.co/api/whoami-v2', {
+          headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' },
+        });
+        tokenValid = response.ok;
+        tokenStatus = response.status;
+      } catch {
+        tokenStatus = 0;
+      }
+    }
+    return json(res, 200, {
+      imageLab: 'ready',
+      tokenConfigured: Boolean(token),
+      tokenValid,
+      tokenStatus,
+      providers: HF_IMAGE_PROVIDERS,
+      generationModels: HF_IMAGE_MODELS,
+      editModels: HF_IMAGE_EDIT_MODELS,
+      modelChecks,
+    });
   }
 
   if (req.method === 'POST' && (pathname === '/api/image/generate' || pathname === '/api/image/edit')) {
