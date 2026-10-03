@@ -38,6 +38,7 @@ import {
 } from './store.mjs';
 import { enqueueJob, isRedisConfigured } from './queue.mjs';
 import { createMediaKey, isSupabaseStorageConfigured, putMedia } from './media.mjs';
+import { capabilityContextForPrompt, getCapabilityRegistry, rankCapabilitiesForIntent } from './capabilities.mjs';
 
 const PORT = Number(process.env.PORT || 10000);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -64,6 +65,7 @@ const ELEVENLABS_DEFAULT_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || '';
 const YOUTUBE_CLIENT_ID = process.env.GOOGLE_YOUTUBE_CLIENT_ID || '';
 const YOUTUBE_CLIENT_SECRET = process.env.GOOGLE_YOUTUBE_CLIENT_SECRET || '';
 const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/$/, '');
+const JARVIS_CREATOR_NAME = String(process.env.JARVIS_CREATOR_NAME || 'Saviour').trim() || 'Saviour';
 
 function isImageBlob(value) {
   return Boolean(value && typeof value.arrayBuffer === 'function');
@@ -232,6 +234,14 @@ function safePath(urlPath) {
 export async function handleApi(req, res, pathname, url) {
   if (req.method === 'GET' && pathname === '/api/_healthcheck') {
     return json(res, 200, { message: 'Success', service: 'JARVIS', deployment: 'vercel' });
+  }
+
+  if (req.method === 'GET' && pathname === '/api/capabilities') {
+    await requireAuthenticatedJarvisUser(req);
+    return json(res, 200, {
+      capabilities: getCapabilityRegistry(),
+      note: 'Availability reflects the current server configuration; authorization is still checked when an action is executed.',
+    });
   }
 
   if (req.method === 'GET' && pathname === '/api/business') {
@@ -493,6 +503,7 @@ export async function handleApi(req, res, pathname, url) {
     const latestUserMessage = String(messages[messages.length - 1]?.content || '').trim();
     const displayName = String(authenticated?.jarvisUser?.name || authenticated?.jarvisUser?.email || '').trim();
     const userIdentity = displayName ? `${displayName}'s` : 'the current user';
+    const intentCandidates = rankCapabilitiesForIntent(latestUserMessage, 4);
 
     const imageRequest = /\b(generate|create|make|draw|illustrate|render)\b[\\s\\S]{0,120}\b(image|picture|photo|illustration)\b|\b(image|picture|photo|illustration)\b[\\s\\S]{0,120}\b(generate|create|make|draw|illustrate|render)\b/i.test(latestUserMessage);
     if (imageRequest) {
@@ -547,7 +558,12 @@ export async function handleApi(req, res, pathname, url) {
       : '';
 
     const systemMessage = [
-      `You are JARVIS FUTURISTIC, the AI assistant for ${userIdentity}.`,
+`You are JARVIS FUTURISTIC, the AI assistant for ${userIdentity}.`,
+      `JARVIS was created by ${JARVIS_CREATOR_NAME}. If asked who created you, answer with that creator identity and do not confuse it with the current user's identity.`,
+      capabilityContextForPrompt(),
+      intentCandidates.length
+        ? `Likely capabilities for the current request (hints, not execution): ${intentCandidates.map(item => item.id).join(', ')}`
+        : 'No capability was confidently identified from simple routing hints; use reasoning and available tools rather than inventing a capability.',
       "The JARVIS application provides you with the current conversation messages and, when available, relevant long-term memories retrieved from its persistent memory system.",
       "Use the supplied conversation and memory context to maintain continuity. Do not claim that you cannot remember previous conversations when relevant history or memory is supplied.",
       "Do not describe yourself as ChatGPT, Claude, Hugging Face, or another underlying model unless the user explicitly asks which model/provider is being used.",
