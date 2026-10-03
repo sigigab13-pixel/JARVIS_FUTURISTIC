@@ -44,6 +44,8 @@ const PORT = Number(process.env.PORT || 10000);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = path.join(ROOT, 'dist');
 
+const OPENAI_CHAT_URL = 'https://api.openai.com/v1/chat/completions';
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-5.4-mini';
 const HF_CHAT_URL = 'https://router.huggingface.co/v1/chat/completions';
 const HF_MODEL = process.env.HF_MODEL || 'openai/gpt-oss-120b:fastest';
 const HF_IMAGE_MODEL = process.env.HF_IMAGE_MODEL || 'black-forest-labs/FLUX.1-schnell';
@@ -430,7 +432,9 @@ export async function handleApi(req, res, pathname, url) {
       ok: true,
       route: '/api/chat',
       method: 'POST',
-      providerConfigured: Boolean(process.env.HUGGINGFACE_API_TOKEN || process.env.HF_TOKEN),
+      providerConfigured: Boolean(process.env.OPENAI_API_KEY || process.env.HUGGINGFACE_API_TOKEN || process.env.HF_TOKEN),
+      openaiConfigured: Boolean(process.env.OPENAI_API_KEY),
+      huggingFaceConfigured: Boolean(process.env.HUGGINGFACE_API_TOKEN || process.env.HF_TOKEN),
     });
   }
 
@@ -442,8 +446,11 @@ export async function handleApi(req, res, pathname, url) {
     if (!messages.length) return json(res, 400, { error: 'A message is required.' });
     const authenticated = await getOptionalAuthenticatedJarvisUser(req);
     const userId = authenticated?.jarvisUser?.id || null;
-    const token = process.env.HUGGINGFACE_API_TOKEN || process.env.HF_TOKEN;
-    if (!token) return json(res, 503, { error: 'Hugging Face AI is not configured on this deployment.' });
+    const openaiKey = process.env.OPENAI_API_KEY || '';
+    const huggingFaceToken = process.env.HUGGINGFACE_API_TOKEN || process.env.HF_TOKEN || '';
+    if (!openaiKey && !huggingFaceToken) {
+      return json(res, 503, { error: 'No AI provider is configured on this deployment.' });
+    }
 
     const latestUserMessage = String(messages[messages.length - 1]?.content || '').trim();
     let semanticMemories = [];
@@ -465,11 +472,15 @@ export async function handleApi(req, res, pathname, url) {
       memoryContext,
     ].filter(Boolean).join('\n\n');
 
-    const response = await fetch(HF_CHAT_URL, {
+    const provider = openaiKey ? 'openai' : 'huggingface';
+    const endpoint = openaiKey ? OPENAI_CHAT_URL : HF_CHAT_URL;
+    const model = openaiKey ? OPENAI_MODEL : HF_MODEL;
+    const token = openaiKey || huggingFaceToken;
+    const response = await fetch(endpoint, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: { Authorization: \`Bearer \${token}\`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: HF_MODEL,
+        model,
         messages: [
           {
             role: 'system',
@@ -482,7 +493,7 @@ export async function handleApi(req, res, pathname, url) {
       }),
     });
     const data = await response.json();
-    if (!response.ok) return json(res, response.status >= 400 && response.status < 500 ? 400 : 502, { error: data?.error?.message || 'Hugging Face AI request failed.' });
+    if (!response.ok) return json(res, response.status >= 400 && response.status < 500 ? 400 : 502, { error: data?.error?.message || `${provider === 'openai' ? 'OpenAI' : 'Hugging Face'} AI request failed.` });
     const text = String(data?.choices?.[0]?.message?.content || '').trim();
     if (!text) return json(res, 502, { error: 'The AI core returned an empty response.' });
     if (userId && latestUserMessage.length >= 12) {
@@ -506,7 +517,7 @@ export async function handleApi(req, res, pathname, url) {
     return json(
       res,
       200,
-      { text, provider: 'Hugging Face Inference Providers', model: HF_MODEL, persistent: Boolean(userId), guest: !userId },
+      { text, provider: provider === 'openai' ? 'OpenAI' : 'Hugging Face Inference Providers', model, persistent: Boolean(userId), guest: !userId },
       userId ? { 'Set-Cookie': jarvisCookie(userId) } : {},
     );
   }
