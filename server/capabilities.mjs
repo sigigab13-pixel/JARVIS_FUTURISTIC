@@ -92,14 +92,14 @@ export function capabilityContextForPrompt() {
       `- ${capability.id}: ${capability.description} [${capability.available ? 'available' : 'not configured'}]`
     ),
     'Do not claim a capability is available or an action is complete when the registry says the capability is unavailable or no connected tool confirms completion.',
-  ].join('\\n');
+  ].join('\n');
 }
 
 function tokenize(value) {
   return String(value || '')
     .toLowerCase()
-    .replace(/[^a-z0-9\\s]/g, ' ')
-    .split(/\\s+/)
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
     .filter(Boolean);
 }
 
