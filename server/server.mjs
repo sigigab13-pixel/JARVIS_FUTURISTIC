@@ -718,12 +718,41 @@ export async function handleApi(req, res, pathname, url) {
       }
       try {
         const blob = await generateHuggingFaceImage(latestUserMessage);
+        const buffer = Buffer.from(await blob.arrayBuffer());
+        const mimeType = blob.type || 'image/png';
+        const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
+        let media = null;
+        if (isSupabaseStorageConfigured()) {
+          try {
+            const extension = mimeType.includes('jpeg') ? 'jpg' : mimeType.includes('webp') ? 'webp' : 'png';
+            const key = createMediaKey({
+              userId: authenticated.jarvisUser.id,
+              kind: 'chat-image',
+              extension,
+              id: sha256,
+            });
+            media = await putMedia({
+              key,
+              body: buffer,
+              contentType: mimeType,
+              metadata: {
+                user_id: authenticated.jarvisUser.id,
+                source: 'chat_image_generate',
+                sha256,
+              },
+              upsert: true,
+            });
+          } catch (storageError) {
+            console.error('JARVIS chat image storage error:', storageError);
+          }
+        }
+
         const consumed = await consumeImageGeneration(authenticated.jarvisUser.id, {
           prompt: latestUserMessage.slice(0, 500),
           mode: 'chat-image',
+          sha256,
+          media_path: media?.path || null,
         });
-        const buffer = Buffer.from(await blob.arrayBuffer());
-        const mimeType = blob.type || 'image/png';
         const responseText = `Done, ${displayName || 'there'}. I generated the image and opened it in Image Lab.`;
         await appendConversationMessages(authenticated.jarvisUser.id, [
           { role: 'user', content: latestUserMessage },
@@ -732,6 +761,8 @@ export async function handleApi(req, res, pathname, url) {
         return json(res, 200, {
           text: responseText,
           image: { data: buffer.toString('base64'), mimeType },
+          media,
+          evidence: { verified: true, sha256, stored: Boolean(media?.stored) },
           provider: 'Hugging Face Inference Providers',
           model: 'automatic image provider routing',
           persistent: true,
