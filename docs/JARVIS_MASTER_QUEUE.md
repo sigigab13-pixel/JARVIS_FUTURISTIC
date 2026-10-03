@@ -177,3 +177,29 @@ Every capability should be reachable from the central JARVIS chat and governed b
 This queue is intentionally ambitious; implementation should be staged so each phase remains testable and safe.
 
 - [x] Multi-user identity isolation fix: display names, greetings, and browser-local history are scoped to the authenticated account.
+
+
+## P0 — Multimodal Input & Visual Problem Solving
+- [ ] Upload pictures, screenshots, scanned documents, and PDFs directly in the central JARVIS chat.
+- [ ] Let users ask JARVIS to inspect an uploaded image/PDF and explain what is wrong, unusual, missing, or unclear.
+- [ ] Vision understanding for objects, UI screenshots, diagrams, charts, handwriting, forms, and documents.
+- [ ] PDF/document understanding with page-aware extraction plus visual inspection for figures, tables, and scans.
+- [ ] Follow-up questions about the same uploaded file without requiring re-upload.
+- [ ] Reference previous uploaded files using natural language such as “check the second page” or “compare this with the last image.”
+- [ ] Safe file handling: isolate files by user/workspace, enforce size/type limits, and never execute uploaded content.
+- [ ] Visual troubleshooting mode for software, devices, schoolwork, business documents, and other user-provided problems.
+- [ ] Return actionable explanations, highlighted problem areas where supported, and next steps.
+- [ ] Preserve provenance so JARVIS can distinguish user-uploaded evidence from its own assumptions.
+
+## P0 — Global Multilingual Voice & Language Layer
+- [ ] Detect the user's language automatically from text and speech.
+- [ ] Let users choose a preferred language while allowing JARVIS to switch languages naturally when requested.
+- [ ] Multilingual speech-to-text for supported languages.
+- [ ] Multilingual text reasoning and translation across supported languages.
+- [ ] Multilingual text-to-speech with natural pronunciation and language-aware voice selection.
+- [ ] Language-aware voice conversations where the user can speak and receive spoken replies in the same language.
+- [ ] Mixed-language conversation support (for example, English + Nigerian languages where supported).
+- [ ] Per-user language preferences stored in JARVIS memory/settings.
+- [ ] Business and content workflows that can generate localized scripts, captions, titles, and descriptions.
+- [ ] Graceful fallback when a provider does not support a requested language, including clear disclosure instead of fake coverage.
+- [ ] Accessible language controls in the central chat and voice mode.
