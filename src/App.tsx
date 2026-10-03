@@ -389,8 +389,9 @@ function App() {
       const generated = response.data?.image;
       if (!generated?.data || !generated?.mimeType) throw new Error('Invalid image response');
       setImageResult(`data:${generated.mimeType};base64,${generated.data}`);
-    } catch {
-      setImageError('I could not generate that image right now. Please try again.');
+    } catch (error: any) {
+      const detail = String(error?.response?.data?.error || error?.message || '').trim();
+      setImageError(detail ? `Image Lab error: ${detail}` : 'I could not generate that image right now. Please try again.');
     } finally {
       setImageBusy(false);
     }
@@ -424,7 +425,9 @@ function App() {
     if (!imageResult) return;
     const link = document.createElement('a');
     link.href = imageResult;
-    link.download = 'jarvis-generated-image.png';
+    const mimeType = imageResult.match(/^data:([^;]+);/)?.[1] || 'image/png';
+    const extension = mimeType.includes('jpeg') ? 'jpg' : mimeType.includes('webp') ? 'webp' : 'png';
+    link.download = `jarvis-generated-image.${extension}`;
     link.click();
   };
 
