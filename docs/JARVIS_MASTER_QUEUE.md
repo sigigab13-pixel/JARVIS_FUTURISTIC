@@ -474,6 +474,113 @@ JARVIS should not only expose generic automation. It should package repeatable, 
 - [ ] Compare expected vs. actual value and suggest iteration.
 - [ ] Package successful workflows as reusable templates for other authorized businesses.
 
+
+
+# MYTHOS DEEP SKILL LAYER II — World Model, Autonomy & Strategic Intelligence
+
+## P0 — JARVIS World Model
+- [ ] Maintain a structured, permission-scoped model of the user's goals, projects, businesses, people, documents, systems, commitments, events, missions, and important relationships.
+- [ ] Track how entities relate to one another instead of treating every message as isolated text.
+- [ ] Support temporal state: current, historical, planned, completed, expired, and changed information.
+- [ ] Keep evidence and provenance attached to important world-state facts.
+- [ ] Update world state from verified events, user corrections, connected data, and completed missions.
+
+## P0 — Personal Digital Twin
+- [ ] Build a user-controlled model of preferences, routines, goals, workload, recurring commitments, and working style.
+- [ ] Simulate schedules and workload before proposing changes.
+- [ ] Detect conflicts, overload, forgotten commitments, and opportunities.
+- [ ] Never infer sensitive personal traits unnecessarily; users control what is remembered.
+
+## P0 — Business Digital Twin
+- [ ] Build a living operational model for each business workspace: customers, products, projects, workflows, KPIs, content, vendors, team roles, and policies.
+- [ ] Simulate operational changes before executing them.
+- [ ] Identify bottlenecks, dependencies, single points of failure, and opportunities for automation.
+- [ ] Generate an explainable “what changed and what it affects” view after important business events.
+
+## P0 — Autonomy Governor
+- [ ] Give every mission an explicit autonomy level: advise, prepare, execute-with-approval, or execute-within-policy.
+- [ ] Set limits for money, data access, publishing, messaging, account changes, and external actions.
+- [ ] Require stronger approval for higher-impact or irreversible actions.
+- [ ] Automatically reduce autonomy when confidence, tool health, or evidence quality drops.
+- [ ] Provide an emergency stop / revoke control for active missions.
+
+## P0 — Agent Passport & Identity
+- [ ] Give every JARVIS subagent a verifiable identity, role, workspace, permissions, and mission scope.
+- [ ] Track which agent requested which action and under whose authority.
+- [ ] Support short-lived, narrowly scoped credentials for external systems.
+- [ ] Prevent one workspace's agent identity from being reused to access another workspace.
+- [ ] Record an auditable chain of responsibility for consequential actions.
+
+## P0 — Agent-to-Agent Collaboration Layer
+- [ ] Support interoperable communication between JARVIS agents and approved external agents using a protocol adapter architecture.
+- [ ] Exchange structured task requests, capabilities, constraints, evidence, results, and status.
+- [ ] Verify the identity and permissions of an external agent before collaboration.
+- [ ] Allow JARVIS to delegate specialized work while retaining responsibility for final verification.
+
+## P0 — Counterfactual / What-If Simulator
+- [ ] Compare alternative plans before acting.
+- [ ] Estimate downstream consequences, dependencies, risks, time, and cost.
+- [ ] Test “do nothing,” “plan A,” and “plan B” where meaningful.
+- [ ] Clearly label simulated outcomes as predictions rather than facts.
+- [ ] Use simulation to reduce unnecessary external actions.
+
+## P0 — Attention Governor
+- [ ] Decide when the user should be interrupted versus when JARVIS should quietly continue.
+- [ ] Group low-priority notifications into digests.
+- [ ] Escalate only when a deadline, risk, approval, blocker, or high-value opportunity justifies attention.
+- [ ] Respect quiet hours, notification preferences, and workspace rules.
+
+## P1 — Relationship & Stakeholder Graph
+- [ ] Track authorized business/personal relationships, roles, interactions, commitments, and follow-up state.
+- [ ] Surface forgotten follow-ups and relationship context when relevant.
+- [ ] Help prepare meeting agendas, outreach drafts, and follow-up plans.
+- [ ] Never infer hidden emotional traits as facts.
+
+## P1 — Knowledge Lineage Engine
+- [ ] Show where an important fact came from, when it was last verified, and what depends on it.
+- [ ] Identify outputs that should be re-checked when a source changes.
+- [ ] Make document, web, memory, and tool evidence distinguishable.
+
+## P1 — Temporal Reasoning Engine
+- [ ] Understand “yesterday,” “next Friday,” “last quarter,” deadlines, recurring schedules, and historical comparisons using the correct timezone and calendar context.
+- [ ] Distinguish planned future events from completed historical events.
+- [ ] Detect impossible or conflicting timelines before creating missions.
+
+## P1 — Capability Discovery & Tool Onboarding
+- [ ] Inspect available tool metadata and determine whether a tool can satisfy a requested capability.
+- [ ] Recommend a missing connector or skill when necessary.
+- [ ] Learn a new approved tool's schema through a controlled onboarding process.
+- [ ] Test a new connector in a sandbox before allowing production actions.
+
+## P1 — Connector Health & Contract Monitor
+- [ ] Detect API/schema changes, authentication failures, permission changes, and service degradation.
+- [ ] Identify which JARVIS skills are affected by a broken connector.
+- [ ] Automatically switch to safe fallback paths where possible.
+- [ ] Prevent silent behavior changes after an integration update.
+
+## P1 — Mission Economics
+- [ ] Estimate expected time, compute, API usage, and opportunity cost for complex missions.
+- [ ] Offer faster/cheaper alternatives when they preserve required quality.
+- [ ] Track actual versus estimated mission cost and learn from the difference.
+- [ ] Let business workspaces set policy budgets and approval thresholds.
+
+## P1 — Outcome Attribution
+- [ ] Connect JARVIS actions to measurable outcomes where data permits.
+- [ ] Separate correlation from causation and label attribution uncertainty.
+- [ ] Learn which interventions consistently improve a user's or business's target metrics.
+- [ ] Use outcome evidence to improve future planning.
+
+## P1 — Skill Versioning & Governance
+- [ ] Version every reusable skill and workflow.
+- [ ] Maintain compatibility information for its tools, prompts, schemas, and policies.
+- [ ] Run regression tests before activation.
+- [ ] Roll back degraded skills without corrupting user data or mission state.
+
+## P2 — JARVIS Command Charter
+- [ ] Maintain a user-visible set of rules defining what JARVIS may do automatically, what always requires approval, and what it will never do.
+- [ ] Let workspace owners customize policies within platform safety boundaries.
+- [ ] Show the active policy before consequential missions.
+
 ## P0 — Advanced Agentic Capabilities
 
 ### Digital Hands / Computer Use
