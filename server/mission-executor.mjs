@@ -1,16 +1,91 @@
+import crypto from 'node:crypto';
 import { transitionMission, advanceMissionStep } from './mission-runtime.mjs';
 import {
   getMissionForUser,
   updateMissionForUser,
   fanOutRoutineRun,
   queueMissionStepForUser,
+  consumeImageGeneration,
 } from './store.mjs';
+import { createMediaKey, isSupabaseStorageConfigured, putMedia } from './media.mjs';
+import { generateHuggingFaceImage } from './image-generator.mjs';
+
+async function executeImageGeneration(job) {
+  const payload = job?.payload && typeof job.payload === 'object' ? job.payload : {};
+  const step = payload?.step && typeof payload.step === 'object' ? payload.step : {};
+  const prompt = String(step?.prompt || '').trim().slice(0, 4000);
+  if (!prompt) {
+    throw Object.assign(new Error('Image generation mission step requires a prompt.'), {
+      code: 'IMAGE_PROMPT_REQUIRED',
+    });
+  }
+
+  const blob = await generateHuggingFaceImage(prompt);
+  const buffer = Buffer.from(await blob.arrayBuffer());
+  if (!buffer.length) {
+    throw Object.assign(new Error('Image provider returned an empty asset.'), {
+      code: 'IMAGE_ASSET_EMPTY',
+    });
+  }
+
+  const mimeType = blob.type || 'image/png';
+  const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
+
+  // Mission execution needs a durable asset reference because workers cannot
+  // safely return a large binary payload through the mission job result.
+  if (!isSupabaseStorageConfigured()) {
+    throw Object.assign(new Error('Image mission execution requires configured Supabase media storage.'), {
+      code: 'IMAGE_ASSET_STORAGE_UNAVAILABLE',
+    });
+  }
+
+  const extension = mimeType.includes('jpeg') ? 'jpg' : mimeType.includes('webp') ? 'webp' : 'png';
+  const key = createMediaKey({
+    userId: String(job.user_id),
+    kind: 'mission-image',
+    extension,
+    id: String(payload?.mission_id || job.id),
+  });
+  const media = await putMedia({
+    key,
+    body: buffer,
+    contentType: mimeType,
+    metadata: {
+      user_id: String(job.user_id),
+      mission_id: String(payload?.mission_id || ''),
+      source: 'mission_image_generate',
+      sha256,
+    },
+  });
+
+  const consumed = await consumeImageGeneration(String(job.user_id), {
+    prompt: prompt.slice(0, 500),
+    mode: 'mission_generate',
+    mission_id: String(payload?.mission_id || ''),
+    sha256,
+  });
+
+  return {
+    operation: 'image_generation',
+    provider: 'huggingface',
+    completed: true,
+    verifiedAsset: true,
+    mimeType,
+    bytes: buffer.length,
+    sha256,
+    media,
+    allowance: {
+      remaining: Number(consumed?.credits_remaining ?? 0),
+    },
+  };
+}
 
 const ADAPTERS = new Map([
   ['routine_fanout', async job => fanOutRoutineRun({
     ...job,
     type: 'routine_fanout',
   })],
+  ['image_generation', executeImageGeneration],
 ]);
 
 function validUuid(value) {
