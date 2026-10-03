@@ -18,7 +18,7 @@ export function createMediaKey({ userId, kind = 'media', extension = 'bin', id }
   return `jarvis/${safeSegment(userId)}/${safeSegment(kind)}/${date}/${safeSegment(id || crypto.randomUUID())}.${safeSegment(extension, 'bin')}`;
 }
 
-export async function putMedia({ key, body, contentType = 'application/octet-stream', metadata = {} }) {
+export async function putMedia({ key, body, contentType = 'application/octet-stream', metadata = {}, upsert = false }) {
   if (!isSupabaseStorageConfigured()) throw new Error('Supabase Storage is not configured.');
   if (!key) throw new Error('Media object key is required.');
   const response = await fetch(`${supabaseUrl}/storage/v1/object/${encodeURIComponent(bucket)}/${key.split('/').map(encodeURIComponent).join('/')}`, {
@@ -27,7 +27,7 @@ export async function putMedia({ key, body, contentType = 'application/octet-str
       apikey: supabaseKey,
       Authorization: `Bearer ${supabaseKey}`,
       'Content-Type': contentType,
-      'x-upsert': 'false',
+      'x-upsert': upsert ? 'true' : 'false',
       'cache-control': '31536000',
       ...Object.fromEntries(Object.entries(metadata).map(([k, v]) => [`x-${safeSegment(k, 'meta')}`, String(v)])),
     },
