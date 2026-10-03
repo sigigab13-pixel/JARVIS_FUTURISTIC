@@ -634,6 +634,26 @@ function App() {
     return <main className="jarvis-shell"><section className="auth-screen"><div className="auth-card"><div className="orb"><Sparkles size={20} /></div><span className="eyebrow">JARVIS AUTHENTICATION</span><h1>Connecting to JARVIS...</h1><p>Preparing your secure account session.</p></div></section></main>;
   }
 
+  if (!session) {
+    return (
+      <main className="jarvis-shell">
+        <section className="auth-screen">
+          <div className="auth-card">
+            <div className="orb"><Sparkles size={20} /></div>
+            <span className="eyebrow">JARVIS AUTHENTICATION</span>
+            <h1>Sign in to JARVIS</h1>
+            <p>Sign in with Google to sync your conversations, preferences, and long-term JARVIS memory across sessions.</p>
+            {authError && <div className="auth-error">{authError}</div>}
+            <button className="security-primary" onClick={() => void signInWithGoogle()} disabled={authBusy || !supabaseConfigured}>
+              {authBusy ? 'Connecting...' : 'Continue with Google'}
+            </button>
+            {!supabaseConfigured && <small>Supabase Auth is not configured in this deployment yet.</small>}
+          </div>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="jarvis-shell">
       <div className="scanline" />
