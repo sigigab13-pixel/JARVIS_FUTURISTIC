@@ -45,8 +45,15 @@ const DIST = path.join(ROOT, 'dist');
 
 const HF_CHAT_URL = 'https://router.huggingface.co/v1/chat/completions';
 const HF_MODEL = 'openai/gpt-oss-120b:fastest';
-const HF_IMAGE_MODEL = 'black-forest-labs/FLUX.1-schnell';
-const HF_IMAGE_EDIT_MODEL = 'black-forest-labs/FLUX.2-klein-9B';
+const HF_IMAGE_MODELS = [
+  'black-forest-labs/FLUX.1-schnell',
+  'black-forest-labs/FLUX.1-dev',
+];
+const HF_IMAGE_EDIT_MODELS = [
+  'black-forest-labs/FLUX.2-dev',
+  'black-forest-labs/FLUX.2-klein-9B',
+  'black-forest-labs/FLUX.1-Kontext-dev',
+];
 const GOOGLE_TTS_URL = 'https://texttospeech.googleapis.com/v1/text:synthesize';
 const ELEVENLABS_TTS_URL = 'https://api.elevenlabs.io/v1/text-to-speech';
 const ELEVENLABS_VOICES_URL = 'https://api.elevenlabs.io/v2/voices';
@@ -56,22 +63,59 @@ const YOUTUBE_CLIENT_ID = process.env.GOOGLE_YOUTUBE_CLIENT_ID || '';
 const YOUTUBE_CLIENT_SECRET = process.env.GOOGLE_YOUTUBE_CLIENT_SECRET || '';
 const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/$/, '');
 
-async function generateHuggingFaceImage(prompt, model = HF_IMAGE_MODEL, inputImage = null) {
+async function generateHuggingFaceImage(prompt, inputImage = null) {
   const token = process.env.HUGGINGFACE_API_TOKEN || process.env.HF_TOKEN || '';
   if (!token) throw Object.assign(new Error('Hugging Face image generation is not configured.'), { statusCode: 503 });
+
   const { InferenceClient } = await import('@huggingface/inference');
   const client = new InferenceClient(token);
-  if (inputImage) {
+  const errors = [];
+
+  if (!inputImage) {
+    for (const model of HF_IMAGE_MODELS) {
+      try {
+        return await client.textToImage({
+          model,
+          inputs: prompt,
+          provider: 'auto',
+        });
+      } catch (error) {
+        errors.push(`${model}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+  } else {
     const binary = Buffer.from(String(inputImage.data || ''), 'base64');
     const blob = new Blob([binary], { type: String(inputImage.mimeType || 'image/jpeg') });
-    return client.imageToImage({
-      model,
-      inputs: blob,
-      parameters: { prompt },
-      provider: 'auto',
-    });
+
+    for (const model of HF_IMAGE_EDIT_MODELS) {
+      try {
+        return await client.imageTextToImage({
+          model,
+          inputs: blob,
+          parameters: { prompt },
+          provider: 'auto',
+        });
+      } catch (error) {
+        errors.push(`${model} image-text-to-image: ${error instanceof Error ? error.message : String(error)}`);
+      }
+
+      if (model === HF_IMAGE_EDIT_MODELS[1]) {
+        try {
+          return await client.imageToImage({
+            model,
+            inputs: blob,
+            parameters: { prompt },
+            provider: 'auto',
+          });
+        } catch (error) {
+          errors.push(`${model} image-to-image: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+    }
   }
-  return client.textToImage({ model, inputs: prompt, provider: 'auto' });
+
+  const summary = errors.slice(-4).join(' | ');
+  throw new Error(summary || 'No Hugging Face image provider is currently available.');
 }
 
 async function imageResponse(res, blob) {
@@ -661,7 +705,6 @@ export async function handleApi(req, res, pathname, url) {
     try {
       const blob = await generateHuggingFaceImage(
         prompt,
-        pathname.endsWith('/edit') ? HF_IMAGE_EDIT_MODEL : HF_IMAGE_MODEL,
         pathname.endsWith('/edit') ? reference : null
       );
       const consumed = await consumeImageGeneration(jarvisUser.id, { prompt: prompt.slice(0, 500), mode: pathname.endsWith('/edit') ? 'edit' : 'generate' });
