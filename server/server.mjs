@@ -46,16 +46,16 @@ const DIST = path.join(ROOT, 'dist');
 const HF_CHAT_URL = 'https://router.huggingface.co/v1/chat/completions';
 const HF_MODEL = 'openai/gpt-oss-120b:fastest';
 const HF_IMAGE_MODELS = [
-  'black-forest-labs/FLUX.1-dev',
   'black-forest-labs/FLUX.1-schnell',
   'black-forest-labs/FLUX.1-Krea-dev',
+  'black-forest-labs/FLUX.1-dev',
 ];
 const HF_IMAGE_EDIT_MODELS = [
   'black-forest-labs/FLUX.2-klein-9B',
   'black-forest-labs/FLUX.1-Kontext-dev',
   'black-forest-labs/FLUX.2-dev',
 ];
-const HF_IMAGE_PROVIDERS = ['fal-ai', 'auto'];
+const HF_IMAGE_PROVIDERS = ['auto'];
 const GOOGLE_TTS_URL = 'https://texttospeech.googleapis.com/v1/text:synthesize';
 const ELEVENLABS_TTS_URL = 'https://api.elevenlabs.io/v1/text-to-speech';
 const ELEVENLABS_VOICES_URL = 'https://api.elevenlabs.io/v2/voices';
@@ -79,20 +79,20 @@ async function generateHuggingFaceImage(prompt, inputImage = null) {
 
   if (!inputImage) {
     for (const model of HF_IMAGE_MODELS) {
-      for (const provider of HF_IMAGE_PROVIDERS) {
-        try {
-          const result = await client.textToImage({
-            model,
-            inputs: prompt,
-            provider,
-            outputType: 'blob',
-          });
-          if (!isImageBlob(result)) throw new Error('Hugging Face returned an invalid image payload.');
-          return result;
-        } catch (error) {
-          const status = Number(error?.status || error?.httpResponse?.status || 0);
-          errors.push(`${model} via ${provider}${status ? ` [${status}]` : ''}: ${error instanceof Error ? error.message : String(error)}`);
-        }
+      try {
+        const result = await client.textToImage({
+          model,
+          inputs: prompt,
+          provider: 'auto',
+        });
+        if (!isImageBlob(result)) throw new Error('Hugging Face returned an invalid image payload.');
+        return result;
+      } catch (error) {
+        const status = Number(error?.httpResponse?.status || error?.response?.status || error?.status || error?.statusCode || 0);
+        const body = error?.httpResponse?.body || error?.response?.body || error?.data;
+        const detail = typeof body === 'string' ? body : body?.error || body?.message || '';
+        const requestId = error?.httpResponse?.requestId || error?.response?.requestId || '';
+        errors.push(`${model} via auto${status ? ` [${status}]` : ''}${requestId ? ` {${requestId}}` : ''}: ${error instanceof Error ? error.message : String(error)}${detail ? ` | ${detail}` : ''}`);
       }
     }
   } else {
@@ -101,20 +101,21 @@ async function generateHuggingFaceImage(prompt, inputImage = null) {
     const blob = new Blob([binary], { type: String(inputImage.mimeType || 'image/jpeg') });
 
     for (const model of HF_IMAGE_EDIT_MODELS) {
-      for (const provider of HF_IMAGE_PROVIDERS) {
-        try {
-          const result = await client.imageToImage({
-            model,
-            inputs: blob,
-            parameters: { prompt },
-            provider,
-          });
-          if (!isImageBlob(result)) throw new Error('Hugging Face returned an invalid edited-image payload.');
-          return result;
-        } catch (error) {
-          const status = Number(error?.status || error?.httpResponse?.status || 0);
-          errors.push(`${model} image-to-image via ${provider}${status ? ` [${status}]` : ''}: ${error instanceof Error ? error.message : String(error)}`);
-        }
+      try {
+        const result = await client.imageToImage({
+          model,
+          inputs: blob,
+          parameters: { prompt },
+          provider: 'auto',
+        });
+        if (!isImageBlob(result)) throw new Error('Hugging Face returned an invalid edited-image payload.');
+        return result;
+      } catch (error) {
+        const status = Number(error?.httpResponse?.status || error?.response?.status || error?.status || error?.statusCode || 0);
+        const body = error?.httpResponse?.body || error?.response?.body || error?.data;
+        const detail = typeof body === 'string' ? body : body?.error || body?.message || '';
+        const requestId = error?.httpResponse?.requestId || error?.response?.requestId || '';
+        errors.push(`${model} image-to-image via auto${status ? ` [${status}]` : ''}${requestId ? ` {${requestId}}` : ''}: ${error instanceof Error ? error.message : String(error)}${detail ? ` | ${detail}` : ''}`);
       }
     }
   }
