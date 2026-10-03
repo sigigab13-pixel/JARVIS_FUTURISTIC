@@ -134,3 +134,54 @@ When a feature fails, document the failure and the fix. Those failures are part 
 The JARVIS worker was hardened for long-running background jobs. Workers now refresh job heartbeats while processing so longer tasks can keep their execution lease alive. This prepares the system for future Oracle Cloud workers and longer video, memory, and automation jobs.
 
 Development partner: GPT-5.6 Luna.
+
+### Entry 004 — First real mission capability: Image Generation
+
+**Status:** Implemented in source; target deployment verification pending
+
+The first real capability adapter was added to the durable Mission Runtime: text-to-image generation.
+
+### What we built
+
+- Extracted the existing Hugging Face image provider into a shared image-generation service.
+- Added an `image_generation` Mission Runtime adapter.
+- Restricted the adapter to text-to-image execution for this first vertical slice.
+- Added an explicit image-generation prompt requirement.
+- Added Supabase media storage for the generated asset.
+- Added SHA-256 asset hashing so the mission records verifiable output evidence without storing the full binary in mission state.
+- Reused the existing image-generation allowance/usage ledger.
+- Made mission media writes retry-safe with explicit storage upsert behavior.
+- Added authorization tests covering approval requirements for image-generation missions.
+
+### Verified design path
+
+```text
+Mission
+  ↓
+Approval / autonomy gate
+  ↓
+mission_step job
+  ↓
+Hugging Face image generation
+  ↓
+asset validation + hash
+  ↓
+Supabase media storage
+  ↓
+usage/allowance recording
+  ↓
+verified mission evidence
+  ↓
+mission checkpoint / completion
+```
+
+### Important limitation
+
+The source code now contains the adapter, but this milestone is **not yet claimed as production-live**. The canonical Vercel project currently has READY deployments on older commits, and the newly changed source has not yet received a verified production deployment in the target environment.
+
+The adapter therefore remains fail-closed until deployment and a real end-to-end image mission are verified.
+
+### Next
+
+Verify the canonical Vercel deployment, then run one controlled end-to-end image mission before promoting the adapter as production-ready.
+
