@@ -8,7 +8,7 @@ const configured = Boolean(SUPABASE_URL && SUPABASE_SERVER_KEY);
 
 const memory = {
   oauth: new Map(),
-  youtube: null,
+  youtube: new Map(),
   users: new Map(),
   conversations: new Map(),
   missions: new Map(),
@@ -37,23 +37,23 @@ async function request(pathname, options = {}) {
   return body ? JSON.parse(body) : null;
 }
 
-export async function saveOAuthState(state, redirectUri) {
+export async function saveOAuthState(state, redirectUri, userId = null) {
   if (!configured) {
-    memory.oauth.set(state, { redirectUri, createdAt: Date.now() });
+    memory.oauth.set(state, { redirectUri, userId, createdAt: Date.now() });
     return;
   }
   await request('youtube_oauth_state', {
     method: 'POST',
     headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-    body: JSON.stringify({ state, redirect_uri: redirectUri, created_at: new Date().toISOString() }),
+    body: JSON.stringify({ state, redirect_uri: redirectUri, user_id: userId || null, created_at: new Date().toISOString() }),
   });
 }
 
 export async function getOAuthState(state) {
   if (!configured) return memory.oauth.get(state) || null;
-  const rows = await request(`youtube_oauth_state?select=state,redirect_uri,created_at&state=eq.${encodeURIComponent(state)}&limit=1`);
+  const rows = await request(`youtube_oauth_state?select=state,redirect_uri,user_id,created_at&state=eq.${encodeURIComponent(state)}&limit=1`);
   const row = rows?.[0];
-  return row ? { redirectUri: row.redirect_uri, createdAt: new Date(row.created_at).getTime() } : null;
+  return row ? { redirectUri: row.redirect_uri, userId: row.user_id || null, createdAt: new Date(row.created_at).getTime() } : null;
 }
 
 export async function deleteOAuthState(state) {
@@ -64,22 +64,25 @@ export async function deleteOAuthState(state) {
   await request(`youtube_oauth_state?state=eq.${encodeURIComponent(state)}`, { method: 'DELETE' });
 }
 
-export async function getYouTubeConnection() {
-  if (!configured) return memory.youtube;
-  const rows = await request('youtube_connection?select=*&id=eq.default&limit=1');
+export async function getYouTubeConnection(userId) {
+  if (!validUuid(userId)) return null;
+  if (!configured) return memory.youtube.get(userId) || null;
+  const rows = await request(`youtube_connection?select=*&user_id=eq.${encodeURIComponent(userId)}&limit=1`);
   return rows?.[0] || null;
 }
 
-export async function saveYouTubeConnection(connection) {
+export async function saveYouTubeConnection(userId, connection) {
+  if (!validUuid(userId)) throw new Error('Invalid JARVIS user id.');
   if (!configured) {
-    memory.youtube = connection;
+    memory.youtube.set(userId, connection);
     return;
   }
   await request('youtube_connection', {
     method: 'POST',
     headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
     body: JSON.stringify({
-      id: 'default',
+      id: userId,
+      user_id: userId,
       channel_id: connection.channelId,
       channel_title: connection.channelTitle,
       refresh_token: connection.refreshToken,
