@@ -86,6 +86,40 @@ Vercel
 
 Long-running external compute such as Oracle Cloud workers remains part of the target architecture, but it should not be treated as connected until verified.
 
+## ▶️ YouTube-first publishing
+
+For the current build phase, YouTube is the only publishing and analytics target.
+
+The YouTube path is:
+
+```text
+Children Factory
+   ↓
+Story / characters / assets
+   ↓
+Video production
+   ↓
+Quality + approval
+   ↓
+YouTube upload
+   ↓
+YouTube Analytics
+   ↺
+```
+
+The server now contains a YouTube API service for:
+
+- Google OAuth with offline access
+- user-scoped YouTube connections
+- access-token refresh
+- channel status
+- YouTube Analytics reports
+- approval-gated video publishing from a user's stored JARVIS media asset
+
+Publishing is never reported as successful unless YouTube returns a successful video resource. The current publish endpoint defaults to private visibility unless the user explicitly chooses another allowed privacy setting. Unverified YouTube API projects can still be restricted to private uploads by Google's platform rules.
+
+Other social publishing targets are intentionally out of scope for this build phase.
+
 ## 🎬 Video Engine
 
 The Video Engine is being built as a real production pipeline rather than a simple slideshow generator.
