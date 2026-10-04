@@ -46,7 +46,7 @@ export const api = {
       body: JSON.stringify(body),
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw Object.assign(new Error(data?.error || `Request failed with status ${response.status}`), { response: { data } });
+    if (!response.ok) throw Object.assign(new Error(describeApiError(data?.error, `Request failed with status ${response.status}`)), { response: { data } });
     return { data };
   },
   patch: async (path: string, body: unknown) => {
@@ -56,7 +56,7 @@ export const api = {
       body: JSON.stringify(body),
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw Object.assign(new Error(data?.error || `Request failed with status ${response.status}`), { response: { data } });
+    if (!response.ok) throw Object.assign(new Error(describeApiError(data?.error, `Request failed with status ${response.status}`)), { response: { data } });
     return { data };
   },
   put: async (path: string, body: unknown) => {
@@ -66,7 +66,7 @@ export const api = {
       body: JSON.stringify(body),
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw Object.assign(new Error(data?.error || `Request failed with status ${response.status}`), { response: { data } });
+    if (!response.ok) throw Object.assign(new Error(describeApiError(data?.error, `Request failed with status ${response.status}`)), { response: { data } });
     return { data };
   },
   delete: async (path: string) => {
@@ -75,7 +75,7 @@ export const api = {
       headers: await authHeaders(),
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw Object.assign(new Error(data?.error || `Request failed with status ${response.status}`), { response: { data } });
+    if (!response.ok) throw Object.assign(new Error(describeApiError(data?.error, `Request failed with status ${response.status}`)), { response: { data } });
     return { data };
   },
 };
