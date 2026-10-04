@@ -10,6 +10,20 @@ function tokens(value) {
     .filter(Boolean);
 }
 
+
+const intentRules = [
+  { intent: 'children-story', patterns: [/\bchildren\b/i, /\bbedtime\b/i, /\bstory for (?:a )?kid\b/i, /\brhyme\b/i] },
+  { intent: 'image', patterns: [/\bimage\b/i, /\bdraw\b/i, /\bpicture\b/i] },
+  { intent: 'repair', patterns: [/\bfix\b/i, /\bbroken\b/i, /\brepair\b/i] },
+];
+
+function inferIntent(input) {
+  for (const rule of intentRules) {
+    if (rule.patterns.some(pattern => pattern.test(input))) return rule.intent;
+  }
+  return 'chat';
+}
+
 const goalPatterns = [
   { mode: 'search', patterns: [/\b(search|look up|find|research|check online|what's new|latest|current)\b/i] },
   { mode: 'create', patterns: [/\b(create|make|generate|build|write|design|produce|draw)\b/i] },
@@ -67,6 +81,7 @@ export function routeIntent({ messages = [], availableCapabilities = [], user = 
   const latest = normalizeText(normalizedMessages.at(-1)?.content || '');
   const prior = normalizedMessages.slice(0, -1);
   const mode = inferMode(latest);
+  const intent = inferIntent(latest);
   const wordSet = new Set(tokens(latest));
 
   const capabilityScores = availableCapabilities.map(capability => {
@@ -82,6 +97,7 @@ export function routeIntent({ messages = [], availableCapabilities = [], user = 
   const needsClarification = references.some(reference => reference.requiresResolution) && prior.length === 0;
 
   return {
+    intent,
     mode,
     latestUserMessage: latest,
     candidateCapabilities: capabilityScores.filter(item => item.routeScore > 0).slice(0, 6),
@@ -95,7 +111,7 @@ export function routeContextForPrompt(route) {
   if (!route) return '';
   const lines = [
     'Intent routing context:',
-    `- mode: ${route.mode}`,
+    `- intent: ${route.intent || 'chat'}`,\n    `- mode: ${route.mode}`,
     `- candidate capabilities: ${route.candidateCapabilities?.map(item => item.id).join(', ') || 'none confidently identified'}`,
     `- contextual references detected: ${route.references?.length || 0}`,
     '- Treat references as unresolved until they can be grounded in the supplied conversation, files, memory, or tool context.',
