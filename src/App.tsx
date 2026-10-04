@@ -463,6 +463,49 @@ function App() {
     }
   };
 
+  const watchChildrenFactoryMission = async (buildMissionId: string) => {
+    const missionId = String(buildMissionId || '').trim();
+    if (!missionId) return;
+
+    for (let attempt = 0; attempt < 90; attempt += 1) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      try {
+        const progress = await api.get('/api/factory/children/' + missionId);
+        setFactoryDraft(progress.data);
+        if (progress.data?.status === 'awaiting_approval' || progress.data?.status === 'approved') {
+          await loadMissions();
+          return;
+        }
+        if (progress.data?.status === 'failed') {
+          throw new Error(String(progress.data?.error || 'Children Factory build failed.'));
+        }
+      } catch (error: any) {
+        setFactoryError(String(error?.response?.data?.error || error?.message || 'Could not read Children Factory progress.'));
+        return;
+      }
+    }
+
+    setFactoryError('Children Factory is still running. The durable mission remains active and can be checked again without creating a duplicate.');
+  };
+
+  const launchChildrenFactory = async (topic: string, age: number) => {
+    const cleanTopic = topic.trim();
+    if (!cleanTopic) return null;
+
+    setFactoryOpen(true);
+    setFactoryError('');
+    const response = await api.post('/api/factory/children', { topic: cleanTopic, age });
+    setFactoryDraft(response.data);
+
+    const buildMissionId = String(response.data?.buildMission?.id || '').trim();
+    if (response.status === 202 && buildMissionId) {
+      void watchChildrenFactoryMission(buildMissionId);
+    }
+
+    await loadMissions();
+    return response.data;
+  };
+
   const createChildrenFactory = async () => {
     const topic = factoryTopic.trim();
     if (!topic || factoryBusy) return;
@@ -470,31 +513,14 @@ function App() {
     setFactoryError('');
     setFactoryDraft(null);
     try {
-      const response = await api.post('/api/factory/children', { topic, age: factoryAge });
-      setFactoryDraft(response.data);
-      setFactoryTopic('');
-
-      const buildMissionId = String(response.data?.buildMission?.id || '').trim();
-      if (response.status === 202 && buildMissionId) {
-        for (let attempt = 0; attempt < 90; attempt += 1) {
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          const progress = await api.get('/api/factory/children/' + buildMissionId);
-          setFactoryDraft(progress.data);
-          if (progress.data?.status === 'awaiting_approval' || progress.data?.status === 'approved') break;
-          if (progress.data?.status === 'failed') {
-            throw new Error(String(progress.data?.error || 'Children Factory build failed.'));
-          }
-        }
-      }
-
-      await loadMissions();
+      const responseData = await launchChildrenFactory(topic, factoryAge);
+      if (responseData) setFactoryTopic('');
     } catch (error: any) {
-      setFactoryError(String(error?.response?.data?.error || error?.message || 'Children Factory could not create the draft.'));
+      setFactoryError(String(error?.response?.data?.error || error?.message || 'Children Factory could not start the draft mission.'));
     } finally {
       setFactoryBusy(false);
     }
   };
-
   const renderChildrenFactoryVideo = async () => {
     const draft = factoryDraft && factoryDraft.draft;
     const projectId = String(draft && draft.project && draft.project.id || '').trim();
@@ -700,17 +726,33 @@ function App() {
           : 'I could not complete that request. Please try again.',
       );
 
+      let chatAnswer = answer;
       if (response.data?.routing?.factory === 'children-v1') {
+        const ageMatch = clean.match(/\b(3|4|5|6|7|8|9|10|11|12)\s*(?:year|yr)s?\b/i);
+        const requestedAge = ageMatch ? Number(ageMatch[1]) : factoryAge;
         setFactoryTopic(clean);
-        const ageMatch = clean.match(/\\b(3|4|5|6|7|8|9|10|11|12)\\s*(?:year|yr)s?\\b/i);
-        if (ageMatch) setFactoryAge(Number(ageMatch[1]));
+        setFactoryAge(requestedAge);
         setFactoryError('');
         setFactoryOpen(true);
+
+        try {
+          const factory = await launchChildrenFactory(clean, requestedAge);
+          chatAnswer = factory?.status === 'building'
+            ? 'Children Factory mission started. JARVIS is building the story and scene images now; publishing remains approval-gated.'
+            : 'Children Factory is ready for review.';
+          setFactoryTopic('');
+        } catch (factoryError: any) {
+          const detail = String(factoryError?.response?.data?.error || factoryError?.message || '').trim();
+          chatAnswer = detail
+            ? 'I identified this as a Children Factory request, but the factory could not start: ' + detail
+            : 'I identified this as a Children Factory request, but the factory could not start.';
+          setFactoryError(detail || 'Children Factory could not start.');
+        }
       }
 
       setMessages(current => [
         ...current,
-        { role: 'assistant', content: answer },
+        { role: 'assistant', content: chatAnswer },
       ]);
       if (voiceEnabled) void speak(answer);
     } catch (error: any) {
