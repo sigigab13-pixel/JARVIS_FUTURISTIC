@@ -1,9 +1,8 @@
 import crypto from 'node:crypto';
-import { transitionMission, advanceMissionStep } from './mission-runtime.mjs';
+import { createMissionState, transitionMission, advanceMissionStep } from './mission-runtime.mjs';
 import {
   getMissionForUser,
   updateMissionForUser,
-  createMissionForUser,
   fanOutRoutineRun,
   queueMissionStepForUser,
   consumeImageGeneration,
@@ -238,45 +237,40 @@ export async function executeMissionStep(job) {
     metadata: { stepIndex, adapter },
   });
 
-  let approvalMission = null;
-  if (updated.status === 'succeeded' && updated.metadata?.factory === 'children-v1' && !updated.metadata?.approvalMissionId) {
-    const approvalState = createMissionState({
-      missionId: crypto.randomUUID(),
-      userId,
-      goal: 'Children Factory: approve and publish ' + String(updated.metadata.title || 'children content'),
-      autonomy: 'execute_with_approval',
-      steps: [],
-    });
-    approvalState.approval = {
-      required: true,
-      status: 'pending',
-      requestedAt: new Date().toISOString(),
-      approvedAt: null,
-      action: 'publish',
-    };
-    approvalState.metadata = {
-      factory: 'children-v1',
-      projectId: updated.metadata.projectId || null,
-      buildMissionId: updated.id,
-      topic: updated.metadata.topic || null,
-      age: updated.metadata.age || null,
-      story: updated.metadata.story || null,
-      characterId: updated.metadata.characterId || null,
-      characterBible: updated.metadata.characterBible || null,
-      images: Array.isArray(updated.metadata.images) ? updated.metadata.images : [],
-    };
-    approvalMission = transitionMission(approvalState, 'waiting_approval');
-    approvalMission.approval = approvalState.approval;
-    approvalMission = await createMissionForUser(userId, approvalMission);
-    const linkedMetadata = {
-      ...(updated.metadata || {}),
-      approvalMissionId: approvalMission.id,
-    };
-    await updateMissionForUser(userId, updated.id, { ...updated, metadata: linkedMetadata }, {
-      eventType: 'mission.approval_created',
-      message: 'Children Factory build completed; publishing approval is now waiting for user review.',
-      metadata: { approvalMissionId: approvalMission.id },
-    });
+  if (updated.status === 'succeeded' && updated.metadata?.factory === 'children-v1' && updated.metadata?.approvalMissionId) {
+    const approvalMission = await getMissionForUser(userId, String(updated.metadata.approvalMissionId));
+    if (approvalMission && approvalMission.status === 'draft') {
+      const approvalReady = transitionMission(approvalMission, 'waiting_approval');
+      approvalReady.approval = {
+        ...(approvalMission.approval || {}),
+        required: true,
+        status: 'pending',
+        requestedAt: new Date().toISOString(),
+        approvedAt: null,
+        action: 'publish',
+      };
+      approvalReady.metadata = {
+        ...(approvalMission.metadata || {}),
+        images: Array.isArray(updated.metadata.images) ? updated.metadata.images : [],
+        story: updated.metadata.story || approvalMission.metadata?.story || null,
+        characterBible: updated.metadata.characterBible || approvalMission.metadata?.characterBible || null,
+      };
+      await updateMissionForUser(userId, approvalMission.id, approvalReady, {
+        eventType: 'mission.approval_requested',
+        message: 'Children Factory build completed; publishing approval is now waiting for user review.',
+        metadata: { buildMissionId: updated.id, imageCount: Array.isArray(updated.metadata.images) ? updated.metadata.images.length : 0 },
+      });
+
+      const linkedMetadata = {
+        ...(updated.metadata || {}),
+        approvalStatus: 'pending',
+      };
+      await updateMissionForUser(userId, updated.id, { ...updated, metadata: linkedMetadata }, {
+        eventType: 'mission.approval_created',
+        message: 'Children Factory build linked to its publishing approval mission.',
+        metadata: { approvalMissionId: approvalMission.id },
+      });
+    }
   }
 
   let nextJob = null;
