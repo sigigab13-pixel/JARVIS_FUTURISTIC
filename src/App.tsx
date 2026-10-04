@@ -1105,7 +1105,7 @@ function App() {
   }, [passiveWake]);
 
   if (!authReady) {
-    return <main className="jarvis-shell"><section className="auth-screen"><div className="auth-card"><div className="orb"><Sparkles size={20} /></div><span className="eyebrow">JARVIS AUTHENTICATION</span><h1>Connecting to JARVIS...</h1><p>Preparing your secure account session.</p></div></section></main>;
+    return <main className={"jarvis-shell " + ((busy || speaking || listening) ? "active-core" : "")}><section className="auth-screen"><div className="auth-card"><div className="orb"><Sparkles size={20} /></div><span className="eyebrow">JARVIS AUTHENTICATION</span><h1>Connecting to JARVIS...</h1><p>Preparing your secure account session.</p></div></section></main>;
   }
 
   if (!session) {
