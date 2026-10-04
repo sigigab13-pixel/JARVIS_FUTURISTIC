@@ -14,6 +14,7 @@ import {
   updateMissionForUser,
 } from './store.mjs';
 import { executeMissionStep } from './mission-executor.mjs';
+import { canTransition, transitionMission } from './mission-runtime.mjs';
 import { createMediaKey, getMedia, isSupabaseStorageConfigured, putMedia } from './media.mjs';
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
@@ -153,7 +154,88 @@ async function executeVideoPipeline(job) {
   }
 }
 
-export async function executeJob(job) {
+export export function buildMissionFailureState(mission, { jobId = '', adapter = '', attempts = 0, error = null } = {}) {
+  if (!mission || !canTransition(String(mission.status || ''), 'failed')) return null;
+  const next = transitionMission(mission, 'failed');
+  next.lastEvidence = {
+    verified: false,
+    completed: false,
+    adapter: String(adapter || 'unknown'),
+    jobId: String(jobId || ''),
+    attempts: Number(attempts || 0),
+    error: {
+      name: String(error?.name || 'Error'),
+      message: String(error?.message || error || 'Mission execution failed.').slice(0, 2000),
+    },
+  };
+  next.metadata = {
+    ...(mission.metadata || {}),
+    lastFailure: {
+      jobId: String(jobId || ''),
+      adapter: String(adapter || 'unknown'),
+      attempts: Number(attempts || 0),
+      message: String(error?.message || error || 'Mission execution failed.').slice(0, 2000),
+      failedAt: next.updatedAt,
+    },
+  };
+  return next;
+}
+
+async function recordMissionJobFailure(job, error, failureRecord, logger) {
+  if (String(job?.type || '') !== 'mission_step') return;
+  const payload = job?.payload && typeof job.payload === 'object' ? job.payload : {};
+  const userId = String(job?.user_id || payload.user_id || '');
+  const missionId = String(payload.mission_id || '');
+  if (!userId || !missionId) return;
+
+  const mission = await getMissionForUser(userId, missionId);
+  if (!mission) {
+    logger.warn?.(`[JARVIS worker] mission failure could not be recorded; mission missing ${missionId}`);
+    return;
+  }
+
+  const attempts = Number(failureRecord?.attempts ?? Number(job?.attempts || 0) + 1);
+  if (failureRecord?.status === 'retrying') {
+    await updateMissionForUser(userId, missionId, mission, {
+      eventType: 'mission.step_retrying',
+      message: 'Mission step failed transiently and the durable job was scheduled for retry.',
+      metadata: {
+        jobId: String(job.id || ''),
+        adapter: String(payload.adapter || payload.step?.executorType || 'unknown'),
+        attempts,
+        nextAttemptAt: failureRecord.scheduled_at || null,
+      },
+    });
+    return;
+  }
+
+  if (failureRecord?.status !== 'failed') return;
+
+  const next = buildMissionFailureState(mission, {
+    jobId: job.id,
+    adapter: payload.adapter || payload.step?.executorType,
+    attempts,
+    error,
+  });
+
+  if (!next) {
+    logger.warn?.(`[JARVIS worker] mission ${missionId} was not transitioned to failed from status ${mission.status}`);
+    return;
+  }
+
+  await updateMissionForUser(userId, missionId, next, {
+    eventType: 'mission.failed',
+    message: 'Mission execution exhausted its durable job retries and was marked failed.',
+    metadata: {
+      jobId: String(job.id || ''),
+      adapter: String(payload.adapter || payload.step?.executorType || 'unknown'),
+      attempts,
+      error: next.lastEvidence?.error || {},
+    },
+  });
+}
+
+async function executeJob(job) {
   const type = String(job?.type || '');
   const payload = job?.payload && typeof job.payload === 'object' ? job.payload : {};
 
@@ -247,10 +329,16 @@ async function processJob(job, workerId, logger) {
     return { ok: true, jobId: job.id };
   } catch (error) {
     logger.error?.(`[JARVIS worker] failed ${job.id}:`, error);
+    let failureRecord = null;
     try {
-      await failJob(job.id, workerId, error);
+      failureRecord = await failJob(job.id, workerId, error);
     } catch (failureError) {
       logger.error?.('[JARVIS worker] failed to persist failure:', failureError);
+    }
+    try {
+      await recordMissionJobFailure(job, error, failureRecord, logger);
+    } catch (missionFailureError) {
+      logger.error?.(`[JARVIS worker] failed to persist mission failure state ${job.id}:`, missionFailureError);
     }
     await updateRoutineRunFromChildren(job).catch(failureCheckError =>
       logger.warn?.(`[JARVIS worker] routine failure check failed ${job.id}:`, failureCheckError)
