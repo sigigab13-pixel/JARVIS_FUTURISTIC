@@ -634,7 +634,7 @@ export async function getJobForUser(userId, jobId) {
   if (!validUuid(userId) || !validUuid(jobId)) throw new Error('Invalid job identity.');
   if (!configured) return null;
   const rows = await request(
-    'jobs?select=id,user_id,type,status,result,error,attempts,max_attempts,scheduled_at,started_at,finished_at,updated_at&' +
+    'jobs?select=id,user_id,type,status,result,error,attempts,max_attempts,scheduled_at,started_at,completed_at,updated_at&'
     'id=eq.' + encodeURIComponent(jobId) + '&user_id=eq.' + encodeURIComponent(userId) + '&limit=1'
   );
   const row = rows?.[0];
@@ -650,7 +650,7 @@ export async function getJobForUser(userId, jobId) {
     maxAttempts: Number(row.max_attempts || 0),
     scheduledAt: row.scheduled_at || null,
     startedAt: row.started_at || null,
-    finishedAt: row.finished_at || null,
+    finishedAt: row.completed_at || null,
     updatedAt: row.updated_at || null,
   };
 }
