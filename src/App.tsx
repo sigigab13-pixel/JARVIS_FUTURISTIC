@@ -111,6 +111,11 @@ function App() {
   const [brandKit, setBrandKit] = useState<any>(null);
   const [businessBusy, setBusinessBusy] = useState(false);
   const [videoOpen, setVideoOpen] = useState(false);
+  const [youtubeOpen, setYoutubeOpen] = useState(false);
+  const [youtubeStatus, setYoutubeStatus] = useState<any>(null);
+  const [youtubeAnalytics, setYoutubeAnalytics] = useState<any>(null);
+  const [youtubeBusy, setYoutubeBusy] = useState(false);
+  const [youtubeError, setYoutubeError] = useState('');
   const [videoProjects, setVideoProjects] = useState<any[]>([]);
   const [videoProject, setVideoProject] = useState<any>(null);
   const [videoCharacters, setVideoCharacters] = useState<any[]>([]);
@@ -280,6 +285,47 @@ function App() {
     }
   };
 
+  const openYouTubeCenter = async () => {
+    setYoutubeOpen(true);
+    setYoutubeBusy(true);
+    setYoutubeError('');
+    try {
+      const response = await api.get('/api/youtube/status');
+      setYoutubeStatus(response.data || null);
+    } catch (error: any) {
+      setYoutubeError(String(error?.response?.data?.error || error?.message || 'Could not load YouTube status.'));
+    } finally {
+      setYoutubeBusy(false);
+    }
+  };
+
+  const connectYouTube = async () => {
+    setYoutubeBusy(true);
+    setYoutubeError('');
+    try {
+      const response = await api.get('/api/youtube/connect');
+      const authorizationUrl = String(response.data?.authorizationUrl || '');
+      if (!authorizationUrl) throw new Error('YouTube authorization URL was not returned.');
+      window.location.assign(authorizationUrl);
+    } catch (error: any) {
+      setYoutubeError(String(error?.response?.data?.error || error?.message || 'Could not start YouTube connection.'));
+      setYoutubeBusy(false);
+    }
+  };
+
+  const loadYouTubeAnalytics = async () => {
+    setYoutubeBusy(true);
+    setYoutubeError('');
+    try {
+      const response = await api.get('/api/youtube/analytics');
+      setYoutubeAnalytics(response.data?.analytics || null);
+    } catch (error: any) {
+      setYoutubeError(String(error?.response?.data?.error || error?.message || 'Could not load YouTube analytics.'));
+    } finally {
+      setYoutubeBusy(false);
+    }
+  };
+
   const createImageMission = async () => {
     const prompt = missionPrompt.trim();
     if (!prompt || missionBusy) return;
@@ -366,6 +412,7 @@ function App() {
       setCapabilityOpen(false);
       setBusinessOpen(false);
       setVideoOpen(false);
+      setYoutubeOpen(false);
       setImageLabOpen(false);
       setSystemOpen(false);
       setSecurityOpen(false);
@@ -386,6 +433,10 @@ function App() {
       closeAll();
       setImageLabOpen(true);
       response = 'Image Lab is open. Describe the picture you want and I will generate it here.';
+    } else if (/^(open|show|launch) (youtube|youtube center|youtube studio)$/.test(value) || value === 'youtube') {
+      closeAll();
+      void openYouTubeCenter();
+      response = 'YouTube Center is open.';
     } else if (/^(open|show|launch) (video lab|video studio)$/.test(value) || value === 'video lab') {
       closeAll();
       void openVideoStudio();
