@@ -685,6 +685,15 @@ function App() {
           ? `Done, ${String(session?.user?.user_metadata?.full_name || session?.user?.user_metadata?.name || session?.user?.email || 'there').trim() || 'there'}. Your image is ready in Image Lab.`
           : 'I could not complete that request. Please try again.',
       );
+
+      if (response.data?.routing?.factory === 'children-v1') {
+        setFactoryTopic(clean);
+        const ageMatch = clean.match(/\\b(3|4|5|6|7|8|9|10|11|12)\\s*(?:year|yr)s?\\b/i);
+        if (ageMatch) setFactoryAge(Number(ageMatch[1]));
+        setFactoryError('');
+        setFactoryOpen(true);
+      }
+
       setMessages(current => [
         ...current,
         { role: 'assistant', content: answer },
