@@ -843,225 +843,6 @@ button {
 .auth-card small { color: #718c9a; line-height: 1.5; }
 
 
-/* Mythos living-interface layer */
-@property --jarvis-accent-h {
-  syntax: '<number>';
-  inherits: true;
-  initial-value: 195;
-}
-
-:root {
-  --jarvis-accent-h: 195;
-  --jarvis-accent: hsl(var(--jarvis-accent-h) 88% 58%);
-  --jarvis-accent-2: hsl(calc(var(--jarvis-accent-h) + 35) 82% 60%);
-  --jarvis-accent-3: hsl(calc(var(--jarvis-accent-h) + 95) 76% 58%);
-  --jarvis-bg: #020713;
-}
-
-.jarvis-shell {
-  --jarvis-accent-h: 195;
-  background:
-    radial-gradient(circle at 50% 38%, hsl(var(--jarvis-accent-h) 80% 55% / 0.10), transparent 18%),
-    radial-gradient(circle at 8% 6%, hsl(calc(var(--jarvis-accent-h) + 5) 90% 58% / 0.12), transparent 26%),
-    radial-gradient(circle at 92% 92%, hsl(calc(var(--jarvis-accent-h) + 80) 80% 58% / 0.10), transparent 30%),
-    linear-gradient(180deg, rgba(255,255,255,.018), transparent 28%),
-    linear-gradient(160deg, #020713 0%, #07111f 52%, #030817 100%);
-  background-size: auto, auto, auto, auto, auto;
-  animation: jarvis-color-cycle 14s ease-in-out infinite;
-}
-
-.jarvis-shell::before {
-  width: 54vw;
-  height: 54vw;
-  left: -14vw;
-  top: 5vh;
-  background:
-    radial-gradient(circle,
-      hsl(var(--jarvis-accent-h) 96% 62% / .20) 0%,
-      hsl(var(--jarvis-accent-h) 88% 58% / .07) 35%,
-      transparent 70%);
-  filter: blur(12px);
-  opacity: .95;
-  animation: aurora-drift-left 16s ease-in-out infinite alternate, jarvis-glow-breathe 7s ease-in-out infinite;
-}
-
-.jarvis-shell::after {
-  content: '';
-  position: fixed;
-  width: 48vw;
-  height: 48vw;
-  right: -12vw;
-  bottom: -15vh;
-  border-radius: 50%;
-  pointer-events: none;
-  z-index: -1;
-  background:
-    radial-gradient(circle,
-      hsl(calc(var(--jarvis-accent-h) + 86) 92% 60% / .17) 0%,
-      hsl(calc(var(--jarvis-accent-h) + 52) 82% 56% / .06) 38%,
-      transparent 72%);
-  filter: blur(16px);
-  animation: aurora-drift-right 18s ease-in-out infinite alternate-reverse, jarvis-glow-breathe 9s ease-in-out infinite reverse;
-}
-
-.jarvis-shell.active-core {
-  animation-duration: 5s;
-}
-
-.jarvis-shell.active-core::before {
-  animation-duration: 7s, 2.3s;
-}
-
-.jarvis-shell.active-core::after {
-  animation-duration: 8s, 2.8s;
-}
-
-.topbar {
-  background:
-    linear-gradient(90deg, hsl(var(--jarvis-accent-h) 70% 55% / .04), transparent 35%, hsl(calc(var(--jarvis-accent-h) + 75) 75% 58% / .05)),
-    rgba(4, 9, 15, 0.84);
-  border-bottom-color: hsl(var(--jarvis-accent-h) 50% 45% / .30);
-  box-shadow: 0 1px 0 hsl(var(--jarvis-accent-h) 75% 60% / .08), 0 14px 50px rgba(0,0,0,.22);
-}
-
-.brand {
-  position: relative;
-}
-
-.brand::after {
-  content: '';
-  position: absolute;
-  left: 54px;
-  bottom: -11px;
-  width: 158px;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--jarvis-accent), hsl(calc(var(--jarvis-accent-h) + 70) 82% 60%), transparent);
-  box-shadow: 0 0 12px hsl(var(--jarvis-accent-h) 90% 60% / .55);
-  animation: brand-line 5s ease-in-out infinite;
-}
-
-.brand strong {
-  position: relative;
-  display: inline-block;
-  font-size: clamp(20px, 2vw, 27px);
-  font-weight: 850;
-  letter-spacing: .18em;
-  line-height: 1;
-  background:
-    linear-gradient(
-      110deg,
-      #dffbff 0%,
-      hsl(var(--jarvis-accent-h) 95% 70%) 18%,
-      hsl(calc(var(--jarvis-accent-h) + 55) 90% 70%) 48%,
-      hsl(calc(var(--jarvis-accent-h) + 100) 85% 68%) 72%,
-      #dffbff 100%
-    );
-  background-size: 260% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  text-shadow:
-    0 0 18px hsl(var(--jarvis-accent-h) 95% 60% / .25),
-    0 0 40px hsl(calc(var(--jarvis-accent-h) + 70) 82% 58% / .12);
-  animation: jarvis-wordmark-shift 7s ease-in-out infinite;
-}
-
-.brand span {
-  color: hsl(var(--jarvis-accent-h) 24% 68% / .78);
-  transition: color 1.5s ease;
-}
-
-.orb {
-  border-color: hsl(var(--jarvis-accent-h) 70% 65% / .76);
-  box-shadow:
-    0 0 18px hsl(var(--jarvis-accent-h) 95% 60% / .40),
-    0 0 42px hsl(calc(var(--jarvis-accent-h) + 30) 90% 60% / .18),
-    inset 0 0 18px rgba(255,255,255,.12);
-  animation: orb-breathe 3.5s ease-in-out infinite, core-color-pulse 10s linear infinite;
-}
-
-.jarvis-shell.active-core .orb {
-  animation-duration: 1.7s, 5s;
-}
-
-.chat-panel {
-  background:
-    linear-gradient(135deg, hsl(var(--jarvis-accent-h) 42% 18% / .08), transparent 32%),
-    linear-gradient(135deg, rgba(3,10,17,.54), rgba(8,5,22,.40));
-}
-
-.chat-head {
-  background:
-    linear-gradient(90deg, hsl(var(--jarvis-accent-h) 80% 60% / .05), transparent 35%, hsl(calc(var(--jarvis-accent-h) + 80) 75% 62% / .055));
-  border-bottom-color: hsl(var(--jarvis-accent-h) 30% 30% / .45);
-}
-
-.composer {
-  border-color: hsl(var(--jarvis-accent-h) 52% 55% / .28);
-  box-shadow:
-    0 0 30px rgba(7,27,40,.38),
-    0 0 42px hsl(calc(var(--jarvis-accent-h) + 75) 80% 58% / .08),
-    inset 0 0 22px hsl(var(--jarvis-accent-h) 85% 58% / .04);
-}
-
-.send {
-  border-color: hsl(var(--jarvis-accent-h) 55% 55% / .66);
-  background: linear-gradient(135deg, hsl(var(--jarvis-accent-h) 60% 22% / .9), hsl(calc(var(--jarvis-accent-h) + 55) 48% 20% / .86));
-  color: #dcfbff;
-  box-shadow: 0 0 20px hsl(var(--jarvis-accent-h) 90% 55% / .10);
-}
-
-@keyframes jarvis-color-cycle {
-  0%, 100% { --jarvis-accent-h: 190; }
-  25% { --jarvis-accent-h: 215; }
-  50% { --jarvis-accent-h: 265; }
-  75% { --jarvis-accent-h: 172; }
-}
-
-@keyframes jarvis-wordmark-shift {
-  0%, 100% { background-position: 0% 50%; transform: translateY(0); }
-  50% { background-position: 100% 50%; transform: translateY(-1px); }
-}
-
-@keyframes core-color-pulse {
-  0%, 100% { filter: hue-rotate(0deg) saturate(1); }
-  33% { filter: hue-rotate(24deg) saturate(1.15); }
-  66% { filter: hue-rotate(72deg) saturate(1.2); }
-}
-
-@keyframes aurora-drift-left {
-  0% { transform: translate3d(0, 0, 0) scale(.94); }
-  50% { transform: translate3d(5vw, 4vh, 0) scale(1.05); }
-  100% { transform: translate3d(10vw, -3vh, 0) scale(1.10); }
-}
-
-@keyframes aurora-drift-right {
-  0% { transform: translate3d(0, 0, 0) scale(.96); }
-  50% { transform: translate3d(-4vw, -5vh, 0) scale(1.08); }
-  100% { transform: translate3d(-8vw, 2vh, 0) scale(1.12); }
-}
-
-@keyframes jarvis-glow-breathe {
-  0%, 100% { opacity: .60; }
-  50% { opacity: .95; }
-}
-
-@keyframes brand-line {
-  0%, 100% { transform: scaleX(.72); opacity: .42; }
-  50% { transform: scaleX(1); opacity: .9; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .jarvis-shell,
-  .jarvis-shell::before,
-  .jarvis-shell::after,
-  .brand strong,
-  .brand::after,
-  .orb {
-    animation: none !important;
-  }
-}
-
 /* JARVIS conversational redesign */
 :root {
   --jarvis-hue: 195;
@@ -1462,4 +1243,224 @@ body {
   .messages { max-height: calc(100dvh - 178px); padding: 16px 16px 8px; }
   .chat-tools { padding-left: 16px; padding-right: 16px; }
   .composer { margin-left: 12px; margin-right: 12px; }
+}
+
+
+/* Mythos living-interface layer */
+@property --jarvis-accent-h {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 195;
+}
+
+:root {
+  --jarvis-accent-h: 195;
+  --jarvis-accent: hsl(var(--jarvis-accent-h) 88% 58%);
+  --jarvis-accent-2: hsl(calc(var(--jarvis-accent-h) + 35) 82% 60%);
+  --jarvis-accent-3: hsl(calc(var(--jarvis-accent-h) + 95) 76% 58%);
+  --jarvis-bg: #020713;
+}
+
+.jarvis-shell {
+  --jarvis-accent-h: 195;
+  background:
+    radial-gradient(circle at 50% 38%, hsl(var(--jarvis-accent-h) 80% 55% / 0.10), transparent 18%),
+    radial-gradient(circle at 8% 6%, hsl(calc(var(--jarvis-accent-h) + 5) 90% 58% / 0.12), transparent 26%),
+    radial-gradient(circle at 92% 92%, hsl(calc(var(--jarvis-accent-h) + 80) 80% 58% / 0.10), transparent 30%),
+    linear-gradient(180deg, rgba(255,255,255,.018), transparent 28%),
+    linear-gradient(160deg, #020713 0%, #07111f 52%, #030817 100%);
+  background-size: auto, auto, auto, auto, auto;
+  animation: jarvis-color-cycle 14s ease-in-out infinite;
+}
+
+.jarvis-shell::before {
+  width: 54vw;
+  height: 54vw;
+  left: -14vw;
+  top: 5vh;
+  background:
+    radial-gradient(circle,
+      hsl(var(--jarvis-accent-h) 96% 62% / .20) 0%,
+      hsl(var(--jarvis-accent-h) 88% 58% / .07) 35%,
+      transparent 70%);
+  filter: blur(12px);
+  opacity: .95;
+  animation: aurora-drift-left 16s ease-in-out infinite alternate, jarvis-glow-breathe 7s ease-in-out infinite;
+}
+
+.jarvis-shell::after {
+  content: '';
+  position: fixed;
+  width: 48vw;
+  height: 48vw;
+  right: -12vw;
+  bottom: -15vh;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: -1;
+  background:
+    radial-gradient(circle,
+      hsl(calc(var(--jarvis-accent-h) + 86) 92% 60% / .17) 0%,
+      hsl(calc(var(--jarvis-accent-h) + 52) 82% 56% / .06) 38%,
+      transparent 72%);
+  filter: blur(16px);
+  animation: aurora-drift-right 18s ease-in-out infinite alternate-reverse, jarvis-glow-breathe 9s ease-in-out infinite reverse;
+}
+
+.jarvis-shell.active-core {
+  animation-duration: 5s;
+}
+
+.jarvis-shell.active-core::before {
+  animation-duration: 7s, 2.3s;
+}
+
+.jarvis-shell.active-core::after {
+  animation-duration: 8s, 2.8s;
+}
+
+.topbar {
+  background:
+    linear-gradient(90deg, hsl(var(--jarvis-accent-h) 70% 55% / .04), transparent 35%, hsl(calc(var(--jarvis-accent-h) + 75) 75% 58% / .05)),
+    rgba(4, 9, 15, 0.84);
+  border-bottom-color: hsl(var(--jarvis-accent-h) 50% 45% / .30);
+  box-shadow: 0 1px 0 hsl(var(--jarvis-accent-h) 75% 60% / .08), 0 14px 50px rgba(0,0,0,.22);
+}
+
+.brand {
+  position: relative;
+}
+
+.brand::after {
+  content: '';
+  position: absolute;
+  left: 54px;
+  bottom: -11px;
+  width: 158px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--jarvis-accent), hsl(calc(var(--jarvis-accent-h) + 70) 82% 60%), transparent);
+  box-shadow: 0 0 12px hsl(var(--jarvis-accent-h) 90% 60% / .55);
+  animation: brand-line 5s ease-in-out infinite;
+}
+
+.brand strong {
+  position: relative;
+  display: inline-block;
+  font-size: clamp(20px, 2vw, 27px);
+  font-weight: 850;
+  letter-spacing: .18em;
+  line-height: 1;
+  background:
+    linear-gradient(
+      110deg,
+      #dffbff 0%,
+      hsl(var(--jarvis-accent-h) 95% 70%) 18%,
+      hsl(calc(var(--jarvis-accent-h) + 55) 90% 70%) 48%,
+      hsl(calc(var(--jarvis-accent-h) + 100) 85% 68%) 72%,
+      #dffbff 100%
+    );
+  background-size: 260% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow:
+    0 0 18px hsl(var(--jarvis-accent-h) 95% 60% / .25),
+    0 0 40px hsl(calc(var(--jarvis-accent-h) + 70) 82% 58% / .12);
+  animation: jarvis-wordmark-shift 7s ease-in-out infinite;
+}
+
+.brand span {
+  color: hsl(var(--jarvis-accent-h) 24% 68% / .78);
+  transition: color 1.5s ease;
+}
+
+.orb {
+  border-color: hsl(var(--jarvis-accent-h) 70% 65% / .76);
+  box-shadow:
+    0 0 18px hsl(var(--jarvis-accent-h) 95% 60% / .40),
+    0 0 42px hsl(calc(var(--jarvis-accent-h) + 30) 90% 60% / .18),
+    inset 0 0 18px rgba(255,255,255,.12);
+  animation: orb-breathe 3.5s ease-in-out infinite, core-color-pulse 10s linear infinite;
+}
+
+.jarvis-shell.active-core .orb {
+  animation-duration: 1.7s, 5s;
+}
+
+.chat-panel {
+  background:
+    linear-gradient(135deg, hsl(var(--jarvis-accent-h) 42% 18% / .08), transparent 32%),
+    linear-gradient(135deg, rgba(3,10,17,.54), rgba(8,5,22,.40));
+}
+
+.chat-head {
+  background:
+    linear-gradient(90deg, hsl(var(--jarvis-accent-h) 80% 60% / .05), transparent 35%, hsl(calc(var(--jarvis-accent-h) + 80) 75% 62% / .055));
+  border-bottom-color: hsl(var(--jarvis-accent-h) 30% 30% / .45);
+}
+
+.composer {
+  border-color: hsl(var(--jarvis-accent-h) 52% 55% / .28);
+  box-shadow:
+    0 0 30px rgba(7,27,40,.38),
+    0 0 42px hsl(calc(var(--jarvis-accent-h) + 75) 80% 58% / .08),
+    inset 0 0 22px hsl(var(--jarvis-accent-h) 85% 58% / .04);
+}
+
+.send {
+  border-color: hsl(var(--jarvis-accent-h) 55% 55% / .66);
+  background: linear-gradient(135deg, hsl(var(--jarvis-accent-h) 60% 22% / .9), hsl(calc(var(--jarvis-accent-h) + 55) 48% 20% / .86));
+  color: #dcfbff;
+  box-shadow: 0 0 20px hsl(var(--jarvis-accent-h) 90% 55% / .10);
+}
+
+@keyframes jarvis-color-cycle {
+  0%, 100% { --jarvis-accent-h: 190; }
+  25% { --jarvis-accent-h: 215; }
+  50% { --jarvis-accent-h: 265; }
+  75% { --jarvis-accent-h: 172; }
+}
+
+@keyframes jarvis-wordmark-shift {
+  0%, 100% { background-position: 0% 50%; transform: translateY(0); }
+  50% { background-position: 100% 50%; transform: translateY(-1px); }
+}
+
+@keyframes core-color-pulse {
+  0%, 100% { filter: hue-rotate(0deg) saturate(1); }
+  33% { filter: hue-rotate(24deg) saturate(1.15); }
+  66% { filter: hue-rotate(72deg) saturate(1.2); }
+}
+
+@keyframes aurora-drift-left {
+  0% { transform: translate3d(0, 0, 0) scale(.94); }
+  50% { transform: translate3d(5vw, 4vh, 0) scale(1.05); }
+  100% { transform: translate3d(10vw, -3vh, 0) scale(1.10); }
+}
+
+@keyframes aurora-drift-right {
+  0% { transform: translate3d(0, 0, 0) scale(.96); }
+  50% { transform: translate3d(-4vw, -5vh, 0) scale(1.08); }
+  100% { transform: translate3d(-8vw, 2vh, 0) scale(1.12); }
+}
+
+@keyframes jarvis-glow-breathe {
+  0%, 100% { opacity: .60; }
+  50% { opacity: .95; }
+}
+
+@keyframes brand-line {
+  0%, 100% { transform: scaleX(.72); opacity: .42; }
+  50% { transform: scaleX(1); opacity: .9; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jarvis-shell,
+  .jarvis-shell::before,
+  .jarvis-shell::after,
+  .brand strong,
+  .brand::after,
+  .orb {
+    animation: none !important;
+  }
 }
