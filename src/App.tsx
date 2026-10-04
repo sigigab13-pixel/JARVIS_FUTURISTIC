@@ -1118,7 +1118,7 @@ function App() {
               {missions.filter((m:any) => m.metadata?.factory === 'children-v1').map((mission:any) => <article key={mission.id} className="security-card" style={{ alignItems:'flex-start' }}>
                 <Activity size={20} /><div style={{ flex:1 }}><b>{mission.goal}</b><span>Status: {mission.status}</span><span>Approval: {mission.approval?.status || 'not_required'}</span>
                   {mission.status === 'waiting_approval' && mission.approval?.status === 'pending' && <button className="security-primary" onClick={() => void approveChildrenFactory(mission.id)} disabled={factoryBusy} style={{ marginTop:10 }}>Approve Draft</button>}
-                  {mission.approval?.status === 'approved' && <span style={{ marginTop:8 }}>Approved. No publishing provider is connected in Children Factory v1.</span>}
+                  {mission.approval?.status === 'approved' && <span style={{ marginTop:8 }}>Approved. YouTube is the current publishing target. Open YouTube Center from the YouTube command when you are ready to publish.</span>}
                 </div>
               </article>)}
             </div>
