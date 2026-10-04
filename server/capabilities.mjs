@@ -32,6 +32,18 @@ const capabilities = [
     available: () => Boolean(process.env.ELEVENLABS_API_KEY),
   },
   {
+    id: 'children_factory',
+    label: "Children's Content Factory",
+    category: 'creation',
+    description: "Prepare age-appropriate children's stories, rhymes, characters, images, and approval-gated publish packages.",
+    keywords: ['children', 'kids', 'story', 'rhyme', 'nursery', 'bedtime', 'children factory'],
+    available: () => Boolean(
+      process.env.SUPABASE_URL &&
+      (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY) &&
+      (process.env.HUGGINGFACE_API_TOKEN || process.env.HF_TOKEN),
+    ),
+  },
+  {
     id: 'video',
     label: 'Video Lab',
     category: 'creation',
