@@ -534,7 +534,12 @@ function App() {
       let jobId = existingJobId;
       if (!jobId || !['queued', 'running'].includes(existingStatus)) {
         setFactoryRenderJob({ status: 'queued' });
-        const response = await api.video.render(projectId, imageKeys, String((factoryDraft && factoryDraft.approvalGate && factoryDraft.approvalGate.missionId) || ''));
+        const response = await api.video.render(
+          projectId,
+          imageKeys,
+          String((factoryDraft && factoryDraft.approvalGate && factoryDraft.approvalGate.missionId) || ''),
+          { includeVoice: true, narrationText: String(draft && draft.story || '') },
+        );
         const job = response.data && response.data.job;
         if (!job || !job.id) throw new Error('Video render job was not created.');
         jobId = String(job.id);
@@ -754,7 +759,7 @@ function App() {
         ...current,
         { role: 'assistant', content: chatAnswer },
       ]);
-      if (voiceEnabled) void speak(answer);
+      if (voiceEnabled) void speak(chatAnswer);
     } catch (error: any) {
       const detail = String(error?.response?.data?.error || error?.message || '').trim();
       setMessages(current => [
