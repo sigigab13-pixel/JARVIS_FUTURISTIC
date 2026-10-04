@@ -301,6 +301,17 @@ You can support the project without spending money:
 
 Development is being done with limited hardware, so legitimate support such as development hardware, cloud resources, storage, or AI/API credits can also help the project progress.
 
+## 🛡️ Future security roadmap
+
+Two active backlog tracks are now recorded in GitHub:
+
+- **Future-Ready Cryptography** — crypto-agility, NIST post-quantum standards, hybrid support where providers allow it, security readiness checks, and provider compatibility reviews.
+- **Simple Custom Domain + Search Discovery** — a short memorable public address, canonical URL handling, SEO metadata, and a simple Share JARVIS experience.
+
+These are roadmap items, not claims that the features are already production-complete. Vercel currently supports post-quantum cryptography for HTTPS connections to its network, while JARVIS still needs its own application-level crypto inventory and migration plan.
+
+See the active queues: [#17 Future-Ready Cryptography](https://github.com/sigigab13-pixel/JARVIS_FUTURISTIC/issues/17) and [#18 Simple Custom Domain + Search Discovery](https://github.com/sigigab13-pixel/JARVIS_FUTURISTIC/issues/18).
+
 ## 👤 Creator
 
 **Saviour** — Creator and developer of JARVIS.
