@@ -88,6 +88,12 @@ function App() {
   const [missionPrompt, setMissionPrompt] = useState('');
   const [missionBusy, setMissionBusy] = useState(false);
   const [missionError, setMissionError] = useState('');
+  const [factoryOpen, setFactoryOpen] = useState(false);
+  const [factoryTopic, setFactoryTopic] = useState('');
+  const [factoryAge, setFactoryAge] = useState(5);
+  const [factoryBusy, setFactoryBusy] = useState(false);
+  const [factoryError, setFactoryError] = useState('');
+  const [factoryDraft, setFactoryDraft] = useState<any>(null);
   const [empireOpen, setEmpireOpen] = useState(false);
   const [capabilityOpen, setCapabilityOpen] = useState(false);
   const [systemOpen, setSystemOpen] = useState(false);
@@ -300,6 +306,38 @@ function App() {
       setMissionError(String(error?.response?.data?.error || error?.message || 'Could not request approval.'));
     } finally {
       setMissionBusy(false);
+    }
+  };
+
+  const createChildrenFactory = async () => {
+    const topic = factoryTopic.trim();
+    if (!topic || factoryBusy) return;
+    setFactoryBusy(true);
+    setFactoryError('');
+    setFactoryDraft(null);
+    try {
+      const response = await api.post('/api/factory/children', { topic, age: factoryAge });
+      setFactoryDraft(response.data);
+      setFactoryTopic('');
+      await loadMissions();
+    } catch (error: any) {
+      setFactoryError(String(error?.response?.data?.error || error?.message || 'Children Factory could not create the draft.'));
+    } finally {
+      setFactoryBusy(false);
+    }
+  };
+
+  const approveChildrenFactory = async (id: string) => {
+    setFactoryBusy(true);
+    setFactoryError('');
+    try {
+      const response = await api.missions.approve(id);
+      setFactoryDraft((current: any) => current ? { ...current, approved: true, mission: response.data?.mission } : current);
+      await loadMissions();
+    } catch (error: any) {
+      setFactoryError(String(error?.response?.data?.error || error?.message || 'Could not approve the draft.'));
+    } finally {
+      setFactoryBusy(false);
     }
   };
 
@@ -985,6 +1023,47 @@ function App() {
                   <BrainCircuit size={18} /><b>{title}</b><span>{prompt}</span>
                 </button>
               ))}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {factoryOpen && (
+        <div className="security-overlay" role="dialog" aria-modal="true" aria-label="JARVIS Children Factory">
+          <section className="security-panel" style={{ maxWidth: 1000 }}>
+            <div className="security-head">
+              <div>
+                <span className="eyebrow">CHILDREN CONTENT FACTORY V1</span>
+                <h2>JARVIS Children Factory</h2>
+                <p>Topic → story → character bible → 3 consistent images → approval.</p>
+              </div>
+              <button className="close-security" onClick={() => setFactoryOpen(false)} aria-label="Close Children Factory"><X size={18} /></button>
+            </div>
+            <div style={{ display:'grid', gap:10, marginBottom:18 }}>
+              <textarea value={factoryTopic} onChange={e => setFactoryTopic(e.target.value.slice(0,500))} placeholder="Example: A little lion learns not to be afraid of water" rows={3} />
+              <div style={{ display:'flex', gap:10, alignItems:'center', flexWrap:'wrap' }}>
+                <label>Age <select value={factoryAge} onChange={e => setFactoryAge(Number(e.target.value))}>{[3,4,5,6,7,8,9,10,11,12].map(age => <option key={age} value={age}>{age}</option>)}</select></label>
+                <button className="security-primary" onClick={() => void createChildrenFactory()} disabled={factoryBusy || !factoryTopic.trim()}><Sparkles size={16} /> {factoryBusy ? 'Creating…' : 'Create Children Draft'}</button>
+              </div>
+            </div>
+            {factoryError && <div className="lock-note"><AlertTriangle size={16} /><span>{factoryError}</span></div>}
+            {factoryDraft?.draft && <article className="security-card" style={{ display:'block', marginTop:12 }}>
+              <span className="eyebrow">DRAFT READY</span>
+              <h3>{factoryDraft.draft.project?.title || 'Children Story'}</h3>
+              <p style={{ whiteSpace:'pre-wrap' }}>{factoryDraft.draft.story}</p>
+              <div style={{ display:'grid', gap:6 }}><b>Character Bible</b><span>{factoryDraft.draft.characterBible?.name} · {factoryDraft.draft.characterBible?.species} · {factoryDraft.draft.characterBible?.color} · {factoryDraft.draft.characterBible?.clothes}</span></div>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(3,minmax(0,1fr))', gap:8, marginTop:12 }}>
+                {(factoryDraft.draft.images || []).map((item:any) => item.media?.url ? <img key={item.scene} src={item.media.url} alt={'Children Factory scene '+item.scene} style={{ width:'100%', borderRadius:10 }} /> : <div key={item.scene} className="lock-note">Scene {item.scene} asset stored</div>)}
+              </div>
+              <div className="lock-note" style={{ marginTop:12 }}><LockKeyhole size={16} /><span>Publishing is not automatic. Approve the mission below only when you are ready to authorize the next publishing step.</span></div>
+            </article>}
+            <div style={{ display:'grid', gap:10, marginTop:16 }}>
+              {missions.filter((m:any) => m.metadata?.factory === 'children-v1').map((mission:any) => <article key={mission.id} className="security-card" style={{ alignItems:'flex-start' }}>
+                <Activity size={20} /><div style={{ flex:1 }}><b>{mission.goal}</b><span>Status: {mission.status}</span><span>Approval: {mission.approval?.status || 'not_required'}</span>
+                  {mission.status === 'waiting_approval' && mission.approval?.status === 'pending' && <button className="security-primary" onClick={() => void approveChildrenFactory(mission.id)} disabled={factoryBusy} style={{ marginTop:10 }}>Approve Draft</button>}
+                  {mission.approval?.status === 'approved' && <span style={{ marginTop:8 }}>Approved. No publishing provider is connected in Children Factory v1.</span>}
+                </div>
+              </article>)}
             </div>
           </section>
         </div>
