@@ -408,20 +408,25 @@ function App() {
     const draft = factoryDraft && factoryDraft.draft;
     const projectId = String(draft && draft.project && draft.project.id || '').trim();
     const imageKeys = Array.isArray(draft && draft.images) ? draft.images.map((item: any) => String(item && item.media && (item.media.path || item.media.key) || '').trim()).filter(Boolean) : [];
+    const existingJobId = String(factoryRenderJob && factoryRenderJob.id || '').trim();
+    const existingStatus = String(factoryRenderJob && factoryRenderJob.status || '');
     if (!projectId || !imageKeys.length || factoryBusy) return;
     setFactoryBusy(true);
     setFactoryError('');
-    setFactoryRenderJob({ status: 'queued' });
     try {
-      const response = await api.video.render(projectId, imageKeys, String((factoryDraft && factoryDraft.approvalGate && factoryDraft.approvalGate.missionId) || ''));
-      const job = response.data && response.data.job;
-      if (!job || !job.id) throw new Error('Video render job was not created.');
-      setFactoryRenderJob(job);
+      let jobId = existingJobId;
+      if (!jobId || !['queued', 'running'].includes(existingStatus)) {
+        setFactoryRenderJob({ status: 'queued' });
+        const response = await api.video.render(projectId, imageKeys, String((factoryDraft && factoryDraft.approvalGate && factoryDraft.approvalGate.missionId) || ''));
+        const job = response.data && response.data.job;
+        if (!job || !job.id) throw new Error('Video render job was not created.');
+        jobId = String(job.id);
+        setFactoryRenderJob(job);
+      }
       for (let attempt = 0; attempt < 45; attempt += 1) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        const statusResponse = await api.video.job(job.id);
+        const statusResponse = await api.video.job(jobId);
         const current = statusResponse.data && statusResponse.data.job;
-        if (!current) continue;
+        if (!current) throw new Error('Video render job could not be found.');
         setFactoryRenderJob(current);
         if (current.status === 'succeeded') {
           const result = current.result || {};
@@ -435,8 +440,9 @@ function App() {
           return;
         }
         if (current.status === 'failed' || current.status === 'canceled') throw new Error((current.error && current.error.message) || 'Video render failed.');
+        await new Promise(resolve => setTimeout(resolve, 2000));
       }
-      throw new Error('Video render is still running. Try again later.');
+      throw new Error('Video render is still running. The existing job has been kept so you can check it again without creating a duplicate.');
     } catch (error: any) {
       setFactoryError(String((error.response && error.response.data && error.response.data.error) || error.message || 'Could not render the children video.'));
     } finally {
