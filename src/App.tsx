@@ -413,7 +413,7 @@ function App() {
     setFactoryError('');
     setFactoryRenderJob({ status: 'queued' });
     try {
-      const response = await api.video.render(projectId, imageKeys);
+      const response = await api.video.render(projectId, imageKeys, String((factoryDraft && factoryDraft.approvalGate && factoryDraft.approvalGate.missionId) || ''));
       const job = response.data && response.data.job;
       if (!job || !job.id) throw new Error('Video render job was not created.');
       setFactoryRenderJob(job);
