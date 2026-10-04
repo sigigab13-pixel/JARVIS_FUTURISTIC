@@ -476,8 +476,12 @@ function App() {
           await loadMissions();
           return;
         }
-        if (progress.data?.status === 'failed') {
-          throw new Error(String(progress.data?.error || 'Children Factory build failed.'));
+        if (progress.data?.status === 'failed' || progress.data?.status === 'video_failed') {
+          throw new Error(String(
+            progress.data?.error ||
+            progress.data?.video?.error ||
+            'Children Factory video build failed.'
+          ));
         }
       } catch (error: any) {
         setFactoryError(String(error?.response?.data?.error || error?.message || 'Could not read Children Factory progress.'));
@@ -1363,9 +1367,11 @@ function App() {
                 {(factoryDraft.draft.images || []).map((item:any) => item.media?.url ? <img key={item.scene} src={item.media.url} alt={'Children Factory scene '+item.scene} style={{ width:'100%', borderRadius:10 }} /> : <div key={item.scene} className="lock-note">Scene {item.scene} asset stored</div>)}
               </div>
               <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:12 }}>
-                <button className="security-secondary" onClick={() => void renderChildrenFactoryVideo()} disabled={factoryBusy || !(factoryDraft && factoryDraft.draft && factoryDraft.draft.project && factoryDraft.draft.project.id) || !((factoryDraft && factoryDraft.draft && factoryDraft.draft.images) || []).length}>
-                  {factoryRenderJob && (factoryRenderJob.status === 'running' || factoryRenderJob.status === 'queued') ? 'Rendering video…' : 'Render YouTube Video'}
-                </button>
+                {factoryDraft?.status === 'video_failed' && (
+                  <button className="security-secondary" onClick={() => void renderChildrenFactoryVideo()} disabled={factoryBusy || !(factoryDraft && factoryDraft.draft && factoryDraft.draft.project && factoryDraft.draft.project.id) || !((factoryDraft && factoryDraft.draft && factoryDraft.draft.images) || []).length}>
+                    Retry AI Video
+                  </button>
+                )}
                 {factoryDraft && factoryDraft.renderedVideo && factoryDraft.renderedVideo.mediaKey && <button className="security-secondary" onClick={() => { setYoutubeMissionId(String(factoryDraft.approvalGate && factoryDraft.approvalGate.missionId || '')); setYoutubeMediaKey(String(factoryDraft.renderedVideo.mediaKey)); setYoutubeTitle(String(factoryDraft.draft && factoryDraft.draft.project && factoryDraft.draft.project.title || '').slice(0,100)); setYoutubeDescription(String(factoryDraft.draft && factoryDraft.draft.story || '').slice(0,5000)); setFactoryOpen(false); void openYouTubeCenter(); }}>Open YouTube Publisher</button>}
               </div>
               {factoryRenderJob && <div className="security-status"><span>Render job: {factoryRenderJob.status}</span></div>}
