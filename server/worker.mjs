@@ -153,7 +153,6 @@ export async function executeJob(job) {
     },
   );
 }
-}
 
 async function dispatchDueRoutines(workerId, logger) {
   const routines = await claimDueRoutines(workerId, Number(process.env.JARVIS_ROUTINE_BATCH_LIMIT || 10));
