@@ -1046,8 +1046,8 @@ function App() {
           <div className="chat-head">
             <div>
               <span className="eyebrow">CONVERSATION CORE</span>
-              <h1>How can I assist?</h1>
-              <p className="chat-subtitle">One conversation for creation, tools, memory, system controls, and voice.</p>
+              <h1>What can I help you with?</h1>
+              <p className="chat-subtitle">Ask JARVIS anything, or use a tool when you need one.</p>
             </div>
             <div className="head-actions">
               <button className={passiveWake ? 'active-control' : ''} title="Toggle passive Hey wake mode" onClick={togglePassiveWake} aria-label="Toggle passive wake">
@@ -1085,12 +1085,9 @@ function App() {
           <div className="chat-tools" aria-label="JARVIS chat actions">
             {[
               ['Create image', 'Create an image of a cute storybook animal in a magical forest.'],
+              ['Children Factory', 'Open children factory'],
               ['Video Lab', 'Open video lab'],
-              ['Voice mode', 'Turn voice on'],
-              ['System check', 'Open system center'],
-              ['Security', 'Open security center'],
-              ['Capabilities', 'Open capabilities'],
-              ['Memory', 'Export memory'],
+              ['More', 'Open command center'],
             ].map(([label, command]) => (
               <button key={label} onClick={() => void sendMessage(command)} disabled={busy}>{label}</button>
             ))}
