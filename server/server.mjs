@@ -902,6 +902,7 @@ export async function handleApi(req, res, pathname, url) {
           characterBible: mission.metadata?.characterBible || null,
           images,
         },
+        renderedVideo: mission.metadata?.renderedVideo || approvalMission?.metadata?.renderedVideo || null,
         approvalGate: {
           required: true,
           status: approvalMission.approval?.status === 'approved' ? 'approved' : 'awaiting_approval',
