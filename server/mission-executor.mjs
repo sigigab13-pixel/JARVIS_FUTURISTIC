@@ -5,8 +5,10 @@ import {
   updateMissionForUser,
   fanOutRoutineRun,
   queueMissionStepForUser,
+  queueVideoJobForUser,
   consumeImageGeneration,
 } from './store.mjs';
+import { enqueueJob, isRedisConfigured } from './queue.mjs';
 import { createMediaKey, isSupabaseStorageConfigured, putMedia } from './media.mjs';
 import { generateHuggingFaceImage } from './image-generator.mjs';
 import { appendChildrenFactoryImage, markChildrenFactoryBuildComplete } from './factory-runtime.mjs';
@@ -238,37 +240,54 @@ export async function executeMissionStep(job) {
   });
 
   if (updated.status === 'succeeded' && updated.metadata?.factory === 'children-v1' && updated.metadata?.approvalMissionId) {
-    const approvalMission = await getMissionForUser(userId, String(updated.metadata.approvalMissionId));
-    if (approvalMission && approvalMission.status === 'draft') {
-      const approvalReady = transitionMission(approvalMission, 'waiting_approval');
-      approvalReady.approval = {
-        ...(approvalMission.approval || {}),
-        required: true,
-        status: 'pending',
-        requestedAt: new Date().toISOString(),
-        approvedAt: null,
-        action: 'publish',
-      };
-      approvalReady.metadata = {
-        ...(approvalMission.metadata || {}),
-        images: Array.isArray(updated.metadata.images) ? updated.metadata.images : [],
-        story: updated.metadata.story || approvalMission.metadata?.story || null,
-        characterBible: updated.metadata.characterBible || approvalMission.metadata?.characterBible || null,
-      };
-      await updateMissionForUser(userId, approvalMission.id, approvalReady, {
-        eventType: 'mission.approval_requested',
-        message: 'Children Factory build completed; publishing approval is now waiting for user review.',
-        metadata: { buildMissionId: updated.id, imageCount: Array.isArray(updated.metadata.images) ? updated.metadata.images.length : 0 },
+    const imageKeys = (Array.isArray(updated.metadata.images) ? updated.metadata.images : [])
+      .map(item => String(item?.media?.path || item?.media?.key || '').trim())
+      .filter(key => key.startsWith(`jarvis/${userId}/`));
+    const videoStatus = String(updated.metadata?.videoStatus || '').trim();
+
+    if (imageKeys.length && !['queued', 'running', 'succeeded'].includes(videoStatus)) {
+      const scenePrompts = Array.isArray(updated.steps)
+        ? updated.steps.map(step => String(step?.prompt || '').trim().slice(0, 4000))
+        : [];
+      const sceneDurations = imageKeys.map(() => 5);
+      const videoJob = await queueVideoJobForUser(userId, String(updated.metadata.projectId), {
+        operation: 'generate_children_episode',
+        mission_id: updated.id,
+        image_keys: imageKeys,
+        scene_prompts: scenePrompts,
+        scene_durations: sceneDurations,
+        narration_text: String(updated.metadata.story || '').slice(0, 20_000),
+        include_voice: true,
+        provider: 'higgsfield',
+        priority: 8,
       });
 
-      const linkedMetadata = {
+      let videoDispatch = { queued: false, provider: 'supabase' };
+      if (videoJob?.id && isRedisConfigured()) {
+        try {
+          videoDispatch = {
+            queued: true,
+            provider: 'upstash_redis',
+            message: await enqueueJob(videoJob.id, videoJob.type),
+          };
+        } catch (queueError) {
+          console.error('JARVIS Children Factory video Redis dispatch error:', queueError);
+          videoDispatch = { queued: false, provider: 'supabase', fallback: 'redis_unavailable' };
+        }
+      }
+
+      const videoMetadata = {
         ...(updated.metadata || {}),
-        approvalStatus: 'pending',
+        factoryStage: 'video',
+        videoStatus: 'queued',
+        videoJobId: String(videoJob?.id || ''),
+        videoProvider: 'higgsfield',
+        videoDispatch,
       };
-      await updateMissionForUser(userId, updated.id, { ...updated, metadata: linkedMetadata }, {
-        eventType: 'mission.approval_created',
-        message: 'Children Factory build linked to its publishing approval mission.',
-        metadata: { approvalMissionId: approvalMission.id },
+      await updateMissionForUser(userId, updated.id, { ...updated, metadata: videoMetadata }, {
+        eventType: 'factory.video_queued',
+        message: 'Children Factory images verified; the AI video and narration job was queued.',
+        metadata: { videoJobId: videoJob?.id || null, imageCount: imageKeys.length, provider: 'higgsfield' },
       });
     }
   }
