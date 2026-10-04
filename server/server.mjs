@@ -655,8 +655,19 @@ export async function handleApi(req, res, pathname, url) {
         }
         mission = await updateMissionForUser(jarvisUser.id, missionId, next, {
           eventType: 'mission.approved',
-          message: 'Mission approval recorded and the first execution step is being queued.',
+          message: next.status === 'succeeded'
+            ? 'Children Factory publishing approval recorded. Publishing still requires a separate explicit action.'
+            : 'Mission approval recorded and the first execution step is being queued.',
         });
+
+        if (mission.status === 'succeeded' && mission.metadata?.factory === 'children-v1' && mission.metadata?.factoryStage === 'approval') {
+          return json(res, 200, {
+            mission,
+            approved: true,
+            execution: { queued: false, provider: 'none', reason: 'approval_complete' },
+          }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+        }
+
         const execution = await queueMissionExecution(jarvisUser.id, mission);
         return json(res, 202, {
           mission,
