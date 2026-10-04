@@ -94,6 +94,7 @@ function App() {
   const [factoryBusy, setFactoryBusy] = useState(false);
   const [factoryError, setFactoryError] = useState('');
   const [factoryDraft, setFactoryDraft] = useState<any>(null);
+  const [factoryRenderJob, setFactoryRenderJob] = useState<any>(null);
   const [empireOpen, setEmpireOpen] = useState(false);
   const [capabilityOpen, setCapabilityOpen] = useState(false);
   const [systemOpen, setSystemOpen] = useState(false);
