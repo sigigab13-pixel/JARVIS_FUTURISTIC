@@ -57,6 +57,7 @@ import { createMissionState, transitionMission, advanceMissionStep } from './mis
 import { preflightMission, getMissionAdapters } from './mission-executor.mjs';
 import { prepareMissionAction } from './mission-actions.mjs';
 import { generateHuggingFaceImage, HF_IMAGE_MODELS, HF_IMAGE_EDIT_MODELS, HF_IMAGE_PROVIDERS } from './image-generator.mjs';
+import { buildChildrenFactoryImageSteps } from './factory-runtime.mjs';
 import { getYouTubeAccessToken, getYouTubeAnalytics, getYouTubeChannel, uploadYouTubeVideo } from './youtube.mjs';
 
 const PORT = Number(process.env.PORT || 10000);
@@ -782,6 +783,74 @@ export async function handleApi(req, res, pathname, url) {
     return json(res, 404, { error: 'Mission action not found.' });
   }
 
+  const childrenFactoryMissionMatch = pathname.match(/^\/api\/factory\/children\/([0-9a-f-]{36})$/i);
+  if (req.method === 'GET' && childrenFactoryMissionMatch) {
+    const { jarvisUser } = await requireAuthenticatedJarvisUser(req);
+    const mission = await getMissionForUser(jarvisUser.id, childrenFactoryMissionMatch[1]);
+    if (!mission) return json(res, 404, { error: 'Children Factory mission not found.' });
+    if (mission.metadata?.factory !== 'children-v1') {
+      return json(res, 409, { error: 'That mission is not a Children Factory mission.', code: 'CHILDREN_FACTORY_MISSION_MISMATCH' });
+    }
+
+    const approvalMissionId = String(mission.metadata?.approvalMissionId || '').trim();
+    const approvalMission = approvalMissionId
+      ? await getMissionForUser(jarvisUser.id, approvalMissionId)
+      : null;
+    const images = Array.isArray(mission.metadata?.images)
+      ? mission.metadata.images
+      : Array.isArray(approvalMission?.metadata?.images)
+        ? approvalMission.metadata.images
+        : [];
+
+    if (mission.status === 'failed') {
+      return json(res, 200, {
+        factory: 'children-v1',
+        status: 'failed',
+        buildMission: mission,
+        error: mission.lastEvidence?.error?.message || mission.metadata?.lastFailure?.message || 'Children Factory build failed.',
+      }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+    }
+
+    if (approvalMission?.status === 'waiting_approval' || approvalMission?.approval?.status === 'pending' || approvalMission?.approval?.status === 'approved') {
+      return json(res, 200, {
+        factory: 'children-v1',
+        status: approvalMission.approval?.status === 'approved' ? 'approved' : 'awaiting_approval',
+        buildMission: mission,
+        draft: {
+          project: { id: mission.metadata?.projectId || null, title: mission.metadata?.title || 'Children Story' },
+          character: mission.metadata?.character || null,
+          story: mission.metadata?.story || '',
+          characterBible: mission.metadata?.characterBible || null,
+          images,
+        },
+        approvalGate: {
+          required: true,
+          status: approvalMission.approval?.status === 'approved' ? 'approved' : 'awaiting_approval',
+          missionId: approvalMission.id,
+          label: 'Approve Draft for Publishing',
+          autoPublish: false,
+          publishingProvider: 'youtube',
+          note: 'Approval records permission to publish this draft to YouTube. JARVIS never publishes automatically.',
+        },
+        mission: approvalMission,
+      }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+    }
+
+    return json(res, 200, {
+      factory: 'children-v1',
+      status: mission.status === 'succeeded' ? 'finalizing_approval' : 'building',
+      buildMission: mission,
+      draft: {
+        project: { id: mission.metadata?.projectId || null, title: mission.metadata?.title || 'Children Story' },
+        character: mission.metadata?.character || null,
+        story: mission.metadata?.story || '',
+        characterBible: mission.metadata?.characterBible || null,
+        images,
+      },
+      approvalGate: null,
+    }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+  }
+
   if (req.method === 'POST' && pathname === '/api/factory/children') {
     const { jarvisUser } = await requireAuthenticatedJarvisUser(req);
     const body = await parseBody(req);
@@ -830,121 +899,89 @@ export async function handleApi(req, res, pathname, url) {
         },
       });
 
-      const imageResults = [];
-      const characterPrompt = [
-        'Create a child-friendly storybook illustration.',
-        'Keep this exact character consistent in every image:',
-        'Name: ' + draft.character.name,
-        'Species: ' + draft.character.species,
-        'Color: ' + draft.character.color,
-        'Clothes: ' + draft.character.clothes,
-        'Description: ' + draft.character.description,
-        'Style: warm, colorful, friendly, simple storybook art.',
-        'No text, no watermark.',
-      ].join(' ');
+      const buildMissionId = crypto.randomUUID();
+      const approvalMissionId = crypto.randomUUID();
+      const imageSteps = buildChildrenFactoryImageSteps({
+        story: draft.story,
+        character: draft.character,
+        count: 3,
+      });
 
-      for (let index = 1; index <= 3; index += 1) {
-        const blob = await generateHuggingFaceImage(
-          characterPrompt + ' Illustration ' + index + ' should depict a different moment from this story: ' + draft.story.slice(0, 1800)
-        );
-        const buffer = Buffer.from(await blob.arrayBuffer());
-        const mimeType = blob.type || 'image/png';
-        const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
-        let media = null;
-        if (isSupabaseStorageConfigured()) {
-          const extension = mimeType.includes('jpeg') ? 'jpg' : mimeType.includes('webp') ? 'webp' : 'png';
-          const key = createMediaKey({
-            userId: jarvisUser.id,
-            kind: 'children-factory',
-            extension,
-            id: sha256,
-          });
-          media = await putMedia({
-            key,
-            body: buffer,
-            contentType: mimeType,
-            metadata: {
-              user_id: jarvisUser.id,
-              source: 'children_factory_v1',
-              sha256,
-              character: draft.character.name,
-              scene: index,
-            },
-            upsert: true,
-          });
-        } else {
-          throw Object.assign(new Error('Supabase Storage is not configured for Children Factory assets.'), { statusCode: 503 });
-        }
-        await consumeImageGeneration(jarvisUser.id, {
-          prompt: `${draft.title} — Children Factory scene ${index}`.slice(0, 500),
-          mode: 'children-factory-v1',
-          sha256,
-          media_path: media?.path || null,
-        });
-        imageResults.push({
-          scene: index,
-          sha256,
-          media,
-        });
-      }
+      const buildState = createMissionState({
+        missionId: buildMissionId,
+        userId: jarvisUser.id,
+        goal: 'Children Factory: build ' + draft.title,
+        autonomy: 'execute_within_policy',
+        steps: imageSteps,
+      });
+      buildState.approval = { required: false, status: 'not_required' };
+      buildState.metadata = {
+        factory: 'children-v1',
+        factoryStage: 'build',
+        title: draft.title,
+        projectId: project.id,
+        characterId: character?.id || null,
+        character: character || null,
+        topic,
+        age,
+        story: draft.story,
+        characterBible: draft.character,
+        images: [],
+        factoryBuild: { status: 'queued', completedScenes: 0, totalScenes: imageSteps.length },
+        approvalMissionId,
+      };
 
-      const state = createMissionState({
-        missionId: crypto.randomUUID(),
+      const approvalState = createMissionState({
+        missionId: approvalMissionId,
         userId: jarvisUser.id,
         goal: 'Children Factory: approve and publish ' + draft.title,
         autonomy: 'execute_with_approval',
         steps: [],
       });
-      state.approval = {
+      approvalState.approval = {
         required: true,
         status: 'not_requested',
         requestedAt: null,
         approvedAt: null,
         action: 'publish',
       };
-      state.metadata = {
+      approvalState.metadata = {
         factory: 'children-v1',
+        factoryStage: 'approval',
         projectId: project.id,
-        characterId: character?.id || null,
+        buildMissionId,
         topic,
         age,
+        title: draft.title,
         story: draft.story,
+        characterId: character?.id || null,
         characterBible: draft.character,
-        images: imageResults,
+        images: [],
       };
-      const createdMission = await createMissionForUser(jarvisUser.id, state);
-      const approvalMission = transitionMission(createdMission, 'waiting_approval');
-      approvalMission.approval = {
-        ...(createdMission.approval || {}),
-        required: true,
-        status: 'pending',
-        requestedAt: new Date().toISOString(),
-        action: 'publish',
-      };
-      const mission = await updateMissionForUser(jarvisUser.id, createdMission.id, approvalMission, {
-        eventType: 'mission.approval_requested',
-        message: 'Children Factory draft is ready for approval before any publishing action.',
-      });
 
-      return json(res, 201, {
+      await createMissionForUser(jarvisUser.id, approvalState);
+      const queuedState = transitionMission(buildState, 'queued');
+      const buildMission = await updateMissionForUser(jarvisUser.id, buildMissionId, queuedState, {
+        eventType: 'mission.queued',
+        message: 'Children Factory build queued as durable image-generation steps.',
+        metadata: { approvalMissionId, stepCount: imageSteps.length },
+      });
+      const execution = await queueMissionExecution(jarvisUser.id, buildMission);
+
+      return json(res, 202, {
         factory: 'children-v1',
-        status: 'awaiting_approval',
+        status: 'building',
+        buildMission,
+        dispatch: execution.dispatch,
+        job: execution.job,
         draft: {
           project,
           character,
           story: draft.story,
           characterBible: draft.character,
-          images: imageResults,
+          images: [],
         },
-        approvalGate: {
-          required: true,
-          status: 'awaiting_approval',
-          missionId: mission.id,
-          label: 'Approve Draft for Publishing',
-          autoPublish: false,
-          publishingProvider: 'youtube',
-          note: 'Approval records permission to publish this draft to YouTube. JARVIS never publishes automatically.'
-        },
+        approvalGate: null,
       }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
     } catch (error) {
       console.error('JARVIS Children Factory error:', error);
