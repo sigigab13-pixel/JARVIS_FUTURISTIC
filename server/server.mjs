@@ -165,6 +165,77 @@ function safePath(urlPath) {
   return target.startsWith(DIST) ? target : null;
 }
 
+async function generateChildrenFactoryDraft(topic, age) {
+  const hfToken = process.env.HUGGINGFACE_API_TOKEN || process.env.HF_TOKEN || '';
+  if (!hfToken) {
+    throw Object.assign(new Error('Hugging Face is not configured for the Children Factory.'), { statusCode: 503 });
+  }
+
+  const prompt = [
+    'You are JARVIS Children Factory v1.',
+    'Create one safe, age-appropriate children story.',
+    'Return ONLY valid JSON. No markdown and no extra text.',
+    'Schema:',
+    '{"title":"string","story":"about 200 words","character":{"name":"string","species":"string","color":"string","clothes":"string","description":"string"}}',
+    'Keep the story gentle, imaginative, educational or emotionally positive.',
+    'Do not include frightening, graphic, sexual, dangerous, or age-inappropriate material.',
+    'Keep the main character visually consistent for image generation.',
+    'Topic: ' + String(topic).slice(0, 500),
+    'Target age: ' + String(age),
+  ].join('\\n');
+
+  const response = await fetch(HF_CHAT_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + hfToken,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: HF_MODEL,
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 900,
+      temperature: 0.7,
+    }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const providerError = data?.error;
+    const message = providerError?.message || providerError?.detail || providerError?.error
+      || (typeof providerError === 'string' ? providerError : null)
+      || (providerError && typeof providerError === 'object' ? JSON.stringify(providerError) : null)
+      || 'Children Factory story generation failed.';
+    throw Object.assign(new Error(String(message)), { statusCode: response.status >= 400 && response.status < 500 ? 400 : 502 });
+  }
+
+  const raw = String(data?.choices?.[0]?.message?.content || '').trim();
+  const cleaned = raw.replace(/^\s*\`\`\`json\s*/i, '').replace(/\s*\`\`\`\s*$/i, '').trim();
+  let draft;
+  try {
+    draft = JSON.parse(cleaned);
+  } catch {
+    throw Object.assign(new Error('Children Factory received an invalid story format from the AI Core.'), { statusCode: 502 });
+  }
+
+  const story = String(draft?.story || '').trim();
+  const character = draft?.character && typeof draft.character === 'object' ? draft.character : {};
+  if (!story || !character.name || !character.species || !character.color || !character.clothes) {
+    throw Object.assign(new Error('Children Factory received an incomplete story or character bible.'), { statusCode: 502 });
+  }
+
+  return {
+    title: String(draft.title || 'JARVIS Children Story').trim().slice(0, 200),
+    story: story.slice(0, 5000),
+    character: {
+      name: String(character.name).trim().slice(0, 120),
+      species: String(character.species).trim().slice(0, 120),
+      color: String(character.color).trim().slice(0, 120),
+      clothes: String(character.clothes).trim().slice(0, 300),
+      description: String(character.description || '').trim().slice(0, 1000),
+    },
+  };
+}
+
 export async function handleApi(req, res, pathname, url) {
   if (req.method === 'GET' && pathname === '/api/_healthcheck') {
     return json(res, 200, { message: 'Success', service: 'JARVIS', deployment: 'vercel' });
@@ -559,6 +630,151 @@ export async function handleApi(req, res, pathname, url) {
     }
 
     return json(res, 404, { error: 'Mission action not found.' });
+  }
+
+  if (req.method === 'POST' && pathname === '/api/factory/children') {
+    const { jarvisUser } = await requireAuthenticatedJarvisUser(req);
+    const body = await parseBody(req);
+    const topic = String(body?.topic || '').trim();
+    const age = Number(body?.age || 5);
+    if (!topic) return json(res, 400, { error: 'A story topic is required.' });
+    if (!Number.isInteger(age) || age < 3 || age > 12) return json(res, 400, { error: 'Age must be a whole number from 3 to 12.' });
+
+    try {
+      const draft = await generateChildrenFactoryDraft(topic, age);
+
+      const project = await createVideoProjectForUser(jarvisUser.id, {
+        title: draft.title,
+        description: 'JARVIS Children Factory v1 draft.',
+        format: '16:9',
+        story_bible: {
+          factory: 'children-v1',
+          topic,
+          age,
+          story: draft.story,
+          character_bible: draft.character,
+        },
+      });
+
+      const character = await addVideoCharacterForUser(jarvisUser.id, project.id, {
+        name: draft.character.name,
+        role: 'main character',
+        profile: {
+          species: draft.character.species,
+          description: draft.character.description,
+          age_target: age,
+        },
+        appearance: { color: draft.character.color },
+        wardrobe: { clothes: draft.character.clothes },
+        continuity_rules: {
+          locked: true,
+          identity_fields: ['name', 'species', 'color', 'clothes'],
+        },
+      });
+
+      const imageResults = [];
+      const characterPrompt = [
+        'Create a child-friendly storybook illustration.',
+        'Keep this exact character consistent in every image:',
+        'Name: ' + draft.character.name,
+        'Species: ' + draft.character.species,
+        'Color: ' + draft.character.color,
+        'Clothes: ' + draft.character.clothes,
+        'Description: ' + draft.character.description,
+        'Style: warm, colorful, friendly, simple storybook art.',
+        'No text, no watermark.',
+      ].join(' ');
+
+      for (let index = 1; index <= 3; index += 1) {
+        const blob = await generateHuggingFaceImage(
+          characterPrompt + ' Illustration ' + index + ' should depict a different moment from this story: ' + draft.story.slice(0, 1800)
+        );
+        const buffer = Buffer.from(await blob.arrayBuffer());
+        const mimeType = blob.type || 'image/png';
+        const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
+        let media = null;
+        if (isSupabaseStorageConfigured()) {
+          const extension = mimeType.includes('jpeg') ? 'jpg' : mimeType.includes('webp') ? 'webp' : 'png';
+          const key = createMediaKey({
+            userId: jarvisUser.id,
+            kind: 'children-factory',
+            extension,
+            id: sha256,
+          });
+          media = await putMedia({
+            key,
+            body: buffer,
+            contentType: mimeType,
+            metadata: {
+              user_id: jarvisUser.id,
+              source: 'children_factory_v1',
+              sha256,
+              character: draft.character.name,
+              scene: index,
+            },
+            upsert: true,
+          });
+        } else {
+          throw Object.assign(new Error('Supabase Storage is not configured for Children Factory assets.'), { statusCode: 503 });
+        }
+        imageResults.push({
+          scene: index,
+          sha256,
+          media,
+        });
+      }
+
+      const state = createMissionState({
+        missionId: crypto.randomUUID(),
+        userId: jarvisUser.id,
+        goal: 'Children Factory: approve and publish ' + draft.title,
+        autonomy: 'execute_with_approval',
+        steps: [],
+      });
+      state.approval = {
+        required: true,
+        status: 'not_requested',
+        requestedAt: null,
+        approvedAt: null,
+        action: 'publish',
+      };
+      state.metadata = {
+        factory: 'children-v1',
+        projectId: project.id,
+        characterId: character?.id || null,
+        topic,
+        age,
+        story: draft.story,
+        characterBible: draft.character,
+        images: imageResults,
+      };
+      const mission = await createMissionForUser(jarvisUser.id, state);
+
+      return json(res, 201, {
+        factory: 'children-v1',
+        status: 'awaiting_approval',
+        draft: {
+          project,
+          character,
+          story: draft.story,
+          characterBible: draft.character,
+          images: imageResults,
+        },
+        approvalGate: {
+          required: true,
+          status: 'awaiting_approval',
+          missionId: mission.id,
+          label: 'Approve & Publish',
+          autoPublish: false,
+        },
+      }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+    } catch (error) {
+      console.error('JARVIS Children Factory error:', error);
+      return json(res, Number(error?.statusCode) || 502, {
+        error: error instanceof Error ? error.message : 'Children Factory failed.',
+        code: 'CHILDREN_FACTORY_FAILED',
+      });
+    }
   }
 
   if (req.method === 'GET' && pathname === '/api/plans') {
