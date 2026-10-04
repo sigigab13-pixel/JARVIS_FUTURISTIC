@@ -369,6 +369,43 @@ export async function handleApi(req, res, pathname, url) {
       });
     }
 
+    const renderMatch = pathname.match(/^\/api\/video\/projects\/([0-9a-f-]{36})\/render$/i);
+    if (req.method === 'POST' && renderMatch) {
+      const projectId = renderMatch[1];
+      const project = await getVideoProjectForUser(jarvisUser.id, projectId);
+      if (!project) return json(res, 404, { error: 'Video project not found.' });
+      if (!isSupabaseStorageConfigured()) {
+        return json(res, 503, { error: 'Supabase Storage is required before rendering a video.', code: 'VIDEO_STORAGE_UNAVAILABLE' });
+      }
+      const body = await parseBody(req);
+      const imageKeys = Array.isArray(body?.imageKeys) ? body.imageKeys.map(String).map(v => v.trim()).filter(Boolean).slice(0, 12) : [];
+      if (!imageKeys.length) return json(res, 400, { error: 'At least one stored image key is required.' });
+      if (imageKeys.some(key => !key.startsWith(`jarvis/${jarvisUser.id}/`))) {
+        return json(res, 403, { error: 'One or more image assets do not belong to this JARVIS user.' });
+      }
+      const job = await queueVideoJobForUser(jarvisUser.id, projectId, {
+        operation: 'render',
+        image_keys: imageKeys,
+        format: project.format,
+        title: project.title,
+      });
+      let dispatch = { queued: false, provider: 'supabase' };
+      if (isRedisConfigured()) {
+        try {
+          dispatch = { queued: true, provider: 'upstash_redis', message: await enqueueJob(job.id, job.type) };
+        } catch (queueError) {
+          console.error('JARVIS Redis video render dispatch error:', queueError);
+          dispatch = { queued: false, provider: 'supabase', fallback: 'redis_unavailable' };
+        }
+      }
+      return json(res, 202, {
+        job,
+        dispatch,
+        renderer: 'ffmpeg-image-sequence-v1',
+        note: 'The worker will render the supplied stored images into a 16:9 MP4 and save the verified video asset to JARVIS media storage.',
+      });
+    }
+
     return json(res, 404, { error: 'Video Engine route not found.' });
   }
 
