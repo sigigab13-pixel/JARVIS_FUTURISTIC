@@ -24,6 +24,7 @@ test('mission state starts in draft with ordered steps', () => {
 
 test('mission transitions enforce the state machine', () => {
   assertTransition('draft', 'queued');
+  assertTransition('draft', 'waiting_approval');
   assert.throws(() => assertTransition('draft', 'succeeded'), /Invalid mission transition/);
   const queued = transitionMission(createMissionState({ missionId: 'm2' }), 'queued');
   const running = transitionMission(queued, 'running');
