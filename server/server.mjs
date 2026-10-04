@@ -1026,7 +1026,7 @@ export async function handleApi(req, res, pathname, url) {
       user: authenticated?.jarvisUser || null,
     });
 
-    const childrenFactoryRoute = route.intent === 'children-story';
+    const childrenFactoryRoute = route.intent === 'children-factory';
 
     const imageRequest = /\b(generate|create|make|draw|illustrate|render)\b[\\s\\S]{0,120}\b(image|picture|photo|illustration)\b|\b(image|picture|photo|illustration)\b[\\s\\S]{0,120}\b(generate|create|make|draw|illustrate|render)\b/i.test(latestUserMessage);
     if (imageRequest) {
@@ -1119,6 +1119,9 @@ export async function handleApi(req, res, pathname, url) {
         ? `Likely capabilities for the current request (hints, not execution): ${intentCandidates.map(item => item.id).join(', ')}`
         : 'No capability was confidently identified from simple routing hints; use reasoning and available tools rather than inventing a capability.',
       routeContextForPrompt(route),
+      childrenFactoryRoute
+        ? "This request targets the Children's Content Factory. Prefer the existing approval-gated factory workflow over presenting a generic chat reply as the finished production result. Never claim that story, images, video, or publishing happened unless a connected JARVIS provider actually confirms it."
+        : "",
       "The JARVIS application provides you with the current conversation messages and, when available, relevant long-term memories retrieved from its persistent memory system.",
       "Use the supplied conversation and memory context to maintain continuity. Do not claim that you cannot remember previous conversations when relevant history or memory is supplied.",
       "Do not describe yourself as ChatGPT, Claude, Hugging Face, or another underlying model unless the user explicitly asks which model/provider is being used.",
