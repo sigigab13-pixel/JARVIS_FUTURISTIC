@@ -35,6 +35,7 @@ import {
   updateVideoSceneForUser,
   getVideoScenesForUser,
   queueVideoJobForUser,
+  getJobForUser,
   createMissionForUser,
   getMissionForUser,
   listMissionsForUser,
@@ -367,6 +368,13 @@ export async function handleApi(req, res, pathname, url) {
         dispatch,
         pipeline: ['story_director','character_bible','world_asset_bible','scene_director','storyboard_cost_gate','visual_generation','motion','voice_audio','lip_sync','editing','subtitles','continuity_brand_qa','repair_recovery','render','final_qa','publish'],
       });
+    }
+
+    const jobMatch = pathname.match(/^\/api\/video\/jobs\/([0-9a-f-]{36})$/i);
+    if (req.method === 'GET' && jobMatch) {
+      const job = await getJobForUser(jarvisUser.id, jobMatch[1]);
+      if (!job) return json(res, 404, { error: 'Video job not found.' });
+      return json(res, 200, { job });
     }
 
     const renderMatch = pathname.match(/^\/api\/video\/projects\/([0-9a-f-]{36})\/render$/i);
