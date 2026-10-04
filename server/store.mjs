@@ -858,7 +858,7 @@ export async function queueVideoJobForUser(userId, projectId, payload = {}) {
       priority: Number(payload.priority || 5),
       payload: jobPayload,
       attempts: 0,
-      max_attempts: 3,
+      max_attempts: String(payload.provider || '').toLowerCase() === 'higgsfield' || String(payload.include_voice || '').toLowerCase() === 'true' ? 1 : 3,
       scheduled_at: new Date().toISOString(),
     }),
   });
