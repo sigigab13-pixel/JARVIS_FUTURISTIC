@@ -29,6 +29,9 @@ import {
   RotateCcw,
   Globe,
   Battery,
+  Mail,
+  Github,
+  Apple,
 } from 'lucide-react';
 
 type Message = { role: 'user' | 'assistant'; content: string };
@@ -74,6 +77,9 @@ function App() {
   const [authReady, setAuthReady] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState('');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
   const [entitlement, setEntitlement] = useState<any>(null);
   const [messages, setMessages] = useState<Message[]>(starter);
   const [input, setInput] = useState('');
@@ -208,7 +214,7 @@ function App() {
     return () => { active = false; };
   }, [session]);
 
-  const signInWithGoogle = async () => {
+  const signInWithOAuth = async (provider: 'google' | 'github' | 'azure' | 'apple', label: string) => {
     setAuthBusy(true);
     setAuthError('');
     if (!supabaseConfigured || !supabase) {
@@ -217,10 +223,86 @@ function App() {
       return;
     }
     const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
+      provider,
       options: { redirectTo: window.location.origin },
     });
-    if (error) { setAuthError(error.message); setAuthBusy(false); }
+    if (error) {
+      setAuthError(error.message || label + ' sign-in failed.');
+      setAuthBusy(false);
+    }
+  };
+
+  const signInWithGoogle = () => signInWithOAuth('google', 'Google');
+
+  const signInWithEmail = async () => {
+    setAuthBusy(true);
+    setAuthError('');
+    if (!supabaseConfigured || !supabase) {
+      setAuthError('Supabase Auth is not configured in this deployment.');
+      setAuthBusy(false);
+      return;
+    }
+    const email = authEmail.trim();
+    const password = authPassword;
+    if (!email || !password) {
+      setAuthError('Enter your email and password.');
+      setAuthBusy(false);
+      return;
+    }
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) setAuthError(error.message);
+    setAuthBusy(false);
+  };
+
+  const createEmailAccount = async () => {
+    setAuthBusy(true);
+    setAuthError('');
+    if (!supabaseConfigured || !supabase) {
+      setAuthError('Supabase Auth is not configured in this deployment.');
+      setAuthBusy(false);
+      return;
+    }
+    const email = authEmail.trim();
+    const password = authPassword;
+    if (!email || password.length < 8) {
+      setAuthError('Use a valid email and a password of at least 8 characters.');
+      setAuthBusy(false);
+      return;
+    }
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: window.location.origin },
+    });
+    if (error) {
+      setAuthError(error.message);
+    } else if (!data.session) {
+      setAuthError('Account created. Check your email to confirm your address before signing in.');
+      setAuthMode('signin');
+    }
+    setAuthBusy(false);
+  };
+
+  const sendMagicLink = async () => {
+    setAuthBusy(true);
+    setAuthError('');
+    if (!supabaseConfigured || !supabase) {
+      setAuthError('Supabase Auth is not configured in this deployment.');
+      setAuthBusy(false);
+      return;
+    }
+    const email = authEmail.trim();
+    if (!email) {
+      setAuthError('Enter your email address first.');
+      setAuthBusy(false);
+      return;
+    }
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: window.location.origin },
+    });
+    setAuthError(error ? error.message : 'Magic link sent. Check your email.');
+    setAuthBusy(false);
   };
 
   const signOut = async () => {
@@ -1011,12 +1093,41 @@ function App() {
             <div className="orb"><Sparkles size={20} /></div>
             <span className="eyebrow">JARVIS AUTHENTICATION</span>
             <h1>Sign in to JARVIS</h1>
-            <p>Sign in with Google to sync your conversations, preferences, and long-term JARVIS memory across sessions.</p>
+            <p>Choose a secure sign-in method to sync your conversations, preferences, and long-term JARVIS memory.</p>
             {authError && <div className="auth-error">{authError}</div>}
-            <button className="security-primary" onClick={() => void signInWithGoogle()} disabled={authBusy || !supabaseConfigured}>
-              {authBusy ? 'Connecting...' : 'Continue with Google'}
-            </button>
+
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(2,minmax(0,1fr))', gap:8, marginTop:12 }}>
+              <button className="security-primary" onClick={() => void signInWithGoogle()} disabled={authBusy || !supabaseConfigured}>
+                {authBusy ? 'Connecting...' : 'Continue with Google'}
+              </button>
+              <button className="security-secondary" onClick={() => void signInWithOAuth('github','GitHub')} disabled={authBusy || !supabaseConfigured}>
+                <Github size={16} /> GitHub
+              </button>
+              <button className="security-secondary" onClick={() => void signInWithOAuth('azure','Microsoft')} disabled={authBusy || !supabaseConfigured}>
+                Microsoft
+              </button>
+              <button className="security-secondary" onClick={() => void signInWithOAuth('apple','Apple')} disabled={authBusy || !supabaseConfigured}>
+                <Apple size={16} /> Apple
+              </button>
+            </div>
+
+            <div style={{ display:'grid', gap:8, marginTop:14 }}>
+              <div style={{ display:'flex', gap:8 }}>
+                <button className={authMode === 'signin' ? 'security-primary' : 'security-secondary'} onClick={() => setAuthMode('signin')} disabled={authBusy}>Sign in</button>
+                <button className={authMode === 'signup' ? 'security-primary' : 'security-secondary'} onClick={() => setAuthMode('signup')} disabled={authBusy}>Create account</button>
+              </div>
+              <input type="email" value={authEmail} onChange={e=>setAuthEmail(e.target.value)} placeholder="Email address" autoComplete="email" />
+              <input type="password" value={authPassword} onChange={e=>setAuthPassword(e.target.value)} placeholder={authMode === 'signup' ? 'Password (8+ characters)' : 'Password'} autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'} onKeyDown={e=>{if(e.key==='Enter') void (authMode === 'signup' ? createEmailAccount() : signInWithEmail());}} />
+              <button className="security-primary" onClick={() => void (authMode === 'signup' ? createEmailAccount() : signInWithEmail())} disabled={authBusy || !supabaseConfigured}>
+                <Mail size={16} /> {authMode === 'signup' ? 'Create with Email' : 'Continue with Email'}
+              </button>
+              <button className="security-secondary" onClick={() => void sendMagicLink()} disabled={authBusy || !supabaseConfigured || !authEmail.trim()}>
+                Send Magic Link
+              </button>
+            </div>
+
             {!supabaseConfigured && <small>Supabase Auth is not configured in this deployment yet.</small>}
+            <small style={{ display:'block', marginTop:8, opacity:.75 }}>Additional social buttons require their provider to be enabled in Supabase Auth.</small>
           </div>
         </section>
       </main>
