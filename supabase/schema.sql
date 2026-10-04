@@ -5,11 +5,13 @@
 create table if not exists public.youtube_oauth_state (
   state text primary key,
   redirect_uri text not null,
+  user_id uuid references public.jarvis_users(id) on delete cascade,
   created_at timestamptz not null default now()
 );
 
 create table if not exists public.youtube_connection (
   id text primary key,
+  user_id uuid references public.jarvis_users(id) on delete cascade unique,
   channel_id text not null,
   channel_title text not null,
   refresh_token text,
@@ -46,3 +48,9 @@ revoke all on public.youtube_oauth_state from anon, authenticated;
 revoke all on public.youtube_connection from anon, authenticated;
 revoke all on public.jarvis_memory from anon, authenticated;
 revoke all on public.video_logs from anon, authenticated;
+
+
+-- YouTube-first hardening for existing installations.
+alter table public.youtube_oauth_state add column if not exists user_id uuid references public.jarvis_users(id) on delete cascade;
+alter table public.youtube_connection add column if not exists user_id uuid references public.jarvis_users(id) on delete cascade;
+create unique index if not exists youtube_connection_user_id_idx on public.youtube_connection(user_id) where user_id is not null;
