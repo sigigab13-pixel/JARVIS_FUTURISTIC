@@ -10,6 +10,8 @@ import {
   dispatchRoutineForUser,
   fanOutRoutineRun,
   updateRoutineRunFromChildren,
+  getMissionForUser,
+  updateMissionForUser,
 } from './store.mjs';
 import { executeMissionStep } from './mission-executor.mjs';
 import { createMediaKey, getMedia, isSupabaseStorageConfigured, putMedia } from './media.mjs';
@@ -123,7 +125,29 @@ async function executeVideoPipeline(job) {
       metadata: { user_id: userId, source: 'video_pipeline', sha256, project_id: payload.project_id || '' },
       upsert: true,
     });
-    return { rendered: true, media: stored, mediaKey, sha256, durationSeconds: Math.max(3, inputs.length * 3), format: '16:9', sourceImageCount: inputs.length };
+    const result = { rendered: true, media: stored, mediaKey, sha256, durationSeconds: Math.max(3, inputs.length * 3), format: '16:9', sourceImageCount: inputs.length, missionId: String(payload.mission_id || '') || null };
+    if (payload.mission_id) {
+      const mission = await getMissionForUser(userId, String(payload.mission_id));
+      if (!mission) throw new Error('Video render mission was not found for this JARVIS user.');
+      const metadata = {
+        ...(mission.metadata || {}),
+        renderedVideo: {
+          mediaKey,
+          sha256,
+          durationSeconds: result.durationSeconds,
+          format: result.format,
+          sourceImageCount: result.sourceImageCount,
+          jobId: String(job?.id || ''),
+          renderedAt: new Date().toISOString(),
+        },
+      };
+      await updateMissionForUser(userId, mission.id, { ...mission, metadata }, {
+        eventType: 'video.rendered',
+        message: 'Video render completed and the verified media asset was bound to the mission.',
+        metadata: { mediaKey, sha256 },
+      });
+    }
+    return result;
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
   }
