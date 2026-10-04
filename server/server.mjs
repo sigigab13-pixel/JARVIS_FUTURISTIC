@@ -48,12 +48,13 @@ import {
   updateRoutineForUser,
 } from './store.mjs';
 import { enqueueJob, isRedisConfigured } from './queue.mjs';
-import { createMediaKey, isSupabaseStorageConfigured, putMedia } from './media.mjs';
+import { createMediaKey, getMedia, isSupabaseStorageConfigured, putMedia } from './media.mjs';
 import { capabilityContextForPrompt, getCapabilityRegistry, getAvailableCapabilities, rankCapabilitiesForIntent } from './capabilities.mjs';
 import { routeContextForPrompt, routeIntent } from './intent-router.mjs';
 import { createMissionState, transitionMission, advanceMissionStep } from './mission-runtime.mjs';
 import { preflightMission, getMissionAdapters } from './mission-executor.mjs';
 import { generateHuggingFaceImage, HF_IMAGE_MODELS, HF_IMAGE_EDIT_MODELS, HF_IMAGE_PROVIDERS } from './image-generator.mjs';
+import { getYouTubeAccessToken, getYouTubeAnalytics, getYouTubeChannel, uploadYouTubeVideo } from './youtube.mjs';
 
 const PORT = Number(process.env.PORT || 10000);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -1173,7 +1174,8 @@ export async function handleApi(req, res, pathname, url) {
   }
 
   if (req.method === 'GET' && pathname === '/api/youtube/status') {
-    const connection = await getYouTubeConnection();
+    const { jarvisUser } = await requireAuthenticatedJarvisUser(req);
+    const connection = await getYouTubeConnection(jarvisUser.id);
     return json(res, 200, {
       configured: Boolean(YOUTUBE_CLIENT_ID && YOUTUBE_CLIENT_SECRET && PUBLIC_URL),
       connected: Boolean(connection),
@@ -1182,16 +1184,17 @@ export async function handleApi(req, res, pathname, url) {
         title: connection.channel_title || connection.channelTitle,
         connectedAt: connection.connected_at || connection.connectedAt,
       } : null,
-    });
+    }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
   }
 
   if (req.method === 'GET' && pathname === '/api/youtube/connect') {
+    const { jarvisUser } = await requireAuthenticatedJarvisUser(req);
     if (!YOUTUBE_CLIENT_ID || !YOUTUBE_CLIENT_SECRET || !PUBLIC_URL) {
       return json(res, 503, { error: 'YouTube OAuth is not configured. Add GOOGLE_YOUTUBE_CLIENT_ID, GOOGLE_YOUTUBE_CLIENT_SECRET and PUBLIC_URL.' });
     }
     const state = crypto.randomUUID();
     const redirectUri = `${PUBLIC_URL}/api/youtube/callback`;
-    await saveOAuthState(state, redirectUri);
+    await saveOAuthState(state, redirectUri, jarvisUser.id);
     const params = new URLSearchParams({
       client_id: YOUTUBE_CLIENT_ID,
       redirect_uri: redirectUri,
@@ -1201,7 +1204,92 @@ export async function handleApi(req, res, pathname, url) {
       scope: 'https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/yt-analytics.readonly',
       state,
     });
-    return json(res, 200, { authorizationUrl: `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}` });
+    return json(res, 200, { authorizationUrl: `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}` }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+  }
+
+  if (req.method === 'GET' && pathname === '/api/youtube/analytics') {
+    const { jarvisUser } = await requireAuthenticatedJarvisUser(req);
+    const connection = await getYouTubeConnection(jarvisUser.id);
+    if (!connection) return json(res, 409, { error: 'Connect YouTube before requesting analytics.', code: 'YOUTUBE_NOT_CONNECTED' });
+    try {
+      const token = await getYouTubeAccessToken(connection);
+      if (token.refreshed) {
+        await saveYouTubeConnection(jarvisUser.id, {
+          ...connection,
+          accessToken: token.accessToken,
+          expiresAt: token.expiresAt,
+        });
+      }
+      const endDate = String(url.searchParams.get('endDate') || new Date().toISOString().slice(0, 10));
+      const startDate = String(url.searchParams.get('startDate') || new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10));
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+        return json(res, 400, { error: 'startDate and endDate must use YYYY-MM-DD.' });
+      }
+      const analytics = await getYouTubeAnalytics(token.accessToken, { startDate, endDate });
+      return json(res, 200, { startDate, endDate, analytics }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+    } catch (error) {
+      return json(res, Number(error?.statusCode) || 502, { error: error instanceof Error ? error.message : 'YouTube Analytics failed.' });
+    }
+  }
+
+  if (req.method === 'POST' && pathname === '/api/youtube/publish') {
+    const { jarvisUser } = await requireAuthenticatedJarvisUser(req);
+    const body = await parseBody(req);
+    const missionId = String(body?.missionId || '').trim();
+    const mediaKey = String(body?.mediaKey || '').trim();
+    const title = String(body?.title || '').trim();
+    const description = String(body?.description || '').trim();
+    const privacyStatus = String(body?.privacyStatus || 'private').trim();
+    const tags = Array.isArray(body?.tags) ? body.tags.map(String).map(v => v.trim()).filter(Boolean).slice(0, 30) : [];
+    if (!missionId || !mediaKey || !title) return json(res, 400, { error: 'missionId, mediaKey, and title are required.' });
+    if (!['private', 'unlisted', 'public'].includes(privacyStatus)) return json(res, 400, { error: 'privacyStatus must be private, unlisted, or public.' });
+    if (title.length > 100 || Buffer.byteLength(description, 'utf8') > 5000) return json(res, 400, { error: 'YouTube title/description limits were exceeded.' });
+    if (!mediaKey.startsWith(`jarvis/${jarvisUser.id}/`)) return json(res, 403, { error: 'That media asset does not belong to this JARVIS user.' });
+
+    const mission = await getMissionForUser(jarvisUser.id, missionId);
+    if (!mission) return json(res, 404, { error: 'Approval mission not found.' });
+    if (mission.approval?.status !== 'approved') {
+      return json(res, 409, { error: 'YouTube publishing requires an approved JARVIS mission.', code: 'YOUTUBE_APPROVAL_REQUIRED', mission });
+    }
+
+    const connection = await getYouTubeConnection(jarvisUser.id);
+    if (!connection) return json(res, 409, { error: 'Connect YouTube before publishing.', code: 'YOUTUBE_NOT_CONNECTED' });
+
+    try {
+      const media = await getMedia({ key: mediaKey });
+      if (!String(media.contentType).startsWith('video/')) {
+        return json(res, 400, { error: 'The selected media asset is not a video.' });
+      }
+      const token = await getYouTubeAccessToken(connection);
+      if (token.refreshed) {
+        await saveYouTubeConnection(jarvisUser.id, { ...connection, accessToken: token.accessToken, expiresAt: token.expiresAt });
+      }
+      const video = await uploadYouTubeVideo(token.accessToken, {
+        videoBuffer: media.body,
+        contentType: media.contentType,
+        body: {
+          snippet: { title, description, tags, categoryId: '24' },
+          status: {
+            privacyStatus,
+            selfDeclaredMadeForKids: Boolean(body?.madeForKids),
+          },
+        },
+      });
+      return json(res, 200, {
+        published: true,
+        provider: 'youtube',
+        videoId: video.id,
+        url: `https://www.youtube.com/watch?v=${encodeURIComponent(video.id)}`,
+        status: video.status || null,
+      }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+    } catch (error) {
+      console.error('YouTube publish error:', error);
+      return json(res, Number(error?.statusCode) || 502, {
+        published: false,
+        provider: 'youtube',
+        error: error instanceof Error ? error.message : 'YouTube publishing failed.',
+      });
+    }
   }
 
   if (req.method === 'GET' && pathname === '/api/youtube/callback') {
@@ -1241,7 +1329,8 @@ export async function handleApi(req, res, pathname, url) {
         expiresAt: Date.now() + Number(tokenData.expires_in || 3600) * 1000,
         connectedAt: new Date().toISOString(),
       };
-      await saveYouTubeConnection(youtubeConnection);
+      if (!pending.userId) throw new Error('YouTube authorization is missing its JARVIS user binding.');
+      await saveYouTubeConnection(pending.userId, youtubeConnection);
       await deleteOAuthState(state);
       return redirect(res, `/?youtube=connected&message=${encodeURIComponent(`YouTube connected: ${youtubeConnection.channelTitle}.`)}`);
     } catch (error) {
