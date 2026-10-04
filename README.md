@@ -49,9 +49,9 @@ Implemented foundations currently include:
 - worker leases, heartbeats, concurrency limits, and workload governance
 - fail-closed handling for unsupported worker job types
 - persistent video project, character, asset, and scene foundations
-- Children Factory v1 backend route with age validation, character continuity, three sequential image assets, and approval-gated publish state (implemented on `main`, pending production deployment verification)
+- Children Factory v1 backend route with age validation, character continuity, three sequential image assets, approval-gated publishing, and a first image-sequence MP4 render adapter (implemented on `main`, pending production deployment verification)
 
-The mission runtime currently has a real adapter for `routine_fanout`. Additional real capability adapters are being added one vertical slice at a time. The next major adapter milestone is Image Generation.
+The mission runtime currently has a real adapter for `routine_fanout`. The Video Engine also has a verified first worker adapter for image-sequence MP4 rendering. Additional production adapters are being added one vertical slice at a time.
 
 Planned or partially connected services must not be described as production-ready until they are verified in the target environment.
 
@@ -107,7 +107,7 @@ YouTube Analytics
    ↺
 ```
 
-The server now contains a YouTube API service for:
+The server now contains a YouTube API service and approval-gated publisher UI for:
 
 - Google OAuth with offline access
 - user-scoped YouTube connections
@@ -155,7 +155,7 @@ Its architecture includes:
 - Publishing
 - Performance memory
 
-The repository contains the foundation for persistent video projects, characters, assets and scenes, plus Video Studio planning and editing flows. Production adapters and rendering services are being connected incrementally.
+The repository contains the foundation for persistent video projects, characters, assets and scenes, plus a real first render path: stored images can be queued to the worker, rendered by FFmpeg into a 16:9 MP4, stored with a SHA-256 identifier, and handed to the YouTube publisher. Full AI motion, voice, lip-sync, editing, and advanced rendering remain future adapters.
 
 ## 💼 Business platform
 
