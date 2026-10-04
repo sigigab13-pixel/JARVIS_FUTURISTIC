@@ -139,6 +139,11 @@ export const missions = {
 };
 
 
+export const video = {
+  render: async (projectId: string, imageKeys: string[]) =>
+    api.post(`/api/video/projects/${encodeURIComponent(projectId)}/render`, { imageKeys }),
+};
+
 export const youtube = {
   status: async () => api.get('/api/youtube/status'),
   connect: async () => api.get('/api/youtube/connect'),
