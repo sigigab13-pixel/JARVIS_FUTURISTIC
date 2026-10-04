@@ -1183,7 +1183,14 @@ function App() {
               <div style={{ display:'grid', gridTemplateColumns:'repeat(3,minmax(0,1fr))', gap:8, marginTop:12 }}>
                 {(factoryDraft.draft.images || []).map((item:any) => item.media?.url ? <img key={item.scene} src={item.media.url} alt={'Children Factory scene '+item.scene} style={{ width:'100%', borderRadius:10 }} /> : <div key={item.scene} className="lock-note">Scene {item.scene} asset stored</div>)}
               </div>
-              <div className="lock-note" style={{ marginTop:12 }}><LockKeyhole size={16} /><span>Publishing is not automatic. Approve the mission below only when you are ready to authorize the next publishing step.</span></div>
+              <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:12 }}>
+                <button className="security-secondary" onClick={() => void renderChildrenFactoryVideo()} disabled={factoryBusy || !(factoryDraft && factoryDraft.draft && factoryDraft.draft.project && factoryDraft.draft.project.id) || !((factoryDraft && factoryDraft.draft && factoryDraft.draft.images) || []).length}>
+                  {factoryRenderJob && (factoryRenderJob.status === 'running' || factoryRenderJob.status === 'queued') ? 'Rendering video…' : 'Render YouTube Video'}
+                </button>
+                {factoryDraft && factoryDraft.renderedVideo && factoryDraft.renderedVideo.mediaKey && <button className="security-secondary" onClick={() => { setYoutubeMissionId(String(factoryDraft.approvalGate && factoryDraft.approvalGate.missionId || '')); setYoutubeMediaKey(String(factoryDraft.renderedVideo.mediaKey)); setYoutubeTitle(String(factoryDraft.draft && factoryDraft.draft.project && factoryDraft.draft.project.title || '').slice(0,100)); setYoutubeDescription(String(factoryDraft.draft && factoryDraft.draft.story || '').slice(0,5000)); setFactoryOpen(false); setYoutubeOpen(true); }}>Open YouTube Publisher</button>}
+              </div>
+              {factoryRenderJob && <div className="security-status"><span>Render job: {factoryRenderJob.status}</span></div>}
+              <div className="lock-note" style={{ marginTop:12 }}><LockKeyhole size={16} /><span>Rendering creates a stored MP4. Publishing is still separate and requires an approved mission.</span></div>
             </article>}
             <div style={{ display:'grid', gap:10, marginTop:16 }}>
               {missions.filter((m:any) => m.metadata?.factory === 'children-v1').map((mission:any) => <article key={mission.id} className="security-card" style={{ alignItems:'flex-start' }}>
