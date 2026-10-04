@@ -630,6 +630,31 @@ export async function getVideoScenesForUser(userId, projectId) {
   return await request('jarvis_video_scenes?select=*&project_id=eq.' + encodeURIComponent(projectId) + '&order=scene_number.asc,version.asc');
 }
 
+export async function getJobForUser(userId, jobId) {
+  if (!validUuid(userId) || !validUuid(jobId)) throw new Error('Invalid job identity.');
+  if (!configured()) return null;
+  const rows = await request(
+    'jobs?select=id,user_id,type,status,result,error,attempts,max_attempts,scheduled_at,started_at,finished_at,updated_at&' +
+    'id=eq.' + encodeURIComponent(jobId) + '&user_id=eq.' + encodeURIComponent(userId) + '&limit=1'
+  );
+  const row = rows?.[0];
+  if (!row) return null;
+  return {
+    id: String(row.id),
+    userId: String(row.user_id),
+    type: String(row.type || ''),
+    status: String(row.status || ''),
+    result: row.result && typeof row.result === 'object' ? row.result : null,
+    error: row.error && typeof row.error === 'object' ? row.error : null,
+    attempts: Number(row.attempts || 0),
+    maxAttempts: Number(row.max_attempts || 0),
+    scheduledAt: row.scheduled_at || null,
+    startedAt: row.started_at || null,
+    finishedAt: row.finished_at || null,
+    updatedAt: row.updated_at || null,
+  };
+}
+
 export async function queueVideoJobForUser(userId, projectId, payload = {}) {
   const project = await getVideoProjectForUser(userId, projectId);
   if (!project) throw Object.assign(new Error('Video project not found.'), { statusCode: 404 });
