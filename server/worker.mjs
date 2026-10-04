@@ -18,6 +18,7 @@ import { canTransition, transitionMission } from './mission-runtime.mjs';
 import { createMediaKey, getMedia, isSupabaseStorageConfigured, putMedia } from './media.mjs';
 import { generateVideoFromImage, isHiggsfieldConfigured, uploadReferenceImage } from './higgsfield.mjs';
 import { isElevenLabsConfigured, synthesizeNarration } from './elevenlabs.mjs';
+import { validateChildrenFactoryVideo } from './factory-qa.mjs';
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
 const SUPABASE_SERVER_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -88,6 +89,27 @@ async function runFfmpeg(args) {
     child.stderr.on('data', chunk => { stderr += chunk.toString(); });
     child.on('error', error => reject(Object.assign(error, { code: error.code || 'FFMPEG_UNAVAILABLE' })));
     child.on('close', code => code === 0 ? resolve() : reject(new Error(`ffmpeg exited with code ${code}: ${stderr.slice(-1200)}`)));
+  });
+}
+
+async function runFfprobe(file) {
+  return new Promise((resolve, reject) => {
+    const child = spawn('ffprobe', [
+      '-v', 'error',
+      '-show_entries', 'format=duration:stream=codec_type,width,height',
+      '-of', 'json',
+      file,
+    ], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', chunk => { stdout += chunk.toString(); });
+    child.stderr.on('data', chunk => { stderr += chunk.toString(); });
+    child.on('error', error => reject(Object.assign(error, { code: error.code || 'FFPROBE_UNAVAILABLE' })));
+    child.on('close', code => {
+      if (code !== 0) return reject(new Error(`ffprobe exited with code ${code}: ${stderr.slice(-1200)}`));
+      try { resolve(JSON.parse(stdout || '{}')); }
+      catch { reject(new Error('ffprobe returned invalid JSON.')); }
+    });
   });
 }
 
@@ -190,15 +212,50 @@ async function executeVideoPipeline(job) {
   const rendered = provider === 'higgsfield'
     ? await executeHiggsfieldVideoPipeline({ userId, imageKeys, payload })
     : await executeFfmpegVideoPipeline({ userId, imageKeys, payload });
+  const qaDir = await fs.mkdtemp(path.join(os.tmpdir(), 'jarvis-video-qa-'));
+  let probe;
+  try {
+    const qaFile = path.join(qaDir, 'final.mp4');
+    await fs.writeFile(qaFile, rendered.video);
+    probe = await runFfprobe(qaFile);
+  } finally {
+    await fs.rm(qaDir, { recursive: true, force: true }).catch(() => {});
+  }
+
+  const streams = Array.isArray(probe?.streams) ? probe.streams : [];
+  const videoStream = streams.find(stream => String(stream?.codec_type || '') === 'video') || null;
+  const hasAudioStream = streams.some(stream => String(stream?.codec_type || '') === 'audio');
+  const probedDuration = Number(probe?.format?.duration || 0);
   const mediaKey = createMediaKey({ userId, kind: 'video-render', extension: 'mp4', id: rendered.sha256 });
+  const qa = validateChildrenFactoryVideo({
+    videoBytes: rendered.video.length,
+    width: Number(videoStream?.width || 0),
+    height: Number(videoStream?.height || 0),
+    durationSeconds: probedDuration || Number(rendered.durationSeconds || 0),
+    sourceImageCount: imageKeys.length,
+    expectedImageCount: imageKeys.length,
+    hasVideoStream: Boolean(videoStream),
+    hasAudioStream,
+    narrationRequested: Boolean(String(payload.narration_text || '').trim()),
+    provider: rendered.provider,
+    mediaKey,
+  });
+  if (!qa.passed) {
+    throw Object.assign(new Error(`Children Factory QA failed: ${qa.reason}`), {
+      code: 'CHILDREN_FACTORY_QA_FAILED',
+      details: qa,
+      safeToRetry: false,
+    });
+  }
+
   const stored = await putMedia({
     key: mediaKey,
     body: rendered.video,
     contentType: 'video/mp4',
-    metadata: { user_id: userId, source: 'video_pipeline', provider: rendered.provider, model: rendered.model || '', sha256: rendered.sha256, project_id: payload.project_id || '' },
+    metadata: { user_id: userId, source: 'video_pipeline', provider: rendered.provider, model: rendered.model || '', sha256: rendered.sha256, project_id: payload.project_id || '', qa: JSON.stringify(qa) },
     upsert: true,
   });
-  const result = { rendered: true, media: stored, mediaKey, sha256: rendered.sha256, durationSeconds: rendered.durationSeconds, format: '16:9', sourceImageCount: imageKeys.length, provider: rendered.provider, model: rendered.model || null, audio: rendered.audio || null, clips: rendered.clips || null, missionId: String(payload.mission_id || '') || null };
+  const result = { rendered: true, media: stored, mediaKey, sha256: rendered.sha256, durationSeconds: Number(probedDuration || rendered.durationSeconds || 0), format: '16:9', sourceImageCount: imageKeys.length, provider: rendered.provider, model: rendered.model || null, audio: rendered.audio || null, clips: rendered.clips || null, qa, missionId: String(payload.mission_id || '') || null };
   if (payload.mission_id) {
     await finalizeChildrenFactoryVideo(userId, String(payload.mission_id), result, job);
   }
