@@ -473,6 +473,20 @@ function App() {
       const response = await api.post('/api/factory/children', { topic, age: factoryAge });
       setFactoryDraft(response.data);
       setFactoryTopic('');
+
+      const buildMissionId = String(response.data?.buildMission?.id || '').trim();
+      if (response.status === 202 && buildMissionId) {
+        for (let attempt = 0; attempt < 90; attempt += 1) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          const progress = await api.get('/api/factory/children/' + buildMissionId);
+          setFactoryDraft(progress.data);
+          if (progress.data?.status === 'awaiting_approval' || progress.data?.status === 'approved') break;
+          if (progress.data?.status === 'failed') {
+            throw new Error(String(progress.data?.error || 'Children Factory build failed.'));
+          }
+        }
+      }
+
       await loadMissions();
     } catch (error: any) {
       setFactoryError(String(error?.response?.data?.error || error?.message || 'Children Factory could not create the draft.'));
