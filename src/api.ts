@@ -137,3 +137,25 @@ export const missions = {
   approve: async (id: string) => api.post('/api/missions/' + encodeURIComponent(id) + '/approve', {}),
   start: async (id: string) => api.post('/api/missions/' + encodeURIComponent(id) + '/start', {}),
 };
+
+
+export const youtube = {
+  status: async () => api.get('/api/youtube/status'),
+  connect: async () => api.get('/api/youtube/connect'),
+  analytics: async (startDate?: string, endDate?: string) => {
+    const query = new URLSearchParams();
+    if (startDate) query.set('startDate', startDate);
+    if (endDate) query.set('endDate', endDate);
+    const suffix = query.toString() ? '?' + query.toString() : '';
+    return api.get('/api/youtube/analytics' + suffix);
+  },
+  publish: async (payload: {
+    missionId: string;
+    mediaKey: string;
+    title: string;
+    description?: string;
+    tags?: string[];
+    privacyStatus?: 'private' | 'unlisted' | 'public';
+    madeForKids?: boolean;
+  }) => api.post('/api/youtube/publish', payload),
+};
