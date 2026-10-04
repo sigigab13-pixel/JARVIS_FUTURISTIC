@@ -16,11 +16,27 @@ async function authHeaders(extra: Record<string, string> = {}): Promise<Record<s
   };
 }
 
+function describeApiError(value: unknown, fallback: string): string {
+  if (typeof value === 'string' && value.trim()) return value.trim();
+  if (value instanceof Error && value.message.trim()) return value.message.trim();
+  if (value && typeof value === 'object') {
+    const candidate = value as Record<string, unknown>;
+    for (const key of ['message', 'error', 'detail', 'description']) {
+      if (typeof candidate[key] === 'string' && candidate[key].trim()) return candidate[key].trim();
+    }
+    try {
+      const serialized = JSON.stringify(value);
+      if (serialized && serialized !== '{}') return serialized;
+    } catch {}
+  }
+  return fallback;
+}
+
 export const api = {
   get: async (path: string) => {
     const response = await fetch(path, { headers: await authHeaders() });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw Object.assign(new Error(data?.error || `Request failed with status ${response.status}`), { response: { data } });
+    if (!response.ok) throw Object.assign(new Error(describeApiError(data?.error, `Request failed with status ${response.status}`)), { response: { data } });
     return { data };
   },
   post: async (path: string, body: unknown) => {
