@@ -1,4 +1,8 @@
 import crypto from 'node:crypto';
+import { spawn } from 'node:child_process';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { dequeueJob, enqueueJob, isRedisConfigured } from './queue.mjs';
 import { groupWorkloadBatch, nextWorkDelayMs, workloadClass } from './workload-governor.mjs';
 import {
@@ -8,6 +12,7 @@ import {
   updateRoutineRunFromChildren,
 } from './store.mjs';
 import { executeMissionStep } from './mission-executor.mjs';
+import { createMediaKey, getMedia, isSupabaseStorageConfigured, putMedia } from './media.mjs';
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
 const SUPABASE_SERVER_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -71,9 +76,64 @@ export async function failJob(jobId, workerId, error) {
   });
 }
 
+async function runFfmpeg(args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn('ffmpeg', args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    let stderr = '';
+    child.stderr.on('data', chunk => { stderr += chunk.toString(); });
+    child.on('error', error => reject(Object.assign(error, { code: error.code || 'FFMPEG_UNAVAILABLE' })));
+    child.on('close', code => code === 0 ? resolve() : reject(new Error(`ffmpeg exited with code ${code}: ${stderr.slice(-1200)}`)));
+  });
+}
+
+async function executeVideoPipeline(job) {
+  const payload = job?.payload && typeof job.payload === 'object' ? job.payload : {};
+  const userId = String(job?.user_id || payload.user_id || '').trim();
+  const imageKeys = Array.isArray(payload.image_keys) ? payload.image_keys.map(String).filter(Boolean).slice(0, 12) : [];
+  if (!userId || !/^jarvis\\/i.test(imageKeys[0] || '')) throw new Error('Video render requires a JARVIS user and stored image assets.');
+  if (!isSupabaseStorageConfigured()) throw new Error('Supabase Storage is not configured for video rendering.');
+  if (!imageKeys.length) throw new Error('Video render requires at least one stored image asset.');
+  if (imageKeys.some(key => !key.startsWith(`jarvis/${userId}/`))) throw new Error('Video render asset ownership validation failed.');
+
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'jarvis-video-'));
+  try {
+    const inputs = [];
+    for (let i = 0; i < imageKeys.length; i += 1) {
+      const media = await getMedia({ key: imageKeys[i] });
+      if (!String(media.contentType).startsWith('image/')) throw new Error('Video render received a non-image asset.');
+      const file = path.join(tempDir, `image-${i}.bin`);
+      await fs.writeFile(file, media.body);
+      inputs.push(file);
+    }
+
+    const output = path.join(tempDir, 'render.mp4');
+    const filters = inputs.map((_, i) => `[${i}:v]scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30[v${i}]`);
+    filters.push(inputs.map((_, i) => `[v${i}]`).join('') + `concat=n=${inputs.length}:v=1:a=0[v]`);
+    const args = [];
+    for (const file of inputs) args.push('-loop', '1', '-i', file);
+    args.push('-filter_complex', filters.join(';'), '-map', '[v]', '-t', String(Math.max(3, inputs.length * 3)), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-y', output);
+    await runFfmpeg(args);
+    const video = await fs.readFile(output);
+    const sha256 = crypto.createHash('sha256').update(video).digest('hex');
+    const mediaKey = createMediaKey({ userId, kind: 'video-render', extension: 'mp4', id: sha256 });
+    const stored = await putMedia({
+      key: mediaKey,
+      body: video,
+      contentType: 'video/mp4',
+      metadata: { user_id: userId, source: 'video_pipeline', sha256, project_id: payload.project_id || '' },
+      upsert: true,
+    });
+    return { rendered: true, media: stored, mediaKey, sha256, durationSeconds: Math.max(3, inputs.length * 3), format: '16:9', sourceImageCount: inputs.length };
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
 export async function executeJob(job) {
   const type = String(job?.type || '');
   const payload = job?.payload && typeof job.payload === 'object' ? job.payload : {};
+
+  if (type === 'video_pipeline') return executeVideoPipeline(job);
 
   if (type === 'routine_fanout') {
     return fanOutRoutineRun(job);
