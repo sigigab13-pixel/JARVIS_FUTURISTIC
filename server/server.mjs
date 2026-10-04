@@ -636,12 +636,17 @@ export async function handleApi(req, res, pathname, url) {
   if (req.method === 'POST' && pathname === '/api/factory/children') {
     const { jarvisUser } = await requireAuthenticatedJarvisUser(req);
     const body = await parseBody(req);
-    const topic = String(body?.topic || '').trim();
+    const topic = String(body?.topic || '').trim().slice(0, 500);
     const age = Number(body?.age || 5);
     if (!topic) return json(res, 400, { error: 'A story topic is required.' });
     if (!Number.isInteger(age) || age < 3 || age > 12) return json(res, 400, { error: 'Age must be a whole number from 3 to 12.' });
     if (!isSupabaseStorageConfigured()) {
       return json(res, 503, { error: 'Supabase Storage is not configured for Children Factory assets.', code: 'CHILDREN_FACTORY_STORAGE_UNAVAILABLE' });
+    }
+    const entitlement = await getJarvisEntitlement(jarvisUser.id) || await ensureJarvisEntitlement(jarvisUser.id);
+    const imageAllowance = Number(entitlement?.credits_remaining ?? 0);
+    if (imageAllowance < 3) {
+      return json(res, 402, { error: 'Children Factory v1 requires at least 3 image-generation credits.', code: 'CHILDREN_FACTORY_CREDITS_REQUIRED', required: 3, remaining: imageAllowance });
     }
 
     try {
@@ -721,6 +726,12 @@ export async function handleApi(req, res, pathname, url) {
         } else {
           throw Object.assign(new Error('Supabase Storage is not configured for Children Factory assets.'), { statusCode: 503 });
         }
+        await consumeImageGeneration(jarvisUser.id, {
+          prompt: `${draft.title} — Children Factory scene ${index}`.slice(0, 500),
+          mode: 'children-factory-v1',
+          sha256,
+          media_path: media?.path || null,
+        });
         imageResults.push({
           scene: index,
           sha256,
@@ -752,7 +763,19 @@ export async function handleApi(req, res, pathname, url) {
         characterBible: draft.character,
         images: imageResults,
       };
-      const mission = await createMissionForUser(jarvisUser.id, state);
+      const createdMission = await createMissionForUser(jarvisUser.id, state);
+      const approvalMission = transitionMission(createdMission, 'waiting_approval');
+      approvalMission.approval = {
+        ...(createdMission.approval || {}),
+        required: true,
+        status: 'pending',
+        requestedAt: new Date().toISOString(),
+        action: 'publish',
+      };
+      const mission = await updateMissionForUser(jarvisUser.id, createdMission.id, approvalMission, {
+        eventType: 'mission.approval_requested',
+        message: 'Children Factory draft is ready for approval before any publishing action.',
+      });
 
       return json(res, 201, {
         factory: 'children-v1',
@@ -768,8 +791,10 @@ export async function handleApi(req, res, pathname, url) {
           required: true,
           status: 'awaiting_approval',
           missionId: mission.id,
-          label: 'Approve & Publish',
+          label: 'Approve Draft for Publishing',
           autoPublish: false,
+          publishingProvider: null,
+          note: 'Approval records permission only; no publishing provider is connected in v1.',
         },
       }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
     } catch (error) {
