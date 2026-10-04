@@ -1227,7 +1227,7 @@ export async function updateRoutineRunFromChildren(job) {
   const ids = run.childJobIds.map(encodeURIComponent).join(',');
   const children = await request('jobs?select=id,status,result,error&id=in.(' + ids + ')&user_id=eq.' + encodeURIComponent(userId));
   if (!Array.isArray(children) || !children.length) return null;
-  const terminal = new Set(['succeeded','failed','cancelled']);
+  const terminal = new Set(['succeeded','failed','canceled','cancelled']);
   if (!children.every(child => terminal.has(String(child.status)))) return { status: run.status, complete: false };
 
   const failed = children.filter(child => String(child.status) === 'failed').length;
