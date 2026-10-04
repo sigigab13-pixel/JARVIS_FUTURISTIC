@@ -31,11 +31,17 @@ export function createMissionState({
   steps = [],
 } = {}) {
   const normalizedSteps = Array.isArray(steps)
-    ? steps.map((step, index) => ({
-        id: String(step?.id || `step-${index + 1}`),
+    ? steps.slice(0, 30).map((step, index) => ({
+        id: String(step?.id || `step-${index + 1}`).slice(0, 100),
         title: String(step?.title || `Step ${index + 1}`).slice(0, 200),
         capability: String(step?.capability || 'unknown').slice(0, 100),
         status: String(step?.status || 'pending'),
+        executorType: String(step?.executorType || step?.executor_type || step?.type || '').slice(0, 100),
+        sideEffect: step?.sideEffect === true || step?.side_effect === true,
+        prompt: String(step?.prompt || '').slice(0, 4000),
+        priority: Math.min(100, Math.max(0, Number(step?.priority ?? 50))),
+        maxAttempts: Math.min(8, Math.max(1, Number(step?.maxAttempts ?? step?.max_attempts ?? 3))),
+        input: step?.input && typeof step.input === 'object' && !Array.isArray(step.input) ? step.input : {},
       }))
     : [];
 
