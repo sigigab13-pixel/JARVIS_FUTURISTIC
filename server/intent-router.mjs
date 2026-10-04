@@ -13,6 +13,10 @@ function tokens(value) {
 
 const intentRules = [
   { intent: 'image', patterns: [/\bimage\b/i, /\bdraw\b/i, /\bpicture\b/i, /\bphoto\b/i, /\billustrat(?:e|ion)\b/i, /\bthumbnail\b/i, /\bposter\b/i] },
+  { intent: 'children-factory', patterns: [
+    /\b(?:create|make|generate|produce|build|prepare)\b[\s\S]{0,140}\b(?:children?|kids?|rhyme|nursery|bedtime|story|stories|animation|video|short)\b/i,
+    /\b(?:children?|kids?)\b[\s\S]{0,140}\b(?:rhyme|nursery|bedtime|story|stories|animation|video|short)\b/i,
+  ] },
   { intent: 'children-story', patterns: [/\bchildren?\b/i, /\bkids?\b/i, /\bbedtime\b/i, /\bstory for (?:a )?kid\b/i, /\brhyme\b/i, /\bnursery\b/i, /\b5[- ]year[- ]old\b/i, /\b6[- ]year[- ]old\b/i, /\b7[- ]year[- ]old\b/i, /\b8[- ]year[- ]old\b/i] },
   { intent: 'repair', patterns: [/\bfix\b/i, /\bbroken\b/i, /\brepair\b/i] },
 ];
