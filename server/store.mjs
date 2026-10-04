@@ -304,11 +304,79 @@ async function rpc(name, body) {
 
 
 export async function getActivePlan(code = 'free') {
-  if (!configured) return { code, name: 'JARVIS Free', monthly_image_generations: 10 };
+  if (!configured) return {
+    code,
+    name: code === 'premium' ? 'JARVIS Premium' : code === 'pro' ? 'JARVIS Pro' : 'JARVIS Free',
+    monthly_image_generations: code === 'premium' ? 150 : code === 'pro' ? 50 : 10,
+  };
   const rows = await request(
     'jarvis_plans?select=*&code=eq.' + encodeURIComponent(code) + '&active=eq.true&limit=1'
   );
   return rows?.[0] || null;
+}
+
+export async function getFamilyAccess(userId) {
+  if (!validUuid(userId)) throw new Error('Invalid JARVIS user id.');
+  if (!configured) return null;
+  const rows = await request(
+    'jarvis_family_access?select=user_id,access_role,active,granted_at,updated_at&user_id=eq.' +
+    encodeURIComponent(userId) + '&active=eq.true&limit=1'
+  );
+  return rows?.[0] || null;
+}
+
+export async function getRegionalPlanPrices(regionCode = 'GLOBAL') {
+  const normalizedRegion = String(regionCode || 'GLOBAL').trim().toUpperCase().slice(0, 20) || 'GLOBAL';
+  if (!configured) {
+    return [
+      { plan_code: 'pro', region_code: normalizedRegion, currency: normalizedRegion === 'NG' ? 'ngn' : 'usd', unit_amount: normalizedRegion === 'NG' ? 450000 : 500 },
+      { plan_code: 'premium', region_code: normalizedRegion, currency: normalizedRegion === 'NG' ? 'ngn' : 'usd', unit_amount: normalizedRegion === 'NG' ? 800000 : 900 },
+    ];
+  }
+
+  const rows = await request(
+    'jarvis_plan_prices?select=region_code,currency,unit_amount,interval,stripe_price_id,jarvis_plans!inner(code,name,monthly_image_generations,features)&active=eq.true&region_code=eq.' +
+    encodeURIComponent(normalizedRegion)
+  );
+  if (rows?.length) {
+    return rows.map(row => ({
+      plan_code: row.jarvis_plans?.code,
+      plan_name: row.jarvis_plans?.name,
+      region_code: row.region_code,
+      currency: row.currency,
+      unit_amount: Number(row.unit_amount || 0),
+      interval: row.interval || 'month',
+      stripe_price_id: row.stripe_price_id || null,
+    }));
+  }
+  const globalRows = await request(
+    'jarvis_plan_prices?select=region_code,currency,unit_amount,interval,stripe_price_id,jarvis_plans!inner(code,name,monthly_image_generations,features)&active=eq.true&region_code=eq.GLOBAL'
+  );
+  return (globalRows || []).map(row => ({
+    plan_code: row.jarvis_plans?.code,
+    plan_name: row.jarvis_plans?.name,
+    region_code: 'GLOBAL',
+    currency: row.currency,
+    unit_amount: Number(row.unit_amount || 0),
+    interval: row.interval || 'month',
+    stripe_price_id: row.stripe_price_id || null,
+  }));
+}
+
+function applyFamilyOverride(entitlement, familyAccess, premiumPlan) {
+  if (!familyAccess?.active || !premiumPlan) return entitlement;
+  return {
+    ...(entitlement || {}),
+    plan_id: premiumPlan.id || entitlement?.plan_id || null,
+    status: 'active',
+    jarvis_plans: premiumPlan,
+    family_access: {
+      role: familyAccess.access_role,
+      active: true,
+      billing: 'free_family',
+    },
+    grant_source: 'family',
+  };
 }
 
 export async function ensureJarvisEntitlement(userId) {
@@ -317,14 +385,48 @@ export async function ensureJarvisEntitlement(userId) {
     return { user_id: userId, plan_code: 'free', status: 'active', credits_remaining: 10 };
   }
 
+  const familyAccess = await getFamilyAccess(userId);
   const existing = await request(
     'jarvis_entitlements?select=*,jarvis_plans(code,name,monthly_image_generations,features)&user_id=eq.' +
     encodeURIComponent(userId) + '&limit=1'
   );
-  if (existing?.[0]) return existing[0];
+  if (existing?.[0]) {
+    const current = existing[0];
+    if (!familyAccess?.active && current.grant_source === 'family') {
+      const freePlan = await getActivePlan('free');
+      if (freePlan?.id && current.plan_id !== freePlan.id) {
+        await request('jarvis_entitlements?user_id=eq.' + encodeURIComponent(userId), {
+          method: 'PATCH',
+          headers: { Prefer: 'return=minimal' },
+          body: JSON.stringify({
+            plan_id: freePlan.id,
+            grant_source: 'system',
+            credits_remaining: Number(freePlan.monthly_image_generations || 0),
+            provider: null,
+            provider_customer_id: null,
+            provider_subscription_id: null,
+            updated_at: new Date().toISOString(),
+          }),
+        });
+        return {
+          ...current,
+          plan_id: freePlan.id,
+          grant_source: 'system',
+          credits_remaining: Number(freePlan.monthly_image_generations || 0),
+          jarvis_plans: freePlan,
+        };
+      }
+    }
+    if (familyAccess?.active) {
+      const premiumPlan = await getActivePlan('premium');
+      return applyFamilyOverride(current, familyAccess, premiumPlan);
+    }
+    return current;
+  }
 
-  const plan = await getActivePlan('free');
-  if (!plan?.id) throw new Error('JARVIS Free plan is not configured.');
+  const selectedCode = familyAccess?.active ? 'premium' : 'free';
+  const plan = await getActivePlan(selectedCode);
+  if (!plan?.id) throw new Error('JARVIS ' + selectedCode + ' plan is not configured.');
 
   const now = new Date();
   const periodEnd = new Date(now);
@@ -337,22 +439,33 @@ export async function ensureJarvisEntitlement(userId) {
       user_id: userId,
       plan_id: plan.id,
       status: 'active',
+      grant_source: familyAccess?.active ? 'family' : 'system',
       credits_remaining: Number(plan.monthly_image_generations || 0),
       current_period_start: now.toISOString(),
       current_period_end: periodEnd.toISOString(),
     }),
   });
-  return rows?.[0] || null;
+  const created = rows?.[0] || null;
+  return familyAccess?.active ? applyFamilyOverride(created, familyAccess, plan) : created;
 }
 
 export async function getJarvisEntitlement(userId) {
   if (!validUuid(userId)) throw new Error('Invalid JARVIS user id.');
   if (!configured) return { user_id: userId, plan_code: 'free', status: 'active', credits_remaining: 10 };
-  const rows = await request(
-    'jarvis_entitlements?select=*,jarvis_plans(code,name,monthly_image_generations,features)&user_id=eq.' +
-    encodeURIComponent(userId) + '&limit=1'
-  );
-  return rows?.[0] || null;
+
+  const [rows, familyAccess] = await Promise.all([
+    request(
+      'jarvis_entitlements?select=*,jarvis_plans(code,name,monthly_image_generations,features)&user_id=eq.' +
+      encodeURIComponent(userId) + '&limit=1'
+    ),
+    getFamilyAccess(userId),
+  ]);
+  const entitlement = rows?.[0] || null;
+  if (familyAccess?.active) {
+    const premiumPlan = await getActivePlan('premium');
+    return applyFamilyOverride(entitlement, familyAccess, premiumPlan);
+  }
+  return entitlement;
 }
 
 export async function consumeImageGeneration(userId, metadata = {}) {
