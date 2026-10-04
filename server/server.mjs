@@ -218,8 +218,9 @@ async function generateChildrenFactoryDraft(topic, age) {
   }
 
   const story = String(draft?.story || '').trim();
+  const storyWordCount = story ? story.split(/\s+/).filter(Boolean).length : 0;
   const character = draft?.character && typeof draft.character === 'object' ? draft.character : {};
-  if (!story || !character.name || !character.species || !character.color || !character.clothes) {
+  if (!story || storyWordCount < 120 || storyWordCount > 300 || !character.name || !character.species || !character.color || !character.clothes) {
     throw Object.assign(new Error('Children Factory received an incomplete story or character bible.'), { statusCode: 502 });
   }
 
@@ -639,6 +640,9 @@ export async function handleApi(req, res, pathname, url) {
     const age = Number(body?.age || 5);
     if (!topic) return json(res, 400, { error: 'A story topic is required.' });
     if (!Number.isInteger(age) || age < 3 || age > 12) return json(res, 400, { error: 'Age must be a whole number from 3 to 12.' });
+    if (!isSupabaseStorageConfigured()) {
+      return json(res, 503, { error: 'Supabase Storage is not configured for Children Factory assets.', code: 'CHILDREN_FACTORY_STORAGE_UNAVAILABLE' });
+    }
 
     try {
       const draft = await generateChildrenFactoryDraft(topic, age);
@@ -921,6 +925,8 @@ export async function handleApi(req, res, pathname, url) {
       availableCapabilities: getAvailableCapabilities(),
       user: authenticated?.jarvisUser || null,
     });
+
+    const childrenFactoryRoute = route.intent === 'children-story';
 
     const imageRequest = /\b(generate|create|make|draw|illustrate|render)\b[\\s\\S]{0,120}\b(image|picture|photo|illustration)\b|\b(image|picture|photo|illustration)\b[\\s\\S]{0,120}\b(generate|create|make|draw|illustrate|render)\b/i.test(latestUserMessage);
     if (imageRequest) {
