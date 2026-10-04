@@ -845,6 +845,51 @@ export async function handleApi(req, res, pathname, url) {
       }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
     }
 
+    const videoStatus = String(mission.metadata?.videoStatus || '').trim();
+    if (videoStatus === 'failed') {
+      return json(res, 200, {
+        factory: 'children-v1',
+        status: 'video_failed',
+        buildMission: mission,
+        draft: {
+          project: { id: mission.metadata?.projectId || null, title: mission.metadata?.title || 'Children Story' },
+          character: mission.metadata?.character || null,
+          story: mission.metadata?.story || '',
+          characterBible: mission.metadata?.characterBible || null,
+          images,
+          renderedVideo: mission.metadata?.renderedVideo || null,
+        },
+        video: {
+          status: 'failed',
+          jobId: mission.metadata?.videoJobId || null,
+          error: mission.metadata?.lastVideoFailure?.message || 'AI video generation failed.',
+        },
+        approvalGate: null,
+      }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+    }
+
+    if (videoStatus === 'queued' || videoStatus === 'running') {
+      return json(res, 200, {
+        factory: 'children-v1',
+        status: 'building_video',
+        buildMission: mission,
+        draft: {
+          project: { id: mission.metadata?.projectId || null, title: mission.metadata?.title || 'Children Story' },
+          character: mission.metadata?.character || null,
+          story: mission.metadata?.story || '',
+          characterBible: mission.metadata?.characterBible || null,
+          images,
+          renderedVideo: mission.metadata?.renderedVideo || null,
+        },
+        video: {
+          status: videoStatus,
+          jobId: mission.metadata?.videoJobId || null,
+          provider: mission.metadata?.videoProvider || 'higgsfield',
+        },
+        approvalGate: null,
+      }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+    }
+
     if (approvalMission?.status === 'waiting_approval' || approvalMission?.approval?.status === 'pending' || approvalMission?.approval?.status === 'approved') {
       return json(res, 200, {
         factory: 'children-v1',
