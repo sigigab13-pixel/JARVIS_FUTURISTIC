@@ -145,15 +145,10 @@ function App() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    const updatePalette = () => {
-      const cycleMinutes = 120;
-      const minutes = ((Date.now() / 60000) % cycleMinutes + cycleMinutes) % cycleMinutes;
-      const hue = Math.round(188 + (minutes / cycleMinutes) * 128);
-      document.documentElement.style.setProperty('--jarvis-hue', String(hue));
-    };
-    updatePalette();
-    const paletteTimer = window.setInterval(updatePalette, 15000);
-    return () => window.clearInterval(paletteTimer);
+    const palette = [185, 212, 238, 268, 302, 334, 28, 52, 118, 154];
+    const hue = palette[Math.floor(Math.random() * palette.length)];
+    document.documentElement.style.setProperty('--jarvis-hue', String(hue));
+    return () => {};
   }, []);
 
   useEffect(() => {
