@@ -235,7 +235,7 @@ async function recordMissionJobFailure(job, error, failureRecord, logger) {
   });
 }
 
-async function executeJob(job) {
+export async function executeJob(job) {
   const type = String(job?.type || '');
   const payload = job?.payload && typeof job.payload === 'object' ? job.payload : {};
 
