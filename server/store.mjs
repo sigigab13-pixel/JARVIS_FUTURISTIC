@@ -419,6 +419,30 @@ export async function ensureJarvisEntitlement(userId) {
     }
     if (familyAccess?.active) {
       const premiumPlan = await getActivePlan('premium');
+      if (premiumPlan?.id && (current.plan_id !== premiumPlan.id || current.grant_source !== 'family')) {
+        await request('jarvis_entitlements?user_id=eq.' + encodeURIComponent(userId), {
+          method: 'PATCH',
+          headers: { Prefer: 'return=minimal' },
+          body: JSON.stringify({
+            plan_id: premiumPlan.id,
+            grant_source: 'family',
+            status: 'active',
+            credits_remaining: Number(premiumPlan.monthly_image_generations || 0),
+            provider: null,
+            provider_customer_id: null,
+            provider_subscription_id: null,
+            updated_at: new Date().toISOString(),
+          }),
+        });
+        return applyFamilyOverride({
+          ...current,
+          plan_id: premiumPlan.id,
+          grant_source: 'family',
+          status: 'active',
+          credits_remaining: Number(premiumPlan.monthly_image_generations || 0),
+          jarvis_plans: premiumPlan,
+        }, familyAccess, premiumPlan);
+      }
       return applyFamilyOverride(current, familyAccess, premiumPlan);
     }
     return current;
