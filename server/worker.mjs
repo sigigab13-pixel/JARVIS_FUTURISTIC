@@ -200,10 +200,7 @@ async function executeVideoPipeline(job) {
   });
   const result = { rendered: true, media: stored, mediaKey, sha256: rendered.sha256, durationSeconds: rendered.durationSeconds, format: '16:9', sourceImageCount: imageKeys.length, provider: rendered.provider, model: rendered.model || null, audio: rendered.audio || null, clips: rendered.clips || null, missionId: String(payload.mission_id || '') || null };
   if (payload.mission_id) {
-    const mission = await getMissionForUser(userId, String(payload.mission_id));
-    if (!mission) throw new Error('Video render mission was not found for this JARVIS user.');
-    const metadata = { ...(mission.metadata || {}), renderedVideo: { ...result, jobId: String(job?.id || ''), renderedAt: new Date().toISOString() } };
-    await updateMissionForUser(userId, mission.id, { ...mission, metadata }, { eventType: 'video.rendered', message: 'Video generation completed and the verified media asset was bound to the mission.', metadata: { mediaKey, sha256: rendered.sha256, provider: rendered.provider } });
+    await finalizeChildrenFactoryVideo(userId, String(payload.mission_id), result, job);
   }
   return result;
 }
@@ -233,6 +230,87 @@ export function buildMissionFailureState(mission, { jobId = '', adapter = '', at
     },
   };
   return next;
+}
+
+async function finalizeChildrenFactoryVideo(userId, missionId, result, job) {
+  const mission = await getMissionForUser(userId, missionId);
+  if (!mission || mission.metadata?.factory !== 'children-v1') return;
+
+  const renderedVideo = {
+    ...(result || {}),
+    jobId: String(job?.id || ''),
+    renderedAt: new Date().toISOString(),
+  };
+  const buildMetadata = {
+    ...(mission.metadata || {}),
+    factoryStage: 'approval',
+    videoStatus: 'succeeded',
+    renderedVideo,
+  };
+  const updatedBuild = await updateMissionForUser(userId, mission.id, { ...mission, metadata: buildMetadata }, {
+    eventType: 'factory.video_completed',
+    message: 'Children Factory AI video and narration completed and the verified media asset was stored.',
+    metadata: { mediaKey: result?.mediaKey || null, provider: result?.provider || null, jobId: String(job?.id || '') },
+  });
+
+  const approvalId = String(updatedBuild.metadata?.approvalMissionId || '').trim();
+  if (!approvalId) return;
+  const approvalMission = await getMissionForUser(userId, approvalId);
+  if (!approvalMission || approvalMission.status !== 'draft') return;
+
+  const approvalReady = transitionMission(approvalMission, 'waiting_approval');
+  approvalReady.approval = {
+    ...(approvalMission.approval || {}),
+    required: true,
+    status: 'pending',
+    requestedAt: new Date().toISOString(),
+    approvedAt: null,
+    action: 'publish',
+  };
+  approvalReady.metadata = {
+    ...(approvalMission.metadata || {}),
+    images: Array.isArray(updatedBuild.metadata.images) ? updatedBuild.metadata.images : [],
+    story: updatedBuild.metadata.story || approvalMission.metadata?.story || null,
+    characterBible: updatedBuild.metadata.characterBible || approvalMission.metadata?.characterBible || null,
+    renderedVideo,
+  };
+  await updateMissionForUser(userId, approvalMission.id, approvalReady, {
+    eventType: 'mission.approval_requested',
+    message: 'Children Factory video is verified; publishing approval is now waiting for user review.',
+    metadata: {
+      buildMissionId: updatedBuild.id,
+      videoJobId: String(job?.id || ''),
+      mediaKey: result?.mediaKey || null,
+    },
+  });
+}
+
+async function recordChildrenFactoryVideoFailure(job, error, failureRecord, logger) {
+  if (failureRecord?.status !== 'failed') return;
+  const payload = job?.payload && typeof job.payload === 'object' ? job.payload : {};
+  const userId = String(job?.user_id || payload.user_id || '');
+  const missionId = String(payload.mission_id || '');
+  if (!userId || !missionId) return;
+
+  const mission = await getMissionForUser(userId, missionId);
+  if (!mission || mission.metadata?.factory !== 'children-v1') return;
+
+  const metadata = {
+    ...(mission.metadata || {}),
+    factoryStage: 'video',
+    videoStatus: 'failed',
+    lastVideoFailure: {
+      jobId: String(job.id || ''),
+      attempts: Number(failureRecord.attempts || 1),
+      message: String(error?.message || error || 'Video generation failed.').slice(0, 2000),
+      failedAt: new Date().toISOString(),
+    },
+  };
+  await updateMissionForUser(userId, mission.id, { ...mission, metadata }, {
+    eventType: 'factory.video_failed',
+    message: 'Children Factory AI video generation failed after the durable provider job reached terminal failure.',
+    metadata: metadata.lastVideoFailure,
+  }).catch(updateError => logger.error?.('[JARVIS worker] failed to persist Children Factory video failure:', updateError));
 }
 
 async function recordMissionJobFailure(job, error, failureRecord, logger) {
@@ -388,6 +466,11 @@ async function processJob(job, workerId, logger) {
       failureRecord = await failJob(job.id, workerId, error);
     } catch (failureError) {
       logger.error?.('[JARVIS worker] failed to persist failure:', failureError);
+    }
+    try {
+      await recordChildrenFactoryVideoFailure(job, error, failureRecord, logger);
+    } catch (videoFailureError) {
+      logger.error?.(`[JARVIS worker] failed to persist Children Factory video failure ${job.id}:`, videoFailureError);
     }
     try {
       await recordMissionJobFailure(job, error, failureRecord, logger);
