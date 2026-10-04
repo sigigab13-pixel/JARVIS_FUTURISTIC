@@ -49,6 +49,7 @@ Implemented foundations currently include:
 - worker leases, heartbeats, concurrency limits, and workload governance
 - fail-closed handling for unsupported worker job types
 - persistent video project, character, asset, and scene foundations
+- Children Factory v1 backend route with age validation, character continuity, three sequential image assets, and approval-gated publish state (implemented on `main`, pending production deployment verification)
 
 The mission runtime currently has a real adapter for `routine_fanout`. Additional real capability adapters are being added one vertical slice at a time. The next major adapter milestone is Image Generation.
 
