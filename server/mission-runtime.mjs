@@ -1,7 +1,7 @@
 const TERMINAL = new Set(['succeeded', 'failed', 'canceled']);
 
 const transitions = {
-  draft: new Set(['queued', 'canceled']),
+  draft: new Set(['queued', 'waiting_approval', 'canceled']),
   queued: new Set(['running', 'paused', 'canceled']),
   running: new Set(['waiting_approval', 'paused', 'succeeded', 'failed', 'canceled']),
   waiting_approval: new Set(['running', 'paused', 'canceled', 'failed']),
