@@ -26,7 +26,9 @@ export function prepareMissionAction(current, action) {
     if (current.status !== 'waiting_approval') {
       throw invalid('MISSION_NOT_WAITING_FOR_APPROVAL', 'Mission is not waiting for approval.');
     }
-    const next = transitionMission(current, 'running');
+    const next = current.metadata?.factory === 'children-v1' && current.metadata?.factoryStage === 'approval' && !current.steps?.length
+      ? transitionMission(current, 'succeeded')
+      : transitionMission(current, 'running');
     next.approval = {
       ...(current.approval || {}),
       required: true,
@@ -36,7 +38,9 @@ export function prepareMissionAction(current, action) {
     return {
       next,
       eventType: 'mission.approved',
-      message: 'Mission approval recorded and the first execution step is ready to queue.',
+      message: next.status === 'succeeded'
+        ? 'Children Factory publishing approval recorded; the draft remains protected until an explicit publish action.'
+        : 'Mission approval recorded and the first execution step is ready to queue.',
     };
   }
 
