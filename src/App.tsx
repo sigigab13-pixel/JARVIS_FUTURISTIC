@@ -404,6 +404,46 @@ function App() {
     }
   };
 
+  const renderChildrenFactoryVideo = async () => {
+    const draft = factoryDraft && factoryDraft.draft;
+    const projectId = String(draft && draft.project && draft.project.id || '').trim();
+    const imageKeys = Array.isArray(draft && draft.images) ? draft.images.map((item: any) => String(item && item.media && (item.media.path || item.media.key) || '').trim()).filter(Boolean) : [];
+    if (!projectId || !imageKeys.length || factoryBusy) return;
+    setFactoryBusy(true);
+    setFactoryError('');
+    setFactoryRenderJob({ status: 'queued' });
+    try {
+      const response = await api.video.render(projectId, imageKeys);
+      const job = response.data && response.data.job;
+      if (!job || !job.id) throw new Error('Video render job was not created.');
+      setFactoryRenderJob(job);
+      for (let attempt = 0; attempt < 45; attempt += 1) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        const statusResponse = await api.video.job(job.id);
+        const current = statusResponse.data && statusResponse.data.job;
+        if (!current) continue;
+        setFactoryRenderJob(current);
+        if (current.status === 'succeeded') {
+          const result = current.result || {};
+          const mediaKey = String(result.mediaKey || (result.media && (result.media.path || result.media.key)) || '').trim();
+          if (!mediaKey) throw new Error('Render completed without a stored video media key.');
+          setFactoryDraft((draftState: any) => draftState ? { ...draftState, renderedVideo: result } : draftState);
+          setYoutubeMissionId(String(factoryDraft && factoryDraft.approvalGate && factoryDraft.approvalGate.missionId || ''));
+          setYoutubeMediaKey(mediaKey);
+          setYoutubeTitle(String(draft && draft.project && draft.project.title || 'JARVIS Children Video').slice(0, 100));
+          setYoutubeDescription(String(draft && draft.story || '').slice(0, 5000));
+          return;
+        }
+        if (current.status === 'failed' || current.status === 'canceled') throw new Error((current.error && current.error.message) || 'Video render failed.');
+      }
+      throw new Error('Video render is still running. Try again later.');
+    } catch (error: any) {
+      setFactoryError(String((error.response && error.response.data && error.response.data.error) || error.message || 'Could not render the children video.'));
+    } finally {
+      setFactoryBusy(false);
+    }
+  };
+
   const approveChildrenFactory = async (id: string) => {
     setFactoryBusy(true);
     setFactoryError('');
