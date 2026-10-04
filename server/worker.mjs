@@ -16,6 +16,7 @@ import {
 import { executeMissionStep } from './mission-executor.mjs';
 import { canTransition, transitionMission } from './mission-runtime.mjs';
 import { createMediaKey, getMedia, isSupabaseStorageConfigured, putMedia } from './media.mjs';
+import { generateVideoFromImage, isHiggsfieldConfigured, uploadReferenceImage } from './higgsfield.mjs';
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
 const SUPABASE_SERVER_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -89,15 +90,7 @@ async function runFfmpeg(args) {
   });
 }
 
-async function executeVideoPipeline(job) {
-  const payload = job?.payload && typeof job.payload === 'object' ? job.payload : {};
-  const userId = String(job?.user_id || payload.user_id || '').trim();
-  const imageKeys = Array.isArray(payload.image_keys) ? payload.image_keys.map(String).filter(Boolean).slice(0, 12) : [];
-  if (!userId || !imageKeys.length || !imageKeys[0].startsWith(`jarvis/${userId}/`)) throw new Error('Video render requires a JARVIS user and stored image assets.');
-  if (!isSupabaseStorageConfigured()) throw new Error('Supabase Storage is not configured for video rendering.');
-  if (!imageKeys.length) throw new Error('Video render requires at least one stored image asset.');
-  if (imageKeys.some(key => !key.startsWith(`jarvis/${userId}/`))) throw new Error('Video render asset ownership validation failed.');
-
+async function executeFfmpegVideoPipeline({ userId, imageKeys, payload }) {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'jarvis-video-'));
   try {
     const inputs = [];
@@ -108,50 +101,94 @@ async function executeVideoPipeline(job) {
       await fs.writeFile(file, media.body);
       inputs.push(file);
     }
-
     const output = path.join(tempDir, 'render.mp4');
     const filters = inputs.map((_, i) => `[${i}:v]scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30[v${i}]`);
     filters.push(inputs.map((_, i) => `[v${i}]`).join('') + `concat=n=${inputs.length}:v=1:a=0[v]`);
     const args = [];
     for (const file of inputs) args.push('-loop', '1', '-i', file);
-    args.push('-filter_complex', filters.join(';'), '-map', '[v]', '-t', String(Math.max(3, inputs.length * 3)), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-y', output);
+    args.push('-filter_complex', filters.join(';'), '-t', String(Math.max(3, inputs.length * 3)), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-y', output);
     await runFfmpeg(args);
     const video = await fs.readFile(output);
     const sha256 = crypto.createHash('sha256').update(video).digest('hex');
-    const mediaKey = createMediaKey({ userId, kind: 'video-render', extension: 'mp4', id: sha256 });
-    const stored = await putMedia({
-      key: mediaKey,
-      body: video,
-      contentType: 'video/mp4',
-      metadata: { user_id: userId, source: 'video_pipeline', sha256, project_id: payload.project_id || '' },
-      upsert: true,
-    });
-    const result = { rendered: true, media: stored, mediaKey, sha256, durationSeconds: Math.max(3, inputs.length * 3), format: '16:9', sourceImageCount: inputs.length, missionId: String(payload.mission_id || '') || null };
-    if (payload.mission_id) {
-      const mission = await getMissionForUser(userId, String(payload.mission_id));
-      if (!mission) throw new Error('Video render mission was not found for this JARVIS user.');
-      const metadata = {
-        ...(mission.metadata || {}),
-        renderedVideo: {
-          mediaKey,
-          sha256,
-          durationSeconds: result.durationSeconds,
-          format: result.format,
-          sourceImageCount: result.sourceImageCount,
-          jobId: String(job?.id || ''),
-          renderedAt: new Date().toISOString(),
-        },
-      };
-      await updateMissionForUser(userId, mission.id, { ...mission, metadata }, {
-        eventType: 'video.rendered',
-        message: 'Video render completed and the verified media asset was bound to the mission.',
-        metadata: { mediaKey, sha256 },
-      });
-    }
-    return result;
+    return { video, sha256, durationSeconds: Math.max(3, inputs.length * 3), provider: 'ffmpeg-image-sequence-v1' };
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
   }
+}
+
+async function executeHiggsfieldVideoPipeline({ userId, imageKeys, payload }) {
+  if (!isHiggsfieldConfigured()) {
+    throw Object.assign(new Error('Higgsfield video generation is not configured. Add HIGGSFIELD_API_KEY to the server environment before using the AI video engine.'), { code: 'HIGGSFIELD_NOT_CONFIGURED', safeToRetry: false });
+  }
+
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'jarvis-hf-video-'));
+  const clipFiles = [];
+  const clipRecords = [];
+  try {
+    const scenePrompts = Array.isArray(payload.scene_prompts) ? payload.scene_prompts.map(String) : [];
+    const sceneDurations = Array.isArray(payload.scene_durations) ? payload.scene_durations.map(Number) : [];
+    for (let i = 0; i < imageKeys.length; i += 1) {
+      const media = await getMedia({ key: imageKeys[i] });
+      if (!String(media.contentType).startsWith('image/')) throw new Error('AI video generation received a non-image asset.');
+      const uploaded = await uploadReferenceImage({ body: media.body, contentType: media.contentType || 'image/png' });
+      const generated = await generateVideoFromImage({
+        body: payload,
+        imageUrl: uploaded.publicUrl,
+        prompt: scenePrompts[i] || `Animate scene ${i + 1} of this children's story. Preserve the character identity, clothing, environment, colors and composition. Use gentle storybook motion and natural camera movement appropriate for children.`,
+        durationSeconds: sceneDurations[i] || payload.scene_duration_seconds || 5,
+        resolution: payload.resolution || '720p',
+      });
+      const clipResponse = await fetch(generated.videoUrl);
+      if (!clipResponse.ok) throw new Error(`Higgsfield generated video could not be downloaded (${clipResponse.status}).`);
+      const clipPath = path.join(tempDir, `clip-${i}.mp4`);
+      await fs.writeFile(clipPath, Buffer.from(await clipResponse.arrayBuffer()));
+      clipFiles.push(clipPath);
+      clipRecords.push({ scene: i + 1, requestId: generated.requestId, model: generated.model });
+    }
+
+    const listFile = path.join(tempDir, 'concat.txt');
+    await fs.writeFile(listFile, clipFiles.map(file => `file '${file.replace(/'/g, "'\\''")}'`).join('\n'));
+    const output = path.join(tempDir, 'render.mp4');
+    await runFfmpeg(['-f', 'concat', '-safe', '0', '-i', listFile, '-c', 'copy', '-movflags', '+faststart', '-y', output]);
+    const video = await fs.readFile(output);
+    const sha256 = crypto.createHash('sha256').update(video).digest('hex');
+    const durationSeconds = sceneDurations.slice(0, clipRecords.length).reduce((sum, value) => sum + (Number.isFinite(value) && value > 0 ? value : 5), 0);
+    return { video, sha256, durationSeconds, provider: 'higgsfield', model: clipRecords[0]?.model || '', clips: clipRecords };
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+async function executeVideoPipeline(job) {
+  const payload = job?.payload && typeof job.payload === 'object' ? job.payload : {};
+  const userId = String(job?.user_id || payload.user_id || '').trim();
+  const imageKeys = Array.isArray(payload.image_keys) ? payload.image_keys.map(String).filter(Boolean).slice(0, 12) : [];
+  if (!userId || !imageKeys.length || !imageKeys[0].startsWith(`jarvis/${userId}/`)) throw new Error('Video render requires a JARVIS user and stored image assets.');
+  if (!isSupabaseStorageConfigured()) throw new Error('Supabase Storage is not configured for video rendering.');
+  if (imageKeys.some(key => !key.startsWith(`jarvis/${userId}/`))) throw new Error('Video render asset ownership validation failed.');
+
+  const provider = String(payload.provider || process.env.VIDEO_PROVIDER || 'higgsfield').trim().toLowerCase();
+  if (!['higgsfield', 'ffmpeg'].includes(provider)) throw Object.assign(new Error(`Unsupported video provider: ${provider}`), { code: 'VIDEO_PROVIDER_UNSUPPORTED', safeToRetry: false });
+
+  const rendered = provider === 'higgsfield'
+    ? await executeHiggsfieldVideoPipeline({ userId, imageKeys, payload })
+    : await executeFfmpegVideoPipeline({ userId, imageKeys, payload });
+  const mediaKey = createMediaKey({ userId, kind: 'video-render', extension: 'mp4', id: rendered.sha256 });
+  const stored = await putMedia({
+    key: mediaKey,
+    body: rendered.video,
+    contentType: 'video/mp4',
+    metadata: { user_id: userId, source: 'video_pipeline', provider: rendered.provider, model: rendered.model || '', sha256: rendered.sha256, project_id: payload.project_id || '' },
+    upsert: true,
+  });
+  const result = { rendered: true, media: stored, mediaKey, sha256: rendered.sha256, durationSeconds: rendered.durationSeconds, format: '16:9', sourceImageCount: imageKeys.length, provider: rendered.provider, model: rendered.model || null, clips: rendered.clips || null, missionId: String(payload.mission_id || '') || null };
+  if (payload.mission_id) {
+    const mission = await getMissionForUser(userId, String(payload.mission_id));
+    if (!mission) throw new Error('Video render mission was not found for this JARVIS user.');
+    const metadata = { ...(mission.metadata || {}), renderedVideo: { ...result, jobId: String(job?.id || ''), renderedAt: new Date().toISOString() } };
+    await updateMissionForUser(userId, mission.id, { ...mission, metadata }, { eventType: 'video.rendered', message: 'Video generation completed and the verified media asset was bound to the mission.', metadata: { mediaKey, sha256: rendered.sha256, provider: rendered.provider } });
+  }
+  return result;
 }
 
 export function buildMissionFailureState(mission, { jobId = '', adapter = '', attempts = 0, error = null } = {}) {
