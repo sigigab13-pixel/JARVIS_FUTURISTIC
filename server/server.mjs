@@ -19,6 +19,7 @@ import {
   updateJarvisPreferences,
   ensureJarvisEntitlement,
   getJarvisEntitlement,
+  getRegionalPlanPrices,
   consumeImageGeneration,
   getBusinessForUser,
   createBusinessForUser,
@@ -864,7 +865,26 @@ export async function handleApi(req, res, pathname, url) {
   if (req.method === 'GET' && pathname === '/api/plans') {
     const { jarvisUser } = await requireAuthenticatedJarvisUser(req);
     const entitlement = await ensureJarvisEntitlement(jarvisUser.id);
-    return json(res, 200, { entitlement });
+    const countryHeader = String(req.headers['x-vercel-ip-country'] || req.headers['cf-ipcountry'] || '').trim().toUpperCase();
+    const region = /^[A-Z]{2}$/.test(countryHeader) ? countryHeader : 'GLOBAL';
+    const prices = await getRegionalPlanPrices(region);
+    return json(res, 200, {
+      entitlement,
+      pricing: {
+        region,
+        currency: prices[0]?.currency || 'usd',
+        provider: 'stripe',
+        localized: region !== 'GLOBAL' && prices.some(price => price.region_code === region),
+        plans: prices.map(price => ({
+          code: price.plan_code,
+          name: price.plan_name,
+          currency: price.currency,
+          unitAmount: price.unit_amount,
+          interval: price.interval || 'month',
+          stripePriceIdConfigured: Boolean(price.stripe_price_id),
+        })),
+      },
+    });
   }
 
   if (req.method === 'GET' && pathname === '/api/tts/status') {
