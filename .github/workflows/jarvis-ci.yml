@@ -28,6 +28,19 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Verify server secret wiring
+        env:
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          HIGGSFIELD_API_KEY: ${{ secrets.HIGGSFIELD_API_KEY }}
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
+        run: |
+          test -n "${SUPABASE_SECRET_KEY:-}" || { echo "Missing SUPABASE_SECRET_KEY"; exit 1; }
+          test -n "${HIGGSFIELD_API_KEY:-}" || { echo "Missing HIGGSFIELD_API_KEY"; exit 1; }
+          test -n "${ELEVENLABS_API_KEY:-}" || { echo "Missing ELEVENLABS_API_KEY"; exit 1; }
+          test -n "${ELEVENLABS_VOICE_ID:-}" || { echo "Missing ELEVENLABS_VOICE_ID"; exit 1; }
+          echo "Required server secret names are present."
+
       - name: Run tests
         run: npm test
 
