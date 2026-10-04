@@ -4,7 +4,10 @@ const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
 const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || '';
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const SUPABASE_SERVER_KEY = SUPABASE_SECRET_KEY || SUPABASE_SERVICE_ROLE_KEY;
-const configured = Boolean(SUPABASE_URL && SUPABASE_SERVER_KEY);
+const productionRuntime = process.env.VERCEL === '1' || process.env.NODE_ENV === 'production';
+const configured = productionRuntime
+  ? true
+  : Boolean(SUPABASE_URL && SUPABASE_SERVER_KEY);
 
 const memory = {
   oauth: new Map(),
@@ -21,6 +24,12 @@ export function persistenceMode() {
 
 async function request(pathname, options = {}) {
   if (!configured) return null;
+  if (!SUPABASE_URL || !SUPABASE_SERVER_KEY) {
+    throw Object.assign(new Error('Supabase persistence is not configured on this deployment.'), {
+      statusCode: 503,
+      code: 'SUPABASE_PERSISTENCE_NOT_CONFIGURED',
+    });
+  }
   const response = await fetch(`${SUPABASE_URL}/rest/v1/${pathname}`, {
     ...options,
     headers: {
