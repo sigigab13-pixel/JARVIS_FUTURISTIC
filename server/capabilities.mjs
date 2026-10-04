@@ -35,7 +35,7 @@ const capabilities = [
     id: 'video',
     label: 'Video Lab',
     category: 'creation',
-    description: 'Plan and manage children's video production projects and pipeline jobs.',
+    description: "Plan and manage children's video production projects and pipeline jobs.",
     keywords: ['video', 'animation', 'reel', 'short', 'storyboard', 'film', 'movie'],
     available: () => Boolean(process.env.SUPABASE_URL && (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)),
   },
