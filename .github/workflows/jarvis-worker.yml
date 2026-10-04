@@ -11,12 +11,12 @@ on:
 
 concurrency:
   group: jarvis-main-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   worker:
     runs-on: ubuntu-latest
-    timeout-minutes: 4
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
@@ -44,7 +44,7 @@ jobs:
           JARVIS_WORKER_HEARTBEAT_MS: "15000"
           JARVIS_WORKER_CONCURRENCY: "4"
           JARVIS_WORKER_MAX_JOBS_PER_RUN: "24"
-          JARVIS_WORKER_MAX_RUNTIME_MS: "210000"
+          JARVIS_WORKER_MAX_RUNTIME_MS: "540000"
           JARVIS_ROUTINE_BATCH_LIMIT: "10"
         run: |
           npm run worker
