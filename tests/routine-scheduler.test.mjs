@@ -14,5 +14,9 @@ test('routine scheduler supports fixed intervals', () => {
 test('routine scheduler supports weekly schedules', () => {
   const from = new Date('2026-10-04T10:00:00.000Z');
   const next = nextRunAt('weekly monday 08:00', { from, timezone: 'Africa/Lagos' });
-  assert.equal(new Intl.DateTimeFormat('en-US', { timeZone: 'Africa/Lagos', weekday: 'long', hour:'2-digit', minute:'2-digit', hour12:false }).format(next), 'Monday, 08:00');
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Africa/Lagos', weekday:'long', hour:'2-digit', minute:'2-digit', hour12:false }).formatToParts(next);
+  const values = Object.fromEntries(parts.filter(part => part.type !== 'literal').map(part => [part.type, part.value]));
+  assert.equal(values.weekday, 'Monday');
+  assert.equal(values.hour, '08');
+  assert.equal(values.minute, '00');
 });
