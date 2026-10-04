@@ -1136,6 +1136,9 @@ export async function handleApi(req, res, pathname, url) {
       200,
       { text, provider, model, persistent: Boolean(userId), guest: !userId, routing: {
         mode: route.mode,
+        intent: route.intent || 'chat',
+        factory: childrenFactoryRoute ? 'children-v1' : null,
+        factoryEndpoint: childrenFactoryRoute ? '/api/factory/children' : null,
         candidateCapabilities: route.candidateCapabilities.map(item => item.id),
         referencesDetected: route.references.length,
         needsClarification: route.needsClarification,
