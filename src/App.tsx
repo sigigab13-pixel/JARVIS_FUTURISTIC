@@ -116,6 +116,14 @@ function App() {
   const [youtubeAnalytics, setYoutubeAnalytics] = useState<any>(null);
   const [youtubeBusy, setYoutubeBusy] = useState(false);
   const [youtubeError, setYoutubeError] = useState('');
+  const [youtubeTitle, setYoutubeTitle] = useState('');
+  const [youtubeDescription, setYoutubeDescription] = useState('');
+  const [youtubeMediaKey, setYoutubeMediaKey] = useState('');
+  const [youtubeMissionId, setYoutubeMissionId] = useState('');
+  const [youtubePrivacy, setYoutubePrivacy] = useState<'private' | 'unlisted' | 'public'>('private');
+  const [youtubeMadeForKids, setYoutubeMadeForKids] = useState(true);
+  const [youtubePublishBusy, setYoutubePublishBusy] = useState(false);
+  const [youtubePublishResult, setYoutubePublishResult] = useState<any>(null);
   const [videoProjects, setVideoProjects] = useState<any[]>([]);
   const [videoProject, setVideoProject] = useState<any>(null);
   const [videoCharacters, setVideoCharacters] = useState<any[]>([]);
@@ -310,6 +318,28 @@ function App() {
     } catch (error: any) {
       setYoutubeError(String(error?.response?.data?.error || error?.message || 'Could not start YouTube connection.'));
       setYoutubeBusy(false);
+    }
+  };
+
+  const publishToYouTube = async () => {
+    if (!youtubeMissionId.trim() || !youtubeMediaKey.trim() || !youtubeTitle.trim() || youtubePublishBusy) return;
+    setYoutubePublishBusy(true);
+    setYoutubeError('');
+    setYoutubePublishResult(null);
+    try {
+      const response = await api.youtube.publish({
+        missionId: youtubeMissionId.trim(),
+        mediaKey: youtubeMediaKey.trim(),
+        title: youtubeTitle.trim(),
+        description: youtubeDescription.trim(),
+        privacyStatus: youtubePrivacy,
+        madeForKids: youtubeMadeForKids,
+      });
+      setYoutubePublishResult(response.data || null);
+    } catch (error: any) {
+      setYoutubeError(String(error?.response?.data?.error || error?.message || 'YouTube publishing failed.'));
+    } finally {
+      setYoutubePublishBusy(false);
     }
   };
 
@@ -1320,6 +1350,41 @@ function App() {
               {imageError && <div className="security-result"><AlertTriangle size={14} /> {imageError}</div>}
               {imageResult && <img src={imageResult} alt="JARVIS generated result" style={{ width: '100%', maxHeight: 560, objectFit: 'contain', borderRadius: 14, border: '1px solid #21445b', background: '#02060a' }} />}
             </div>
+          </section>
+        </div>
+      )}
+
+      {youtubeOpen && (
+        <div className="security-overlay" role="dialog" aria-modal="true" aria-label="JARVIS YouTube Center">
+          <section className="security-panel" style={{ maxWidth: 900 }}>
+            <div className="security-head">
+              <div><span className="eyebrow">YOUTUBE OPERATIONS</span><h2>JARVIS YouTube Center</h2><p>Connect, review analytics, and publish only after an approved mission.</p></div>
+              <button className="close-security" onClick={() => setYoutubeOpen(false)} aria-label="Close YouTube Center"><X size={18} /></button>
+            </div>
+            {youtubeError && <div className="lock-note"><AlertTriangle size={16} /><span>{youtubeError}</span></div>}
+            <div className="security-status">
+              <p><b>Connection:</b> {youtubeStatus?.connected ? 'Connected' : 'Not connected'}</p>
+              {youtubeStatus?.channel && <p><b>Channel:</b> {youtubeStatus.channel.title}</p>}
+            </div>
+            {!youtubeStatus?.connected && <button className="security-primary" onClick={() => void connectYouTube()} disabled={youtubeBusy}>Connect YouTube</button>}
+            {youtubeStatus?.connected && <button className="security-secondary" onClick={() => void loadYouTubeAnalytics()} disabled={youtubeBusy}>Load recent analytics</button>}
+            {youtubeAnalytics?.rows && <div className="security-status"><b>Recent daily analytics</b>{youtubeAnalytics.rows.slice(-7).map((row:any[], i:number) => <p key={i}>{row.join(' • ')}</p>)}</div>}
+            {youtubeStatus?.connected && <div style={{display:'grid',gap:9,marginTop:16}}>
+              <b>Approved Video Publisher</b>
+              <input value={youtubeMissionId} onChange={e=>setYoutubeMissionId(e.target.value)} placeholder="Approved mission ID" />
+              <input value={youtubeMediaKey} onChange={e=>setYoutubeMediaKey(e.target.value)} placeholder="Stored video media key" />
+              <input value={youtubeTitle} onChange={e=>setYoutubeTitle(e.target.value.slice(0,100))} placeholder="YouTube title" maxLength={100} />
+              <textarea value={youtubeDescription} onChange={e=>setYoutubeDescription(e.target.value.slice(0,5000))} placeholder="Description" rows={4} />
+              <div style={{display:'flex',gap:12,alignItems:'center',flexWrap:'wrap'}}>
+                <label>Privacy <select value={youtubePrivacy} onChange={e=>setYoutubePrivacy(e.target.value as 'private'|'unlisted'|'public')}><option value="private">Private</option><option value="unlisted">Unlisted</option><option value="public">Public</option></select></label>
+                <label><input type="checkbox" checked={youtubeMadeForKids} onChange={e=>setYoutubeMadeForKids(e.target.checked)} /> Made for kids</label>
+              </div>
+              <button className="security-primary" onClick={() => void publishToYouTube()} disabled={youtubePublishBusy || !youtubeMissionId.trim() || !youtubeMediaKey.trim() || !youtubeTitle.trim()}>
+                {youtubePublishBusy ? 'Publishing…' : 'Publish Approved Video'}
+              </button>
+              {youtubePublishResult?.published && <div className="security-status"><p>✓ YouTube confirmed the upload.</p><a href={youtubePublishResult.url} target="_blank" rel="noreferrer">Open published video</a></div>}
+            </div>}
+            <div className="lock-note" style={{marginTop:14}}><LockKeyhole size={16}/><span>JARVIS requires an approved mission and a stored video asset. Images alone cannot be uploaded as a YouTube video.</span></div>
           </section>
         </div>
       )}
