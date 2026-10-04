@@ -387,12 +387,21 @@ export async function handleApi(req, res, pathname, url) {
       }
       const body = await parseBody(req);
       const imageKeys = Array.isArray(body?.imageKeys) ? body.imageKeys.map(String).map(v => v.trim()).filter(Boolean).slice(0, 12) : [];
+      const missionId = String(body?.missionId || '').trim();
       if (!imageKeys.length) return json(res, 400, { error: 'At least one stored image key is required.' });
       if (imageKeys.some(key => !key.startsWith(`jarvis/${jarvisUser.id}/`))) {
         return json(res, 403, { error: 'One or more image assets do not belong to this JARVIS user.' });
       }
+      if (missionId) {
+        if (!/^[0-9a-f-]{36}$/i.test(missionId)) return json(res, 400, { error: 'missionId must be a valid mission id.' });
+        const mission = await getMissionForUser(jarvisUser.id, missionId);
+        if (!mission) return json(res, 404, { error: 'Render mission not found.' });
+        if (mission.metadata?.factory && mission.metadata.factory !== 'children-v1') return json(res, 409, { error: 'The supplied mission is not a Children Factory publishing mission.', code: 'VIDEO_MISSION_MISMATCH' });
+        if (mission.metadata?.projectId && mission.metadata.projectId !== projectId) return json(res, 409, { error: 'The render project does not match the selected mission.', code: 'VIDEO_PROJECT_MISMATCH' });
+      }
       const job = await queueVideoJobForUser(jarvisUser.id, projectId, {
         operation: 'render',
+        mission_id: missionId || null,
         image_keys: imageKeys,
         format: project.format,
         title: project.title,
