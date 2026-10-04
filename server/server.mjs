@@ -51,6 +51,7 @@ import {
 } from './store.mjs';
 import { enqueueJob, isRedisConfigured } from './queue.mjs';
 import { isHiggsfieldConfigured } from './higgsfield.mjs';
+import { isElevenLabsConfigured } from './elevenlabs.mjs';
 import { createMediaKey, getMedia, isSupabaseStorageConfigured, putMedia } from './media.mjs';
 import { capabilityContextForPrompt, getCapabilityRegistry, getAvailableCapabilities, rankCapabilitiesForIntent } from './capabilities.mjs';
 import { routeContextForPrompt, routeIntent } from './intent-router.mjs';
@@ -429,8 +430,16 @@ export async function handleApi(req, res, pathname, url) {
         if (mission.metadata?.projectId && mission.metadata.projectId !== projectId) return json(res, 409, { error: 'The render project does not match the selected mission.', code: 'VIDEO_PROJECT_MISMATCH' });
       }
       const provider = String(process.env.VIDEO_PROVIDER || 'higgsfield').trim().toLowerCase();
+      const includeVoice = Boolean(body?.includeVoice);
+      const narrationText = String(body?.narrationText || '').trim().slice(0, 20_000);
       if (provider === 'higgsfield' && !isHiggsfieldConfigured()) {
         return json(res, 503, { error: 'Higgsfield AI video generation is not configured on the server.', code: 'HIGGSFIELD_NOT_CONFIGURED' });
+      }
+      if (includeVoice && !narrationText) {
+        return json(res, 400, { error: 'Narration text is required when voice generation is enabled.', code: 'NARRATION_TEXT_REQUIRED' });
+      }
+      if (includeVoice && !isElevenLabsConfigured()) {
+        return json(res, 503, { error: 'ElevenLabs narration is not configured on the server.', code: 'ELEVENLABS_NOT_CONFIGURED' });
       }
       if (!['higgsfield', 'ffmpeg'].includes(provider)) {
         return json(res, 503, { error: `Unsupported video provider: ${provider}.`, code: 'VIDEO_PROVIDER_UNSUPPORTED' });
@@ -438,6 +447,8 @@ export async function handleApi(req, res, pathname, url) {
       const job = await queueVideoJobForUser(jarvisUser.id, projectId, {
         operation: 'render',
         provider,
+        include_voice: includeVoice,
+        narration_text: narrationText || null,
         mission_id: missionId || null,
         image_keys: imageKeys,
         format: project.format,
@@ -458,7 +469,7 @@ export async function handleApi(req, res, pathname, url) {
         renderer: provider === 'higgsfield' ? 'higgsfield-image-to-video' : 'ffmpeg-image-sequence-v1',
         provider,
         note: provider === 'higgsfield'
-          ? 'The worker will animate each stored story scene through Higgsfield and assemble the verified clips into a 16:9 MP4.'
+          ? 'The worker will animate each stored story scene through Higgsfield, add the requested ElevenLabs narration, and assemble the verified episode into a 16:9 MP4.'
           : 'The worker will render the supplied stored images into a 16:9 MP4 as an explicit local fallback renderer.',
       });
     }
