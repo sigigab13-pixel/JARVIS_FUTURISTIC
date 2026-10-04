@@ -55,6 +55,7 @@ import { capabilityContextForPrompt, getCapabilityRegistry, getAvailableCapabili
 import { routeContextForPrompt, routeIntent } from './intent-router.mjs';
 import { createMissionState, transitionMission, advanceMissionStep } from './mission-runtime.mjs';
 import { preflightMission, getMissionAdapters } from './mission-executor.mjs';
+import { prepareMissionAction } from './mission-actions.mjs';
 import { generateHuggingFaceImage, HF_IMAGE_MODELS, HF_IMAGE_EDIT_MODELS, HF_IMAGE_PROVIDERS } from './image-generator.mjs';
 import { getYouTubeAccessToken, getYouTubeAnalytics, getYouTubeChannel, uploadYouTubeVideo } from './youtube.mjs';
 
@@ -97,6 +98,31 @@ function getJarvisUserId(req) {
 
 function jarvisCookie(userId) {
   return `jarvis_user_id=${encodeURIComponent(userId)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000; Secure`;
+}
+
+async function queueMissionExecution(userId, mission) {
+  const job = await queueMissionStepForUser(userId, mission);
+  if (!job?.id) {
+    throw Object.assign(new Error('Mission has no executable step to queue.'), {
+      statusCode: 409,
+      code: 'MISSION_STEP_NOT_QUEUEABLE',
+    });
+  }
+
+  let dispatch = { queued: false, provider: 'supabase' };
+  if (isRedisConfigured()) {
+    try {
+      dispatch = {
+        queued: true,
+        provider: 'upstash_redis',
+        message: await enqueueJob(job.id, job.type),
+      };
+    } catch (queueError) {
+      console.error('JARVIS mission Redis dispatch error:', queueError);
+      dispatch = { queued: false, provider: 'supabase', fallback: 'redis_unavailable' };
+    }
+  }
+  return { job, dispatch };
 }
 
 async function requireAuthenticatedJarvisUser(req) {
@@ -563,23 +589,34 @@ export async function handleApi(req, res, pathname, url) {
           mission: current,
         }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
       }
-      const next = transitionMission(current, 'queued');
-      const queuedJob = await queueMissionStepForUser(jarvisUser.id, next);
-      const mission = await updateMissionForUser(jarvisUser.id, missionId, next, {
-        eventType: 'mission.queued',
-        message: 'Mission queued with its first durable execution step.',
-        metadata: { jobId: queuedJob?.id || null, stepIndex: next.currentStep },
-      });
-      let dispatch = { queued: false, provider: 'supabase' };
-      if (queuedJob?.id && isRedisConfigured()) {
-        try {
-          dispatch = { queued: true, provider: 'upstash_redis', message: await enqueueJob(queuedJob.id, queuedJob.type) };
-        } catch (queueError) {
-          console.error('JARVIS mission Redis dispatch error:', queueError);
-          dispatch = { queued: false, provider: 'supabase', fallback: 'redis_unavailable' };
+
+      let mission = null;
+      try {
+        const next = prepareMissionAction(current, 'start').next;
+        mission = await updateMissionForUser(jarvisUser.id, missionId, next, {
+          eventType: 'mission.queued',
+          message: 'Mission queued with its first durable execution step.',
+          metadata: { stepIndex: next.currentStep },
+        });
+        const execution = await queueMissionExecution(jarvisUser.id, mission);
+        return json(res, 202, {
+          mission,
+          job: execution.job,
+          dispatch: execution.dispatch,
+        }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+      } catch (error) {
+        if (mission?.status === 'queued') {
+          await updateMissionForUser(jarvisUser.id, missionId, current, {
+            eventType: 'mission.queue_failed',
+            message: 'Mission queueing failed, so JARVIS restored the previous mission state.',
+            metadata: { error: error instanceof Error ? error.message : String(error) },
+          }).catch(rollbackError => console.error('JARVIS mission rollback error:', rollbackError));
         }
+        return json(res, Number(error?.statusCode) || 503, {
+          error: error instanceof Error ? error.message : 'Mission could not be queued.',
+          code: error?.code || 'MISSION_QUEUE_FAILED',
+        }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
       }
-      return json(res, 202, { mission, job: queuedJob, dispatch }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
     }
 
     if (action === 'request-approval') {
@@ -601,18 +638,43 @@ export async function handleApi(req, res, pathname, url) {
       if (current.status !== 'waiting_approval') {
         return json(res, 409, { error: 'Mission is not waiting for approval.', code: 'MISSION_NOT_WAITING_FOR_APPROVAL' });
       }
-      const next = transitionMission(current, 'running');
-      next.approval = {
-        ...(current.approval || {}),
-        required: true,
-        status: 'approved',
-        approvedAt: new Date().toISOString(),
-      };
-      const mission = await updateMissionForUser(jarvisUser.id, missionId, next, {
-        eventType: 'mission.approved',
-        message: 'Mission approval recorded. Execution remains subject to tool-boundary authorization.',
-      });
-      return json(res, 200, { mission }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+
+      let mission = null;
+      try {
+        const next = prepareMissionAction(current, 'approve').next;
+        const preflight = preflightMission(next);
+        if (!preflight.ok) {
+          return json(res, 409, {
+            error: preflight.reason,
+            code: 'MISSION_PREFLIGHT_BLOCKED',
+            supportedAdapters: getMissionAdapters(),
+            preflight,
+            mission: current,
+          }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+        }
+        mission = await updateMissionForUser(jarvisUser.id, missionId, next, {
+          eventType: 'mission.approved',
+          message: 'Mission approval recorded and the first execution step is being queued.',
+        });
+        const execution = await queueMissionExecution(jarvisUser.id, mission);
+        return json(res, 202, {
+          mission,
+          job: execution.job,
+          dispatch: execution.dispatch,
+        }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+      } catch (error) {
+        if (mission?.status === 'running') {
+          await updateMissionForUser(jarvisUser.id, missionId, current, {
+            eventType: 'mission.queue_failed',
+            message: 'Mission approval was not queued for execution, so JARVIS restored the approval state.',
+            metadata: { error: error instanceof Error ? error.message : String(error) },
+          }).catch(rollbackError => console.error('JARVIS mission rollback error:', rollbackError));
+        }
+        return json(res, Number(error?.statusCode) || 503, {
+          error: error instanceof Error ? error.message : 'Approved mission could not be queued.',
+          code: error?.code || 'MISSION_QUEUE_FAILED',
+        }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+      }
     }
 
     if (action === 'pause') {
@@ -641,12 +703,43 @@ export async function handleApi(req, res, pathname, url) {
           mission: current,
         }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
       }
-      const next = transitionMission(current, 'queued');
-      const mission = await updateMissionForUser(jarvisUser.id, missionId, next, {
-        eventType: action === 'resume' ? 'mission.resumed' : 'mission.retried',
-        message: action === 'resume' ? 'Mission resumed and queued for execution.' : 'Failed mission retried and queued for execution.',
-      });
-      return json(res, 202, { mission }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+
+      let mission = null;
+      try {
+        const next = prepareMissionAction(current, action).next;
+        const preflight = preflightMission(next);
+        if (!preflight.ok) {
+          return json(res, 409, {
+            error: preflight.reason,
+            code: 'MISSION_PREFLIGHT_BLOCKED',
+            supportedAdapters: getMissionAdapters(),
+            preflight,
+            mission: current,
+          }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+        }
+        mission = await updateMissionForUser(jarvisUser.id, missionId, next, {
+          eventType: action === 'resume' ? 'mission.resumed' : 'mission.retried',
+          message: action === 'resume' ? 'Mission resumed and is being queued for execution.' : 'Failed mission retried and is being queued for execution.',
+        });
+        const execution = await queueMissionExecution(jarvisUser.id, mission);
+        return json(res, 202, {
+          mission,
+          job: execution.job,
+          dispatch: execution.dispatch,
+        }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+      } catch (error) {
+        if (mission && ['queued'].includes(mission.status)) {
+          await updateMissionForUser(jarvisUser.id, missionId, current, {
+            eventType: 'mission.queue_failed',
+            message: 'Mission queueing failed, so JARVIS restored the previous mission state.',
+            metadata: { error: error instanceof Error ? error.message : String(error) },
+          }).catch(rollbackError => console.error('JARVIS mission rollback error:', rollbackError));
+        }
+        return json(res, Number(error?.statusCode) || 503, {
+          error: error instanceof Error ? error.message : 'Mission could not be queued.',
+          code: error?.code || 'MISSION_QUEUE_FAILED',
+        }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+      }
     }
 
     if (action === 'cancel') {
