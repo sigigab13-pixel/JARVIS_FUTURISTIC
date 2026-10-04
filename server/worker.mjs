@@ -17,6 +17,7 @@ import { executeMissionStep } from './mission-executor.mjs';
 import { canTransition, transitionMission } from './mission-runtime.mjs';
 import { createMediaKey, getMedia, isSupabaseStorageConfigured, putMedia } from './media.mjs';
 import { generateVideoFromImage, isHiggsfieldConfigured, uploadReferenceImage } from './higgsfield.mjs';
+import { isElevenLabsConfigured, synthesizeNarration } from './elevenlabs.mjs';
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
 const SUPABASE_SERVER_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -150,10 +151,26 @@ async function executeHiggsfieldVideoPipeline({ userId, imageKeys, payload }) {
     await fs.writeFile(listFile, clipFiles.map(file => `file '${file.replace(/'/g, "'\\''")}'`).join('\n'));
     const output = path.join(tempDir, 'render.mp4');
     await runFfmpeg(['-f', 'concat', '-safe', '0', '-i', listFile, '-c', 'copy', '-movflags', '+faststart', '-y', output]);
-    const video = await fs.readFile(output);
+    let video = await fs.readFile(output);
+    let audio = null;
+    const narrationText = String(payload.narration_text || '').trim();
+    if (narrationText) {
+      if (!isElevenLabsConfigured()) {
+        throw Object.assign(new Error('Narration was requested but ElevenLabs is not configured on the server.'), { code: 'ELEVENLABS_NOT_CONFIGURED', safeToRetry: false });
+      }
+      const speech = await synthesizeNarration({ text: narrationText });
+      const audioSha256 = crypto.createHash('sha256').update(speech.audio).digest('hex');
+      const audioKey = createMediaKey({ userId, kind: 'narration', extension: 'mp3', id: audioSha256 });
+      const audioStored = await putMedia({ key: audioKey, body: speech.audio, contentType: speech.contentType, metadata: { user_id: userId, source: 'children_factory_narration', sha256: audioSha256, voice_id: speech.voiceId, model: speech.modelId }, upsert: true });
+      audio = { mediaKey: audioKey, sha256: audioSha256, media: audioStored, voiceId: speech.voiceId, model: speech.modelId };
+      const voicedOutput = path.join(tempDir, 'render-voiced.mp4');
+      await fs.writeFile(path.join(tempDir, 'narration.mp3'), speech.audio);
+      await runFfmpeg(['-i', output, '-i', path.join(tempDir, 'narration.mp3'), '-map', '0:v:0', '-map', '1:a:0', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '128k', '-shortest', '-movflags', '+faststart', '-y', voicedOutput]);
+      video = await fs.readFile(voicedOutput);
+    }
     const sha256 = crypto.createHash('sha256').update(video).digest('hex');
     const durationSeconds = sceneDurations.slice(0, clipRecords.length).reduce((sum, value) => sum + (Number.isFinite(value) && value > 0 ? value : 5), 0);
-    return { video, sha256, durationSeconds, provider: 'higgsfield', model: clipRecords[0]?.model || '', clips: clipRecords };
+    return { video, sha256, durationSeconds, provider: 'higgsfield', model: clipRecords[0]?.model || '', clips: clipRecords, audio };
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
   }
@@ -181,7 +198,7 @@ async function executeVideoPipeline(job) {
     metadata: { user_id: userId, source: 'video_pipeline', provider: rendered.provider, model: rendered.model || '', sha256: rendered.sha256, project_id: payload.project_id || '' },
     upsert: true,
   });
-  const result = { rendered: true, media: stored, mediaKey, sha256: rendered.sha256, durationSeconds: rendered.durationSeconds, format: '16:9', sourceImageCount: imageKeys.length, provider: rendered.provider, model: rendered.model || null, clips: rendered.clips || null, missionId: String(payload.mission_id || '') || null };
+  const result = { rendered: true, media: stored, mediaKey, sha256: rendered.sha256, durationSeconds: rendered.durationSeconds, format: '16:9', sourceImageCount: imageKeys.length, provider: rendered.provider, model: rendered.model || null, audio: rendered.audio || null, clips: rendered.clips || null, missionId: String(payload.mission_id || '') || null };
   if (payload.mission_id) {
     const mission = await getMissionForUser(userId, String(payload.mission_id));
     if (!mission) throw new Error('Video render mission was not found for this JARVIS user.');
