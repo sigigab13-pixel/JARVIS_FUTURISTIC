@@ -217,3 +217,22 @@ This entry records the verification trigger itself, not a successful deployment.
 5. Verify generated media storage, SHA-256 evidence, usage linkage and mission completion.
 
 No step is marked complete until it is actually observed.
+
+
+### Entry 007 — Ignored-build-step command neutralized
+
+**Status:** Configuration corrected; fresh deployment trigger pending
+
+The first verification deployment reached the Vercel build machine, but its logs exposed an important detail: the previous ignored-build-step command was still being executed and returned exit code 0, causing Vercel to cancel the build.
+
+The canonical project configuration was corrected again so the ignored-build-step command is explicitly neutralized with `exit 1`. This makes the next Git deployment proceed through the normal build instead of being treated as intentionally ignored.
+
+The deployment is **not** being called successful yet. A fresh deployment from the updated configuration must still reach READY and match the current `main` commit.
+
+### Next verification
+
+1. Trigger a new Git deployment from `main`.
+2. Confirm the ignored-build-step cancellation no longer occurs.
+3. Confirm the deployment reaches READY.
+4. Confirm the commit matches current `main`.
+5. Run the controlled Mission Center image-generation test.
