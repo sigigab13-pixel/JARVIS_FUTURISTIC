@@ -1,9 +1,0 @@
-services:
-  - type: web
-    name: jarvis-empire-command
-    runtime: node
-    plan: free
-    buildCommand: npm install && npm run build
-    startCommand: npm start
-    healthCheckPath: /api/_healthcheck
-    autoDeploy: true
