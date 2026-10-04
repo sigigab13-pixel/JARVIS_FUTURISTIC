@@ -1305,8 +1305,10 @@ export async function handleApi(req, res, pathname, url) {
     if (mission.approval?.status !== 'approved') {
       return json(res, 409, { error: 'YouTube publishing requires an approved JARVIS mission.', code: 'YOUTUBE_APPROVAL_REQUIRED', mission });
     }
-    if (mission.metadata?.factory === 'children-v1' && mission.metadata?.renderedVideo?.mediaKey
-        && mission.metadata.renderedVideo.mediaKey !== mediaKey) {
+    if (mission.metadata?.youtube?.videoId) {
+      return json(res, 409, { error: 'This mission has already been published to YouTube.', code: 'YOUTUBE_ALREADY_PUBLISHED', mission });
+    }
+    if (mission.metadata?.factory === 'children-v1' && mission.metadata?.renderedVideo?.mediaKey !== mediaKey) {
       return json(res, 409, { error: 'The selected video asset is not the verified render bound to this Children Factory mission.', code: 'YOUTUBE_ASSET_MISMATCH' });
     }
     const connection = await getYouTubeConnection(jarvisUser.id);
