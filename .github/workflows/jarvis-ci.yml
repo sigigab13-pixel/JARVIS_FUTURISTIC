@@ -35,11 +35,26 @@ jobs:
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
           ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
         run: |
-          test -n "${SUPABASE_SECRET_KEY:-}" || { echo "Missing SUPABASE_SECRET_KEY"; exit 1; }
-          test -n "${HIGGSFIELD_API_KEY:-}" || { echo "Missing HIGGSFIELD_API_KEY"; exit 1; }
-          test -n "${ELEVENLABS_API_KEY:-}" || { echo "Missing ELEVENLABS_API_KEY"; exit 1; }
-          test -n "${ELEVENLABS_VOICE_ID:-}" || { echo "Missing ELEVENLABS_VOICE_ID"; exit 1; }
-          echo "Required server secret names are present."
+          missing=0
+          for name in SUPABASE_SECRET_KEY HIGGSFIELD_API_KEY ELEVENLABS_API_KEY ELEVENLABS_VOICE_ID; do
+            case "$name" in
+              SUPABASE_SECRET_KEY) value="${SUPABASE_SECRET_KEY:-}" ;;
+              HIGGSFIELD_API_KEY) value="${HIGGSFIELD_API_KEY:-}" ;;
+              ELEVENLABS_API_KEY) value="${ELEVENLABS_API_KEY:-}" ;;
+              ELEVENLABS_VOICE_ID) value="${ELEVENLABS_VOICE_ID:-}" ;;
+            esac
+            if [ -n "$value" ]; then
+              echo "$name: present"
+            else
+              echo "$name: MISSING"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "Required server secrets are not all configured in GitHub Actions."
+            exit 1
+          fi
+          echo "All required server secret names are present."
 
       - name: Run tests
         run: npm test
