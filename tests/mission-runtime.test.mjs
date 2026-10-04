@@ -57,3 +57,28 @@ test('storage normalization preserves approval, evidence, and metadata without u
   assert.deepEqual(normalized.metadata, { source: 'test' });
   assert.ok(!('userId' in normalized));
 });
+
+
+test('execution step definitions survive mission normalization', () => {
+  const state = createMissionState({
+    missionId: 'm5',
+    steps: [{
+      id: 'generate-image',
+      title: 'Generate image',
+      capability: 'image',
+      executorType: 'image_generation',
+      sideEffect: true,
+      prompt: 'A friendly illustrated lion for a children\'s rhyme.',
+      priority: 80,
+      maxAttempts: 5,
+      input: { style: 'storybook' },
+    }],
+  });
+
+  assert.equal(state.steps[0].executorType, 'image_generation');
+  assert.equal(state.steps[0].sideEffect, true);
+  assert.equal(state.steps[0].prompt, 'A friendly illustrated lion for a children\'s rhyme.');
+  assert.equal(state.steps[0].priority, 80);
+  assert.equal(state.steps[0].maxAttempts, 5);
+  assert.deepEqual(state.steps[0].input, { style: 'storybook' });
+});
