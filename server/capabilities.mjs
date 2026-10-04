@@ -64,6 +64,14 @@ const capabilities = [
     available: () => Boolean(process.env.GOOGLE_YOUTUBE_CLIENT_ID && process.env.GOOGLE_YOUTUBE_CLIENT_SECRET && process.env.PUBLIC_URL),
   },
   {
+    id: 'quantum_security',
+    label: 'Quantum Security Readiness',
+    category: 'security',
+    description: 'Tracks post-quantum cryptography readiness, crypto-agility, and provider support without implementing custom cryptography.',
+    keywords: ['quantum', 'post-quantum', 'pqc', 'crypto', 'cryptography', 'security', 'ml-kem', 'ml-dsa', 'slh-dsa'],
+    available: () => true,
+  },
+  {
     id: 'durable_missions',
     label: 'Durable Missions',
     category: 'orchestration',
@@ -87,7 +95,7 @@ export function getCapabilityRegistry() {
     label,
     category,
     description,
-    keywords: Array.isArray(capability.keywords) ? capability.keywords : [],
+    keywords: Array.isArray(capabilities.find(item => item.id === id)?.keywords) ? capabilities.find(item => item.id === id).keywords : [],
     available: Boolean(available()),
   }));
 }
