@@ -97,6 +97,10 @@ function stepAdapterType(step) {
   return String(step?.executorType || step?.executor_type || step?.type || '').trim();
 }
 
+export function missionStatusCanExecute(status) {
+  return ['queued', 'running'].includes(String(status || ''));
+}
+
 export function getMissionAdapters() {
   return [...ADAPTERS.keys()];
 }
@@ -164,6 +168,18 @@ export async function executeMissionStep(job) {
 
   const current = await getMissionForUser(userId, missionId);
   if (!current) throw Object.assign(new Error('Mission disappeared during execution.'), { code: 'MISSION_NOT_FOUND' });
+
+  if (!missionStatusCanExecute(current.status)) {
+    return {
+      accepted: true,
+      completed: false,
+      skipped: true,
+      missionId,
+      stepIndex,
+      status: current.status,
+      message: 'Mission is not executable in its current lifecycle state; stale queued work was not executed.',
+    };
+  }
 
   if (current.currentStep !== stepIndex) {
     const existingStep = current.steps?.[stepIndex];
