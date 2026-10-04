@@ -9,13 +9,13 @@ test('worker creates unique stable ids', () => {
   assert.notEqual(a, b);
 });
 
-test('worker rejects video jobs until a verified adapter exists', async () => {
+test('worker rejects malformed video jobs instead of claiming success', async () => {
   await assert.rejects(
     executeJob({
       type: 'video_pipeline',
       payload: { operation: 'plan', project_id: 'project-1' },
     }),
-    error => error?.code === 'JOB_ADAPTER_UNAVAILABLE'
+    error => error?.message === 'Video render requires a JARVIS user and stored image assets.'
   );
 });
 
