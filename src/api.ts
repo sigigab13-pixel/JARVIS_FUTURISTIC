@@ -140,8 +140,8 @@ export const missions = {
 
 
 export const video = {
-  render: async (projectId: string, imageKeys: string[]) =>
-    api.post(`/api/video/projects/${encodeURIComponent(projectId)}/render`, { imageKeys }),
+  render: async (projectId: string, imageKeys: string[], missionId?: string) =>
+    api.post(`/api/video/projects/${encodeURIComponent(projectId)}/render`, { imageKeys, missionId }),
   job: async (jobId: string) =>
     api.get(`/api/video/jobs/${encodeURIComponent(jobId)}`),
 };
