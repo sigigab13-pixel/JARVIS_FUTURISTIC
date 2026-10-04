@@ -199,3 +199,21 @@ No production-live claim is being made yet. The next verification is to confirm 
 
 This is intentionally documented as a configuration repair, not as a successful deployment.
 
+
+### Entry 006 — Deployment verification trigger
+
+**Status:** Verification initiated; production readiness still unclaimed
+
+After repairing the ignored-build-step configuration, the next safe move is to force the Git-connected deployment path to produce a fresh build from the current `main` source.
+
+This entry records the verification trigger itself, not a successful deployment. The deployment must still be observed as READY and matched to the current `main` commit before JARVIS is considered production-live.
+
+### Verification gate
+
+1. Confirm a new Vercel deployment is created from `main`.
+2. Confirm the deployment reaches READY.
+3. Confirm its commit matches the current GitHub `main` commit.
+4. Run one controlled image mission through the Mission Center with its explicit approval gate.
+5. Verify generated media storage, SHA-256 evidence, usage linkage and mission completion.
+
+No step is marked complete until it is actually observed.
