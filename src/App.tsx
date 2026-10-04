@@ -362,6 +362,7 @@ function App() {
     const closeAll = () => {
       setCommandOpen(false);
       setMissionOpen(false);
+      setFactoryOpen(false);
       setCapabilityOpen(false);
       setBusinessOpen(false);
       setVideoOpen(false);
@@ -371,7 +372,12 @@ function App() {
       setEmpireOpen(false);
     };
 
-    if (/^(open|show|launch) (mission center|missions)$/.test(value) || value === 'mission center') {
+    if (/^(open|show|launch) (children factory|children content factory)$/.test(value) || value === 'children factory') {
+      closeAll();
+      setFactoryOpen(true);
+      void loadMissions();
+      response = 'Children Factory is open. Create a story draft and review it before approval.';
+    } else if (/^(open|show|launch) (mission center|missions)$/.test(value) || value === 'mission center') {
       closeAll();
       setMissionOpen(true);
       void loadMissions();
