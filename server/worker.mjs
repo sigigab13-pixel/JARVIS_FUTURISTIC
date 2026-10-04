@@ -565,7 +565,7 @@ export async function runWorker({
 
   const maxConcurrency = Math.min(8, Math.max(1, Math.floor(Number(concurrency) || 4)));
   const jobLimit = Math.min(100, Math.max(1, Math.floor(Number(maxJobsPerRun) || 24)));
-  const runtimeLimit = Math.min(240000, Math.max(30000, Number(maxRuntimeMs) || 210000));
+  const runtimeLimit = Math.min(540000, Math.max(30000, Number(maxRuntimeMs) || 210000));
   const startedAt = Date.now();
   let processed = 0;
   let attempted = 0;
