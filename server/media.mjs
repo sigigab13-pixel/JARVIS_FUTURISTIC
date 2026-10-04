@@ -38,4 +38,25 @@ export async function putMedia({ key, body, contentType = 'application/octet-str
   return { key, bucket, contentType, path: key, stored: true };
 }
 
+
+export async function getMedia({ key }) {
+  if (!isSupabaseStorageConfigured()) throw new Error('Supabase Storage is not configured.');
+  const safeKey = String(key || '').trim();
+  if (!safeKey) throw new Error('Media object key is required.');
+  const response = await fetch(`${supabaseUrl}/storage/v1/object/${encodeURIComponent(bucket)}/${safeKey.split('/').map(encodeURIComponent).join('/')}`, {
+    headers: {
+      apikey: supabaseKey,
+      Authorization: 'Bearer ' + supabaseKey,
+    },
+  });
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    throw Object.assign(new Error(`Supabase Storage download failed (${response.status}): ${body.slice(0, 300)}`), { statusCode: response.status });
+  }
+  return {
+    body: Buffer.from(await response.arrayBuffer()),
+    contentType: response.headers.get('content-type') || 'application/octet-stream',
+  };
+}
+
 export { bucket as supabaseMediaBucket };
