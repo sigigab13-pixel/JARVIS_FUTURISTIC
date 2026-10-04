@@ -839,8 +839,8 @@ export async function handleApi(req, res, pathname, url) {
           missionId: mission.id,
           label: 'Approve Draft for Publishing',
           autoPublish: false,
-          publishingProvider: null,
-          note: 'Approval records permission only; no publishing provider is connected in v1.',
+          publishingProvider: 'youtube',
+          note: 'Approval records permission to publish this draft to YouTube. JARVIS never publishes automatically.'
         },
       }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
     } catch (error) {
