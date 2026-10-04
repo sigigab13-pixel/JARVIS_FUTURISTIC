@@ -154,7 +154,7 @@ async function executeVideoPipeline(job) {
   }
 }
 
-export export function buildMissionFailureState(mission, { jobId = '', adapter = '', attempts = 0, error = null } = {}) {
+export function buildMissionFailureState(mission, { jobId = '', adapter = '', attempts = 0, error = null } = {}) {
   if (!mission || !canTransition(String(mission.status || ''), 'failed')) return null;
   const next = transitionMission(mission, 'failed');
   next.lastEvidence = {
