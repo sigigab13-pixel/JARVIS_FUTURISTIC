@@ -19,3 +19,8 @@ test('capability ranking identifies likely tools from natural language', () => {
   assert.ok(ids.includes('business'));
   assert.ok(ids.includes('youtube'));
 });
+
+test('capability ranking identifies the Children Factory for production requests', () => {
+  const ranked = rankCapabilitiesForIntent('make a bedtime story video for children');
+  assert.ok(ranked.some(item => item.id === 'children_factory'));
+});
