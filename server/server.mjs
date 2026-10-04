@@ -50,6 +50,7 @@ import {
   updateRoutineForUser,
 } from './store.mjs';
 import { enqueueJob, isRedisConfigured } from './queue.mjs';
+import { isHiggsfieldConfigured } from './higgsfield.mjs';
 import { createMediaKey, getMedia, isSupabaseStorageConfigured, putMedia } from './media.mjs';
 import { capabilityContextForPrompt, getCapabilityRegistry, getAvailableCapabilities, rankCapabilitiesForIntent } from './capabilities.mjs';
 import { routeContextForPrompt, routeIntent } from './intent-router.mjs';
@@ -427,8 +428,16 @@ export async function handleApi(req, res, pathname, url) {
         if (mission.metadata?.factory && mission.metadata.factory !== 'children-v1') return json(res, 409, { error: 'The supplied mission is not a Children Factory publishing mission.', code: 'VIDEO_MISSION_MISMATCH' });
         if (mission.metadata?.projectId && mission.metadata.projectId !== projectId) return json(res, 409, { error: 'The render project does not match the selected mission.', code: 'VIDEO_PROJECT_MISMATCH' });
       }
+      const provider = String(process.env.VIDEO_PROVIDER || 'higgsfield').trim().toLowerCase();
+      if (provider === 'higgsfield' && !isHiggsfieldConfigured()) {
+        return json(res, 503, { error: 'Higgsfield AI video generation is not configured on the server.', code: 'HIGGSFIELD_NOT_CONFIGURED' });
+      }
+      if (!['higgsfield', 'ffmpeg'].includes(provider)) {
+        return json(res, 503, { error: `Unsupported video provider: ${provider}.`, code: 'VIDEO_PROVIDER_UNSUPPORTED' });
+      }
       const job = await queueVideoJobForUser(jarvisUser.id, projectId, {
         operation: 'render',
+        provider,
         mission_id: missionId || null,
         image_keys: imageKeys,
         format: project.format,
@@ -446,8 +455,11 @@ export async function handleApi(req, res, pathname, url) {
       return json(res, 202, {
         job,
         dispatch,
-        renderer: 'ffmpeg-image-sequence-v1',
-        note: 'The worker will render the supplied stored images into a 16:9 MP4 and save the verified video asset to JARVIS media storage.',
+        renderer: provider === 'higgsfield' ? 'higgsfield-image-to-video' : 'ffmpeg-image-sequence-v1',
+        provider,
+        note: provider === 'higgsfield'
+          ? 'The worker will animate each stored story scene through Higgsfield and assemble the verified clips into a 16:9 MP4.'
+          : 'The worker will render the supplied stored images into a 16:9 MP4 as an explicit local fallback renderer.',
       });
     }
 
