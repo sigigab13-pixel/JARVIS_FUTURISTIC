@@ -21,9 +21,14 @@ jobs:
       contents: read
     steps:
       - name: Checkout JARVIS
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 1
+
+      - name: Verify FFmpeg
+        run: |
+          command -v ffmpeg >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y ffmpeg; }
+          ffmpeg -version | head -n 1
 
       - name: Run one worker cycle
         env:
