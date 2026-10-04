@@ -3,12 +3,14 @@ import { transitionMission, advanceMissionStep } from './mission-runtime.mjs';
 import {
   getMissionForUser,
   updateMissionForUser,
+  createMissionForUser,
   fanOutRoutineRun,
   queueMissionStepForUser,
   consumeImageGeneration,
 } from './store.mjs';
 import { createMediaKey, isSupabaseStorageConfigured, putMedia } from './media.mjs';
 import { generateHuggingFaceImage } from './image-generator.mjs';
+import { appendChildrenFactoryImage, markChildrenFactoryBuildComplete } from './factory-runtime.mjs';
 
 async function executeImageGeneration(job) {
   const payload = job?.payload && typeof job.payload === 'object' ? job.payload : {};
@@ -211,11 +213,22 @@ export async function executeMissionStep(job) {
 
   const result = await adapterFn(job);
   const evidence = verifiedEvidence(adapter, result);
+
+  let metadata = current.metadata && typeof current.metadata === 'object' ? current.metadata : {};
+  if (metadata.factory === 'children-v1' && adapter === 'image_generation') {
+    metadata = appendChildrenFactoryImage(metadata, stepIndex + 1, result);
+  }
+
   const next = advanceMissionStep({
     ...current,
     lastEvidence: evidence,
+    metadata,
   });
   next.lastEvidence = evidence;
+
+  if (metadata.factory === 'children-v1' && next.status === 'succeeded') {
+    next.metadata = markChildrenFactoryBuildComplete(metadata);
+  }
 
   const updated = await updateMissionForUser(userId, missionId, next, {
     eventType: next.status === 'succeeded' ? 'mission.completed' : 'mission.checkpoint',
@@ -224,6 +237,47 @@ export async function executeMissionStep(job) {
       : 'Mission step completed from a verified executor result.',
     metadata: { stepIndex, adapter },
   });
+
+  let approvalMission = null;
+  if (updated.status === 'succeeded' && updated.metadata?.factory === 'children-v1' && !updated.metadata?.approvalMissionId) {
+    const approvalState = createMissionState({
+      missionId: crypto.randomUUID(),
+      userId,
+      goal: 'Children Factory: approve and publish ' + String(updated.metadata.title || 'children content'),
+      autonomy: 'execute_with_approval',
+      steps: [],
+    });
+    approvalState.approval = {
+      required: true,
+      status: 'pending',
+      requestedAt: new Date().toISOString(),
+      approvedAt: null,
+      action: 'publish',
+    };
+    approvalState.metadata = {
+      factory: 'children-v1',
+      projectId: updated.metadata.projectId || null,
+      buildMissionId: updated.id,
+      topic: updated.metadata.topic || null,
+      age: updated.metadata.age || null,
+      story: updated.metadata.story || null,
+      characterId: updated.metadata.characterId || null,
+      characterBible: updated.metadata.characterBible || null,
+      images: Array.isArray(updated.metadata.images) ? updated.metadata.images : [],
+    };
+    approvalMission = transitionMission(approvalState, 'waiting_approval');
+    approvalMission.approval = approvalState.approval;
+    approvalMission = await createMissionForUser(userId, approvalMission);
+    const linkedMetadata = {
+      ...(updated.metadata || {}),
+      approvalMissionId: approvalMission.id,
+    };
+    await updateMissionForUser(userId, updated.id, { ...updated, metadata: linkedMetadata }, {
+      eventType: 'mission.approval_created',
+      message: 'Children Factory build completed; publishing approval is now waiting for user review.',
+      metadata: { approvalMissionId: approvalMission.id },
+    });
+  }
 
   let nextJob = null;
   if (updated.status !== 'succeeded' && updated.currentStep >= 0) {
