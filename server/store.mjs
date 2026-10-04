@@ -632,9 +632,9 @@ export async function getVideoScenesForUser(userId, projectId) {
 
 export async function getJobForUser(userId, jobId) {
   if (!validUuid(userId) || !validUuid(jobId)) throw new Error('Invalid job identity.');
-  if (!configured()) return null;
+  if (!configured) return null;
   const rows = await request(
-    'jobs?select=id,user_id,type,status,result,error,attempts,max_attempts,scheduled_at,started_at,finished_at,updated_at&' +
+    'jobs?select=id,user_id,type,status,result,error,attempts,max_attempts,scheduled_at,started_at,finished_at,updated_at&
     'id=eq.' + encodeURIComponent(jobId) + '&user_id=eq.' + encodeURIComponent(userId) + '&limit=1'
   );
   const row = rows?.[0];
