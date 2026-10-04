@@ -863,8 +863,16 @@ export async function handleApi(req, res, pathname, url) {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
+        const providerError = data?.error;
+        const message = providerError?.message || providerError?.detail || providerError?.error
+          || (typeof providerError === 'string' ? providerError : null)
+          || (providerError && typeof providerError === 'object' ? JSON.stringify(providerError) : null)
+          || 'JARVIS AI core request failed.';
+        console.error('JARVIS Hugging Face request failed:', response.status, message);
         return json(res, response.status >= 400 && response.status < 500 ? 400 : 502, {
-          error: data?.error?.message || data?.error || 'JARVIS AI core request failed.',
+          error: String(message),
+          code: 'AI_PROVIDER_REQUEST_FAILED',
+          provider: 'Hugging Face Inference Providers',
         });
       }
       text = String(data?.choices?.[0]?.message?.content || '').trim();
