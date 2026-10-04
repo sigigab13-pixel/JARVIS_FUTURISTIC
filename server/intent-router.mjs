@@ -111,7 +111,8 @@ export function routeContextForPrompt(route) {
   if (!route) return '';
   const lines = [
     'Intent routing context:',
-    `- intent: ${route.intent || 'chat'}`,\n    `- mode: ${route.mode}`,
+    `- intent: ${route.intent || 'chat'}`,
+    `- mode: ${route.mode}`,
     `- candidate capabilities: ${route.candidateCapabilities?.map(item => item.id).join(', ') || 'none confidently identified'}`,
     `- contextual references detected: ${route.references?.length || 0}`,
     '- Treat references as unresolved until they can be grounded in the supplied conversation, files, memory, or tool context.',
