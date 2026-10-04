@@ -137,6 +137,7 @@ function tokenize(value) {
 const intentHints = {
   image: ['image', 'picture', 'photo', 'illustration', 'draw', 'visual'],
   video: ['video', 'animation', 'reel', 'short', 'storyboard'],
+  children_factory: ['children', 'kids', 'story', 'rhyme', 'nursery', 'bedtime', 'video'],
   voice: ['voice', 'speak', 'audio', 'listen', 'microphone', 'call'],
   business: ['business', 'client', 'customer', 'crm', 'lead', 'company', 'sales'],
   web_intelligence: ['search', 'web', 'latest', 'today', 'news', 'research', 'competitor', 'current'],
