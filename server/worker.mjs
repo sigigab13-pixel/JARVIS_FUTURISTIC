@@ -90,7 +90,7 @@ async function executeVideoPipeline(job) {
   const payload = job?.payload && typeof job.payload === 'object' ? job.payload : {};
   const userId = String(job?.user_id || payload.user_id || '').trim();
   const imageKeys = Array.isArray(payload.image_keys) ? payload.image_keys.map(String).filter(Boolean).slice(0, 12) : [];
-  if (!userId || !/^jarvis\\/i.test(imageKeys[0] || '')) throw new Error('Video render requires a JARVIS user and stored image assets.');
+  if (!userId || !imageKeys.length || !imageKeys[0].startsWith(`jarvis/${userId}/`)) throw new Error('Video render requires a JARVIS user and stored image assets.');
   if (!isSupabaseStorageConfigured()) throw new Error('Supabase Storage is not configured for video rendering.');
   if (!imageKeys.length) throw new Error('Video render requires at least one stored image asset.');
   if (imageKeys.some(key => !key.startsWith(`jarvis/${userId}/`))) throw new Error('Video render asset ownership validation failed.');
