@@ -1305,7 +1305,10 @@ export async function handleApi(req, res, pathname, url) {
     if (mission.approval?.status !== 'approved') {
       return json(res, 409, { error: 'YouTube publishing requires an approved JARVIS mission.', code: 'YOUTUBE_APPROVAL_REQUIRED', mission });
     }
-
+    if (mission.metadata?.factory === 'children-v1' && mission.metadata?.renderedVideo?.mediaKey
+        && mission.metadata.renderedVideo.mediaKey !== mediaKey) {
+      return json(res, 409, { error: 'The selected video asset is not the verified render bound to this Children Factory mission.', code: 'YOUTUBE_ASSET_MISMATCH' });
+    }
     const connection = await getYouTubeConnection(jarvisUser.id);
     if (!connection) return json(res, 409, { error: 'Connect YouTube before publishing.', code: 'YOUTUBE_NOT_CONNECTED' });
 
@@ -1329,12 +1332,37 @@ export async function handleApi(req, res, pathname, url) {
           },
         },
       });
+      const videoId = String(video.id || '').trim();
+      if (!videoId) return json(res, 502, { published: false, provider: 'youtube', error: 'YouTube did not return a video id.' });
+      const evidence = {
+        provider: 'youtube',
+        videoId,
+        url: `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`,
+        privacyStatus,
+        mediaKey,
+        publishedAt: new Date().toISOString(),
+      };
+      let missionUpdated = false;
+      try {
+        const completed = transitionMission(mission, 'succeeded');
+        completed.lastEvidence = evidence;
+        completed.metadata = { ...(mission.metadata || {}), youtube: evidence };
+        await updateMissionForUser(jarvisUser.id, mission.id, completed, {
+          eventType: 'mission.published',
+          message: 'YouTube confirmed the upload and the mission was completed with verified evidence.',
+          metadata: evidence,
+        });
+        missionUpdated = true;
+      } catch (missionError) {
+        console.error('YouTube mission completion update failed:', missionError);
+      }
       return json(res, 200, {
         published: true,
         provider: 'youtube',
-        videoId: video.id,
-        url: `https://www.youtube.com/watch?v=${encodeURIComponent(video.id)}`,
+        videoId,
+        url: evidence.url,
         status: video.status || null,
+        missionUpdated,
       }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
     } catch (error) {
       console.error('YouTube publish error:', error);
