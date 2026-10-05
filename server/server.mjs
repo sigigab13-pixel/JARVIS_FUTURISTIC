@@ -168,12 +168,13 @@ function safePath(urlPath) {
   return target.startsWith(DIST) ? target : null;
 }
 
-export function buildChildrenFactoryPipeline({ renderQueued = false, renderCompleted = false, approvalStatus = 'pending', published = false } = {}) {
+export function buildChildrenFactoryPipeline({ renderQueued = false, renderCompleted = false, verifiedVideo = false, approvalStatus = 'pending', published = false } = {}) {
   return [
     { id: 'story', label: 'Story', status: 'completed' },
     { id: 'character_bible', label: 'Character Bible', status: 'completed' },
     { id: 'scene_assets', label: 'Scene Assets', status: 'completed' },
     { id: 'render', label: '9:16 Render', status: renderCompleted ? 'completed' : renderQueued ? 'queued' : 'pending' },
+    { id: 'verified_video', label: 'Verified Video', status: verifiedVideo ? 'completed' : 'blocked' },
     { id: 'approval', label: 'Approval', status: published ? 'completed' : approvalStatus },
     { id: 'publish', label: 'Publish', status: published ? 'completed' : 'blocked' },
   ];
@@ -410,6 +411,7 @@ export async function handleApi(req, res, pathname, url) {
         if (!mission) return json(res, 404, { error: 'Render mission not found.' });
         if (mission.metadata?.factory && mission.metadata.factory !== 'children-v1') return json(res, 409, { error: 'The supplied mission is not a Children Factory publishing mission.', code: 'VIDEO_MISSION_MISMATCH' });
         if (mission.metadata?.projectId && mission.metadata.projectId !== projectId) return json(res, 409, { error: 'The render project does not match the selected mission.', code: 'VIDEO_PROJECT_MISMATCH' });
+        if (mission.metadata?.pipeline?.render === 'completed') return json(res, 409, { error: 'This Children Factory render is already completed. A new render must create a new verified video state.', code: 'VIDEO_RENDER_ALREADY_COMPLETED' });
       }
       const job = await queueVideoJobForUser(jarvisUser.id, projectId, {
         operation: 'render',
@@ -594,6 +596,9 @@ export async function handleApi(req, res, pathname, url) {
     }
 
     if (action === 'request-approval') {
+      if (current.metadata?.factory === 'children-v1' && current.metadata?.pipeline?.verified_video !== 'completed' && !current.metadata?.verifiedVideo?.mediaKey) {
+        return json(res, 409, { error: 'Children Factory approval requires a verified video render first.', code: 'CHILDREN_FACTORY_VERIFIED_VIDEO_REQUIRED', mission: current });
+      }
       const next = transitionMission(current, 'waiting_approval');
       next.approval = {
         ...(current.approval || {}),
@@ -829,25 +834,14 @@ export async function handleApi(req, res, pathname, url) {
         story: draft.story,
         characterBible: draft.character,
         images: imageResults,
-        pipeline: buildChildrenFactoryPipeline({ approvalStatus: 'pending' }),
+        pipeline: buildChildrenFactoryPipeline({ approvalStatus: 'blocked' }),
       };
       const createdMission = await createMissionForUser(jarvisUser.id, state);
-      const approvalMission = transitionMission(createdMission, 'waiting_approval');
-      approvalMission.approval = {
-        ...(createdMission.approval || {}),
-        required: true,
-        status: 'pending',
-        requestedAt: new Date().toISOString(),
-        action: 'publish',
-      };
-      const mission = await updateMissionForUser(jarvisUser.id, createdMission.id, approvalMission, {
-        eventType: 'mission.approval_requested',
-        message: 'Children Factory draft is ready for approval before any publishing action.',
-      });
+      const mission = createdMission;
 
       return json(res, 201, {
         factory: 'children-v1',
-        status: 'awaiting_approval',
+        status: 'render_required',
         draft: {
           project,
           character,
@@ -858,12 +852,12 @@ export async function handleApi(req, res, pathname, url) {
         },
         approvalGate: {
           required: true,
-          status: 'awaiting_approval',
+          status: 'render_required',
           missionId: mission.id,
-          label: 'Approve Draft for Publishing',
+          label: 'Render, Verify, then Request Approval',
           autoPublish: false,
           publishingProvider: 'youtube',
-          note: 'Approval records permission to publish this draft to YouTube. JARVIS never publishes automatically.'
+          note: 'JARVIS requires a completed verified video before approval can be requested. JARVIS never publishes automatically.'
         },
       }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
     } catch (error) {
@@ -1340,6 +1334,11 @@ export async function handleApi(req, res, pathname, url) {
     if (!mission) return json(res, 404, { error: 'Approval mission not found.' });
     if (mission.approval?.status !== 'approved') {
       return json(res, 409, { error: 'YouTube publishing requires an approved JARVIS mission.', code: 'YOUTUBE_APPROVAL_REQUIRED', mission });
+    }
+    if (mission.metadata?.factory === 'children-v1') {
+      if (mission.metadata?.pipeline?.render !== 'completed' || mission.metadata?.pipeline?.verified_video !== 'completed' || !mission.metadata?.verifiedVideo?.mediaKey) {
+        return json(res, 409, { error: 'Children Factory publishing requires a completed and verified video render.', code: 'CHILDREN_FACTORY_VERIFIED_VIDEO_REQUIRED', mission });
+      }
     }
     if (mission.metadata?.youtube?.videoId) {
       return json(res, 409, { error: 'This mission has already been published to YouTube.', code: 'YOUTUBE_ALREADY_PUBLISHED', mission });
