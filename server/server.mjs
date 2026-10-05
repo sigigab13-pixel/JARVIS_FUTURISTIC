@@ -817,6 +817,13 @@ export async function handleApi(req, res, pathname, url) {
             }, `children-factory:${mission.id}:scene:${scene}`);
             if (!job?.id) throw new Error('Children Factory scene job was not created for scene ' + String(scene) + '.');
             sceneJobs.push(job);
+            if (isRedisConfigured()) {
+              try {
+                await enqueueJob(job.id, job.type);
+              } catch (queueError) {
+                console.error('JARVIS Children Factory Redis dispatch warning:', queueError);
+              }
+            }
           }
         } catch (queueError) {
           try {
