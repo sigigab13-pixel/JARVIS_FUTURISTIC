@@ -823,7 +823,7 @@ export async function queueVideoJobForUser(userId, projectId, payload = {}, supp
   if (!configured) return { id: crypto.randomUUID(), user_id: userId, type: 'video_pipeline', status: 'queued', payload: jobPayload, idempotency_key: idempotencyKey };
   const rows = await request('jobs', {
     method: 'POST',
-    headers: { Prefer: 'return=representation' },
+    headers: { Prefer: 'resolution=ignore-duplicates,return=representation' },
     body: JSON.stringify({
       user_id: userId,
       type: 'video_pipeline',
