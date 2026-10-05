@@ -9,7 +9,7 @@ const fetchCalls = [];
 global.fetch = async (url, options = {}) => {
   fetchCalls.push({ url: String(url), options });
   return new Response(JSON.stringify({
-    signedURL: 'https://wyblfoxpaycguuxdehpn.supabase.co/storage/v1/object/sign/jarvis-media/temporary-token',
+    signedURL: '/object/sign/jarvis-media/temporary-token',
   }), {
     status: 200,
     headers: { 'Content-Type': 'application/json' },
