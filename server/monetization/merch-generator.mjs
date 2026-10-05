@@ -21,6 +21,7 @@ export function buildMerchExport({
   const normalizedSlogans = Array.isArray(slogans)
     ? slogans.map(value => String(value || '').trim()).filter(Boolean).slice(0, 10)
     : [];
+  const selectedProducts = normalizedProducts.length ? normalizedProducts : ['sticker'];
 
   return {
     exportVersion: 'merch-manifest-v1',
@@ -30,7 +31,7 @@ export function buildMerchExport({
       name,
       description,
     },
-    products: normalizedProducts.length ? normalizedProducts : ['sticker'],
+    products: selectedProducts,
     slogans: normalizedSlogans,
     artworkBrief: {
       subject: name,
@@ -38,7 +39,7 @@ export function buildMerchExport({
       transparentBackgroundPreferred: true,
       preserveBrandSafeTypography: true,
     },
-    mockupPlaceholders: normalizedProducts.map(product => ({
+    mockupPlaceholders: selectedProducts.map(product => ({
       product,
       assetSource: 'character-artwork',
       readyForExternalProvider: true,
