@@ -507,24 +507,60 @@ export async function consumeImageGeneration(userId, metadata = {}) {
     return { ...entitlement, credits_remaining: remaining - 1 };
   }
 
-  const result = await rpc('jarvis_consume_image_generation', {
-    p_user_id: userId,
-    p_metadata: metadata && typeof metadata === 'object' && !Array.isArray(metadata) ? metadata : {},
-  });
+  if (String(process.env.JARVIS_ATOMIC_IMAGE_CREDITS || '').toLowerCase() === 'true') {
+    const result = await rpc('jarvis_consume_image_generation', {
+      p_user_id: userId,
+      p_metadata: metadata && typeof metadata === 'object' && !Array.isArray(metadata) ? metadata : {},
+    });
 
-  if (!result?.ok) {
-    const error = Object.assign(
-      new Error(String(result?.message || 'Image generation credit consumption failed.')),
-      { statusCode: result?.code === 'IMAGE_ALLOWANCE_EXHAUSTED' ? 402 : 503, code: String(result?.code || 'IMAGE_CREDIT_CONSUMPTION_FAILED') }
-    );
-    throw error;
+    if (!result?.ok) {
+      const error = Object.assign(
+        new Error(String(result?.message || 'Image generation credit consumption failed.')),
+        { statusCode: result?.code === 'IMAGE_ALLOWANCE_EXHAUSTED' ? 402 : 503, code: String(result?.code || 'IMAGE_CREDIT_CONSUMPTION_FAILED') }
+      );
+      throw error;
+    }
+
+    return {
+      ...(await getJarvisEntitlement(userId) || entitlement),
+      credits_remaining: Number(result?.credits_remaining ?? remaining),
+      already_charged: Boolean(result?.already_charged),
+    };
   }
 
-  return {
-    ...(await getJarvisEntitlement(userId) || entitlement),
-    credits_remaining: Number(result?.credits_remaining ?? remaining),
-    already_charged: Boolean(result?.already_charged),
-  };
+  const nextRemaining = remaining - 1;
+  if (nextRemaining < 0) {
+    throw Object.assign(new Error('Your image-generation allowance is used up for this billing period.'), {
+      statusCode: 402,
+      code: 'IMAGE_ALLOWANCE_EXHAUSTED',
+    });
+  }
+
+  await request(
+    'jarvis_entitlements?user_id=eq.' + encodeURIComponent(userId),
+    {
+      method: 'PATCH',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        credits_remaining: nextRemaining,
+        updated_at: new Date().toISOString(),
+      }),
+    }
+  );
+
+  await request('jarvis_usage_ledger', {
+    method: 'POST',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      user_id: userId,
+      operation: 'image_generation',
+      units: 1,
+      credits_charged: 1,
+      metadata,
+    }),
+  });
+
+  return { ...entitlement, credits_remaining: nextRemaining };
 }
 
 export async function getBusinessForUser(userId) {
