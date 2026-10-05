@@ -12,7 +12,7 @@ export const MEDIA_PROVIDER_IDS = Object.freeze({
   VIEWMAX: 'viewmax',
 });
 
-const CAPABILITIES = Object.freeze([
+export const MEDIA_PROVIDER_CAPABILITIES = Object.freeze([
   'image.generate',
   'video.generate',
   'voiceover.generate',
@@ -94,7 +94,7 @@ export function defaultMediaProviderRegistry(env = process.env) {
       label: 'JARVIS Internal',
       enabled: true,
       priority: 10,
-      capabilities: CAPABILITIES,
+      capabilities: MEDIA_PROVIDER_CAPABILITIES,
     },
     {
       id: MEDIA_PROVIDER_IDS.EVERYGEN,
@@ -122,4 +122,31 @@ export function defaultMediaProviderRegistry(env = process.env) {
 
 export function selectMediaProvider(options = {}, env = process.env) {
   return defaultMediaProviderRegistry(env).select(options);
+}
+
+
+export function getMediaProviderStatus(env = process.env) {
+  return defaultMediaProviderRegistry(env).list().map(provider => ({
+    ...provider,
+    state: provider.enabled ? 'enabled' : 'disabled',
+  }));
+}
+
+export function getMediaProviderPlan({ capability, preferred = [], env = process.env } = {}) {
+  const registry = defaultMediaProviderRegistry(env);
+  const ordered = [];
+  const excluded = [];
+  let selection = registry.select({ capability, preferred, exclude: excluded });
+  while (selection) {
+    ordered.push(selection);
+    excluded.push(selection.id);
+    selection = registry.select({ capability, preferred, exclude: excluded });
+  }
+
+  return {
+    capability: String(capability || '').trim(),
+    selected: ordered[0] || null,
+    fallbackChain: ordered,
+    providerCount: ordered.length,
+  };
 }
