@@ -57,6 +57,7 @@ import { createMissionState, transitionMission, advanceMissionStep } from './mis
 import { preflightMission, getMissionAdapters } from './mission-executor.mjs';
 import { generateHuggingFaceImage, HF_IMAGE_MODELS, HF_IMAGE_EDIT_MODELS, HF_IMAGE_PROVIDERS } from './image-generator.mjs';
 import { getYouTubeAccessToken, getYouTubeAnalytics, getYouTubeChannel, uploadYouTubeVideo } from './youtube.mjs';
+import { getMonetizationOfficeConfig, estimatePlatformRevenue, buildYouTubeRevenueSnapshot, buildKdpExport, buildMerchExport } from './monetization-office.mjs';
 
 const PORT = Number(process.env.PORT || 10000);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -297,6 +298,111 @@ export async function handleApi(req, res, pathname, url) {
     if (!business) return json(res, 400, { error: 'Create your business profile first.' });
     const brandKit = await upsertBrandKitForUser(jarvisUser.id, business.id, body);
     return json(res, 200, { brandKit });
+  }
+
+  if (pathname.startsWith('/api/monetization')) {
+    const { jarvisUser } = await requireAuthenticatedJarvisUser(req);
+
+    if (req.method === 'GET' && pathname === '/api/monetization/config') {
+      return json(res, 200, getMonetizationOfficeConfig(), { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+    }
+
+    if (req.method === 'POST' && pathname === '/api/monetization/revenue/estimate') {
+      const body = await parseBody(req);
+      try {
+        const snapshot = estimatePlatformRevenue({
+          platform: body?.platform,
+          views: body?.views,
+          ratePerThousandViews: body?.ratePerThousandViews ?? body?.rpm ?? 0,
+          currency: body?.currency || 'USD',
+        });
+        return json(res, 200, { snapshot }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+      } catch (error) {
+        return json(res, Number(error?.statusCode) || 400, {
+          error: error instanceof Error ? error.message : 'Revenue estimate failed.',
+        });
+      }
+    }
+
+    if (req.method === 'GET' && pathname === '/api/monetization/youtube/estimate') {
+      const connection = await getYouTubeConnection(jarvisUser.id);
+      if (!connection) {
+        return json(res, 409, {
+          error: 'Connect YouTube before requesting a live revenue estimate.',
+          code: 'YOUTUBE_NOT_CONNECTED',
+        });
+      }
+
+      const endDate = String(url.searchParams.get('endDate') || new Date().toISOString().slice(0, 10));
+      const startDate = String(url.searchParams.get('startDate') || new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10));
+      const ratePerThousandViews = Number(url.searchParams.get('rpm') || url.searchParams.get('ratePerThousandViews') || 0);
+      const currency = String(url.searchParams.get('currency') || 'USD').trim().toUpperCase() || 'USD';
+
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+        return json(res, 400, { error: 'startDate and endDate must use YYYY-MM-DD.' });
+      }
+      if (new Date(startDate + 'T00:00:00Z') > new Date(endDate + 'T00:00:00Z')) {
+        return json(res, 400, { error: 'startDate must be on or before endDate.' });
+      }
+      if (!Number.isFinite(ratePerThousandViews) || ratePerThousandViews < 0) {
+        return json(res, 400, { error: 'rpm must be a non-negative number.' });
+      }
+
+      try {
+        const token = await getYouTubeAccessToken(connection);
+        if (token.refreshed) {
+          await saveYouTubeConnection(jarvisUser.id, {
+            ...connection,
+            accessToken: token.accessToken,
+            expiresAt: token.expiresAt,
+          });
+        }
+        const analytics = await getYouTubeAnalytics(token.accessToken, { startDate, endDate });
+        const snapshot = buildYouTubeRevenueSnapshot({
+          analytics,
+          startDate,
+          endDate,
+          ratePerThousandViews,
+          currency,
+        });
+        return json(res, 200, {
+          snapshot,
+          liveAnalytics: true,
+          note: 'Revenue remains an estimate based on the rate supplied in this request; JARVIS does not claim platform payout accuracy.',
+        }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+      } catch (error) {
+        return json(res, Number(error?.statusCode) || 502, {
+          error: error instanceof Error ? error.message : 'YouTube revenue estimate failed.',
+          code: 'YOUTUBE_REVENUE_ESTIMATE_FAILED',
+        });
+      }
+    }
+
+    if (req.method === 'POST' && pathname === '/api/monetization/kdp/export') {
+      const body = await parseBody(req);
+      try {
+        const exportPackage = buildKdpExport(body || {});
+        return json(res, 200, { export: exportPackage }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+      } catch (error) {
+        return json(res, Number(error?.statusCode) || 400, {
+          error: error instanceof Error ? error.message : 'KDP export preparation failed.',
+        });
+      }
+    }
+
+    if (req.method === 'POST' && pathname === '/api/monetization/merch/export') {
+      const body = await parseBody(req);
+      try {
+        const exportPackage = buildMerchExport(body || {});
+        return json(res, 200, { export: exportPackage }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+      } catch (error) {
+        return json(res, Number(error?.statusCode) || 400, {
+          error: error instanceof Error ? error.message : 'Merch export preparation failed.',
+        });
+      }
+    }
+
+    return json(res, 404, { error: 'Monetization Office route not found.' });
   }
 
   if (pathname.startsWith('/api/video')) {
