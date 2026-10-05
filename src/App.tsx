@@ -789,9 +789,21 @@ function App() {
           ? `Done, ${String(session?.user?.user_metadata?.full_name || session?.user?.user_metadata?.name || session?.user?.email || 'there').trim() || 'there'}. Your image is ready in Image Lab.`
           : 'I could not complete that request. Please try again.',
       );
+      const webSearch = response.data?.webSearch?.query && Array.isArray(response.data.webSearch.sources)
+        ? {
+            query: String(response.data.webSearch.query),
+            provider: String(response.data.webSearch.provider || 'Web search'),
+            sources: response.data.webSearch.sources.map((source: any, index: number) => ({
+              rank: Number(source?.rank || index + 1),
+              title: String(source?.title || 'Source'),
+              url: String(source?.url || ''),
+              publishedDate: source?.publishedDate ? String(source.publishedDate) : null,
+            })).filter((source: any) => /^https?:\/\//i.test(source.url)),
+          }
+        : undefined;
       setMessages(current => [
         ...current,
-        { role: 'assistant', content: answer },
+        { role: 'assistant', content: answer, ...(webSearch ? { webSearch } : {}) },
       ]);
       if (voiceEnabled) void speak(answer);
     } catch (error: any) {
@@ -1289,6 +1301,25 @@ function App() {
                       <img src={`data:${message.image.mimeType};base64,${message.image.data}`} alt="JARVIS generated result" />
                     </div>
                   )}
+                  {message.webSearch?.sources?.length ? (
+                    <div className="chat-web-sources">
+                      <div className="chat-web-sources-title">Sources · {message.webSearch.provider}</div>
+                      <div className="chat-web-source-list">
+                        {message.webSearch.sources.map((source) => (
+                          <a
+                            key={source.rank + '-' + source.url}
+                            className="chat-web-source"
+                            href={source.url}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                          >
+                            <span>{source.rank}. {source.title}</span>
+                            {source.publishedDate ? <small>{source.publishedDate}</small> : null}
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ))}
