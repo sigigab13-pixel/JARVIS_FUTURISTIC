@@ -146,6 +146,48 @@ export const video = {
     api.get(`/api/video/jobs/${encodeURIComponent(jobId)}`),
 };
 
+export const monetization = {
+  config: async () => api.get('/api/monetization/config'),
+  plans: async () => api.get('/api/monetization/plans'),
+  estimateRevenue: async (payload: {
+    platform: 'youtube' | 'tiktok' | 'facebook';
+    views: number;
+    ratePerThousandViews?: number;
+    rpm?: number;
+    currency?: string;
+  }) => api.post('/api/monetization/revenue/estimate', payload),
+  youtubeEstimate: async (options?: {
+    startDate?: string;
+    endDate?: string;
+    rpm?: number;
+    currency?: string;
+  }) => {
+    const query = new URLSearchParams();
+    if (options?.startDate) query.set('startDate', options.startDate);
+    if (options?.endDate) query.set('endDate', options.endDate);
+    if (options?.rpm !== undefined) query.set('rpm', String(options.rpm));
+    if (options?.currency) query.set('currency', options.currency);
+    const suffix = query.toString() ? '?' + query.toString() : '';
+    return api.get('/api/monetization/youtube/estimate' + suffix);
+  },
+  kdpExport: async (payload: {
+    title: string;
+    subtitle?: string;
+    author?: string;
+    description?: string;
+    story?: string;
+    chapters?: Array<{ title?: string; body: string } | string>;
+    ageRange?: [number, number];
+    keywords?: string[];
+  }) => api.post('/api/monetization/kdp/export', payload),
+  merchExport: async (payload: {
+    character?: { name?: string; description?: string };
+    collectionName?: string;
+    products?: string[];
+    slogans?: string[];
+  }) => api.post('/api/monetization/merch/export', payload),
+};
+
 export const youtube = {
   status: async () => api.get('/api/youtube/status'),
   connect: async () => api.get('/api/youtube/connect'),
