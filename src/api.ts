@@ -146,6 +146,18 @@ export const video = {
     api.get(`/api/video/jobs/${encodeURIComponent(jobId)}`),
 };
 
+export const contentTrends = {
+  config: async () => api.get('/api/content/trends/config'),
+  rank: async (payload: Record<string, unknown>) => api.post('/api/content/trends/rank', payload),
+  checkPlan: async (series?: string, platforms?: string[]) => {
+    const query = new URLSearchParams();
+    if (series) query.set('series', series);
+    if (platforms?.length) query.set('platforms', platforms.join(','));
+    const suffix = query.toString() ? '?' + query.toString() : '';
+    return api.get('/api/content/trends/check-plan' + suffix);
+  },
+};
+
 export const youtube = {
   status: async () => api.get('/api/youtube/status'),
   connect: async () => api.get('/api/youtube/connect'),
