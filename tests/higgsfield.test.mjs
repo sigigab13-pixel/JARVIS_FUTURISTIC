@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 process.env.HIGGSFIELD_API_KEY = 'test-key-id:test-key-secret';
+process.env.SUPABASE_URL = 'https://wyblfoxpaycguuxdehpn.supabase.co';
+process.env.SUPABASE_SECRET_KEY = 'test-secret';
+process.env.SUPABASE_MEDIA_BUCKET = 'jarvis-media';
 
 const {
   buildHiggsfieldRequest,
