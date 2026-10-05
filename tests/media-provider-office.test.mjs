@@ -1,6 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createMediaProviderRegistry, defaultMediaProviderRegistry, selectMediaProvider } from '../server/media-provider-office.mjs';
+
+import {
+  createMediaProviderRegistry,
+  defaultMediaProviderRegistry,
+  getMediaProviderPlan,
+  getMediaProviderStatus,
+  selectMediaProvider,
+} from '../server/media-provider-office.mjs';
 
 test('media provider office always has the internal provider', () => {
   const registry = defaultMediaProviderRegistry({});
