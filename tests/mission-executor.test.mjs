@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getMissionAdapters, preflightMission } from '../server/mission-executor.mjs';
+import { getMissionAdapters, preflightMission, missionStatusCanExecute } from '../server/mission-executor.mjs';
 
 const userId = '44444444-4444-4444-8444-444444444444';
 const missionId = '55555555-5555-4555-8555-555555555555';
@@ -73,4 +73,14 @@ test('mission preflight requires approval for side effects', () => {
   }));
   assert.equal(result.ok, false);
   assert.match(result.unsafeWithoutApproval[0].reason, /approval required/);
+});
+
+
+test('mission execution status guard blocks stale work after lifecycle control', () => {
+  assert.equal(missionStatusCanExecute('queued'), true);
+  assert.equal(missionStatusCanExecute('running'), true);
+  assert.equal(missionStatusCanExecute('paused'), false);
+  assert.equal(missionStatusCanExecute('canceled'), false);
+  assert.equal(missionStatusCanExecute('succeeded'), false);
+  assert.equal(missionStatusCanExecute('failed'), false);
 });

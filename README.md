@@ -49,7 +49,7 @@ Implemented foundations currently include:
 - worker leases, heartbeats, concurrency limits, and workload governance
 - fail-closed handling for unsupported worker job types
 - persistent video project, character, asset, and scene foundations
-- Children Factory v1 backend route with age validation, character continuity, three sequential image assets, approval-gated publishing, and a first image-sequence MP4 render adapter (implemented on `main`, pending production deployment verification)
+- Children Factory v1 backend route with age validation, character continuity, three sequential image assets, approval-gated publishing, and a first image-sequence MP4 render adapter (implemented on the strategy branch, pending production deployment verification)
 
 The mission runtime currently has a real adapter for `routine_fanout`. The Video Engine also has a verified first worker adapter for image-sequence MP4 rendering. Additional production adapters are being added one vertical slice at a time.
 
@@ -80,11 +80,11 @@ Vercel
         ├──────── Upstash Redis
         │          └── Queues / cache / dispatch
         │
-        └──────── Cloudflare R2
-                   └── Planned media/object storage layer
+        └──────── Supabase Storage
+                   └── Current private JARVIS media/object storage layer
 ```
 
-Long-running external compute such as Oracle Cloud workers remains part of the target architecture, but it should not be treated as connected until verified.
+Long-running external compute such as Oracle Cloud workers remains part of the target architecture, but it should not be treated as connected until verified. Cloudflare R2, Higgsfield/Everygen, and other external media services likewise remain integration targets until their adapters are implemented and verified.
 
 ## ▶️ YouTube-first publishing
 

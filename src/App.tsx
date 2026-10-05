@@ -463,6 +463,53 @@ function App() {
     }
   };
 
+  const watchChildrenFactoryMission = async (buildMissionId: string) => {
+    const missionId = String(buildMissionId || '').trim();
+    if (!missionId) return;
+
+    for (let attempt = 0; attempt < 90; attempt += 1) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      try {
+        const progress = await api.get('/api/factory/children/' + missionId);
+        setFactoryDraft(progress.data);
+        if (progress.data?.status === 'awaiting_approval' || progress.data?.status === 'approved') {
+          await loadMissions();
+          return;
+        }
+        if (progress.data?.status === 'failed' || progress.data?.status === 'video_failed') {
+          throw new Error(String(
+            progress.data?.error ||
+            progress.data?.video?.error ||
+            'Children Factory video build failed.'
+          ));
+        }
+      } catch (error: any) {
+        setFactoryError(String(error?.response?.data?.error || error?.message || 'Could not read Children Factory progress.'));
+        return;
+      }
+    }
+
+    setFactoryError('Children Factory is still running. The durable mission remains active and can be checked again without creating a duplicate.');
+  };
+
+  const launchChildrenFactory = async (topic: string, age: number) => {
+    const cleanTopic = topic.trim();
+    if (!cleanTopic) return null;
+
+    setFactoryOpen(true);
+    setFactoryError('');
+    const response = await api.post('/api/factory/children', { topic: cleanTopic, age });
+    setFactoryDraft(response.data);
+
+    const buildMissionId = String(response.data?.buildMission?.id || '').trim();
+    if (response.status === 202 && buildMissionId) {
+      void watchChildrenFactoryMission(buildMissionId);
+    }
+
+    await loadMissions();
+    return response.data;
+  };
+
   const createChildrenFactory = async () => {
     const topic = factoryTopic.trim();
     if (!topic || factoryBusy) return;
@@ -470,17 +517,14 @@ function App() {
     setFactoryError('');
     setFactoryDraft(null);
     try {
-      const response = await api.post('/api/factory/children', { topic, age: factoryAge });
-      setFactoryDraft(response.data);
-      setFactoryTopic('');
-      await loadMissions();
+      const responseData = await launchChildrenFactory(topic, factoryAge);
+      if (responseData) setFactoryTopic('');
     } catch (error: any) {
-      setFactoryError(String(error?.response?.data?.error || error?.message || 'Children Factory could not create the draft.'));
+      setFactoryError(String(error?.response?.data?.error || error?.message || 'Children Factory could not start the draft mission.'));
     } finally {
       setFactoryBusy(false);
     }
   };
-
   const renderChildrenFactoryVideo = async () => {
     const draft = factoryDraft && factoryDraft.draft;
     const projectId = String(draft && draft.project && draft.project.id || '').trim();
@@ -494,7 +538,12 @@ function App() {
       let jobId = existingJobId;
       if (!jobId || !['queued', 'running'].includes(existingStatus)) {
         setFactoryRenderJob({ status: 'queued' });
-        const response = await api.video.render(projectId, imageKeys, String((factoryDraft && factoryDraft.approvalGate && factoryDraft.approvalGate.missionId) || ''));
+        const response = await api.video.render(
+          projectId,
+          imageKeys,
+          String((factoryDraft && factoryDraft.approvalGate && factoryDraft.approvalGate.missionId) || ''),
+          { includeVoice: true, narrationText: String(draft && draft.story || '') },
+        );
         const job = response.data && response.data.job;
         if (!job || !job.id) throw new Error('Video render job was not created.');
         jobId = String(job.id);
@@ -685,11 +734,36 @@ function App() {
           ? `Done, ${String(session?.user?.user_metadata?.full_name || session?.user?.user_metadata?.name || session?.user?.email || 'there').trim() || 'there'}. Your image is ready in Image Lab.`
           : 'I could not complete that request. Please try again.',
       );
+
+      let chatAnswer = answer;
+      if (response.data?.routing?.factory === 'children-v1') {
+        const ageMatch = clean.match(/\b(3|4|5|6|7|8|9|10|11|12)\s*(?:year|yr)s?\b/i);
+        const requestedAge = ageMatch ? Number(ageMatch[1]) : factoryAge;
+        setFactoryTopic(clean);
+        setFactoryAge(requestedAge);
+        setFactoryError('');
+        setFactoryOpen(true);
+
+        try {
+          const factory = await launchChildrenFactory(clean, requestedAge);
+          chatAnswer = factory?.status === 'building'
+            ? 'Children Factory mission started. JARVIS is building the story and scene images now; publishing remains approval-gated.'
+            : 'Children Factory is ready for review.';
+          setFactoryTopic('');
+        } catch (factoryError: any) {
+          const detail = String(factoryError?.response?.data?.error || factoryError?.message || '').trim();
+          chatAnswer = detail
+            ? 'I identified this as a Children Factory request, but the factory could not start: ' + detail
+            : 'I identified this as a Children Factory request, but the factory could not start.';
+          setFactoryError(detail || 'Children Factory could not start.');
+        }
+      }
+
       setMessages(current => [
         ...current,
-        { role: 'assistant', content: answer },
+        { role: 'assistant', content: chatAnswer },
       ]);
-      if (voiceEnabled) void speak(answer);
+      if (voiceEnabled) void speak(chatAnswer);
     } catch (error: any) {
       const detail = String(error?.response?.data?.error || error?.message || '').trim();
       setMessages(current => [
@@ -1082,7 +1156,7 @@ function App() {
   }, [passiveWake]);
 
   if (!authReady) {
-    return <main className="jarvis-shell"><section className="auth-screen"><div className="auth-card"><div className="orb"><Sparkles size={20} /></div><span className="eyebrow">JARVIS AUTHENTICATION</span><h1>Connecting to JARVIS...</h1><p>Preparing your secure account session.</p></div></section></main>;
+    return <main className={"jarvis-shell " + ((busy || speaking || listening) ? "active-core" : "")}><section className="auth-screen"><div className="auth-card"><div className="orb"><Sparkles size={20} /></div><span className="eyebrow">JARVIS AUTHENTICATION</span><h1>Connecting to JARVIS...</h1><p>Preparing your secure account session.</p></div></section></main>;
   }
 
   if (!session) {
@@ -1293,9 +1367,11 @@ function App() {
                 {(factoryDraft.draft.images || []).map((item:any) => item.media?.url ? <img key={item.scene} src={item.media.url} alt={'Children Factory scene '+item.scene} style={{ width:'100%', borderRadius:10 }} /> : <div key={item.scene} className="lock-note">Scene {item.scene} asset stored</div>)}
               </div>
               <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:12 }}>
-                <button className="security-secondary" onClick={() => void renderChildrenFactoryVideo()} disabled={factoryBusy || !(factoryDraft && factoryDraft.draft && factoryDraft.draft.project && factoryDraft.draft.project.id) || !((factoryDraft && factoryDraft.draft && factoryDraft.draft.images) || []).length}>
-                  {factoryRenderJob && (factoryRenderJob.status === 'running' || factoryRenderJob.status === 'queued') ? 'Rendering video…' : 'Render YouTube Video'}
-                </button>
+                {factoryDraft?.status === 'video_failed' && (
+                  <button className="security-secondary" onClick={() => void renderChildrenFactoryVideo()} disabled={factoryBusy || !(factoryDraft && factoryDraft.draft && factoryDraft.draft.project && factoryDraft.draft.project.id) || !((factoryDraft && factoryDraft.draft && factoryDraft.draft.images) || []).length}>
+                    Retry AI Video
+                  </button>
+                )}
                 {factoryDraft && factoryDraft.renderedVideo && factoryDraft.renderedVideo.mediaKey && <button className="security-secondary" onClick={() => { setYoutubeMissionId(String(factoryDraft.approvalGate && factoryDraft.approvalGate.missionId || '')); setYoutubeMediaKey(String(factoryDraft.renderedVideo.mediaKey)); setYoutubeTitle(String(factoryDraft.draft && factoryDraft.draft.project && factoryDraft.draft.project.title || '').slice(0,100)); setYoutubeDescription(String(factoryDraft.draft && factoryDraft.draft.story || '').slice(0,5000)); setFactoryOpen(false); void openYouTubeCenter(); }}>Open YouTube Publisher</button>}
               </div>
               {factoryRenderJob && <div className="security-status"><span>Render job: {factoryRenderJob.status}</span></div>}

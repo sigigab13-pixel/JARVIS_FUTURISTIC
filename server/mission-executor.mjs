@@ -1,14 +1,17 @@
 import crypto from 'node:crypto';
-import { transitionMission, advanceMissionStep } from './mission-runtime.mjs';
+import { createMissionState, transitionMission, advanceMissionStep } from './mission-runtime.mjs';
 import {
   getMissionForUser,
   updateMissionForUser,
   fanOutRoutineRun,
   queueMissionStepForUser,
+  queueVideoJobForUser,
   consumeImageGeneration,
 } from './store.mjs';
+import { enqueueJob, isRedisConfigured } from './queue.mjs';
 import { createMediaKey, isSupabaseStorageConfigured, putMedia } from './media.mjs';
 import { generateHuggingFaceImage } from './image-generator.mjs';
+import { appendChildrenFactoryImage, markChildrenFactoryBuildComplete } from './factory-runtime.mjs';
 
 async function executeImageGeneration(job) {
   const payload = job?.payload && typeof job.payload === 'object' ? job.payload : {};
@@ -97,6 +100,10 @@ function stepAdapterType(step) {
   return String(step?.executorType || step?.executor_type || step?.type || '').trim();
 }
 
+export function missionStatusCanExecute(status) {
+  return ['queued', 'running'].includes(String(status || ''));
+}
+
 export function getMissionAdapters() {
   return [...ADAPTERS.keys()];
 }
@@ -165,6 +172,18 @@ export async function executeMissionStep(job) {
   const current = await getMissionForUser(userId, missionId);
   if (!current) throw Object.assign(new Error('Mission disappeared during execution.'), { code: 'MISSION_NOT_FOUND' });
 
+  if (!missionStatusCanExecute(current.status)) {
+    return {
+      accepted: true,
+      completed: false,
+      skipped: true,
+      missionId,
+      stepIndex,
+      status: current.status,
+      message: 'Mission is not executable in its current lifecycle state; stale queued work was not executed.',
+    };
+  }
+
   if (current.currentStep !== stepIndex) {
     const existingStep = current.steps?.[stepIndex];
     if (existingStep?.status === 'succeeded') {
@@ -195,11 +214,22 @@ export async function executeMissionStep(job) {
 
   const result = await adapterFn(job);
   const evidence = verifiedEvidence(adapter, result);
+
+  let metadata = current.metadata && typeof current.metadata === 'object' ? current.metadata : {};
+  if (metadata.factory === 'children-v1' && adapter === 'image_generation') {
+    metadata = appendChildrenFactoryImage(metadata, stepIndex + 1, result);
+  }
+
   const next = advanceMissionStep({
     ...current,
     lastEvidence: evidence,
+    metadata,
   });
   next.lastEvidence = evidence;
+
+  if (metadata.factory === 'children-v1' && next.status === 'succeeded') {
+    next.metadata = markChildrenFactoryBuildComplete(metadata);
+  }
 
   const updated = await updateMissionForUser(userId, missionId, next, {
     eventType: next.status === 'succeeded' ? 'mission.completed' : 'mission.checkpoint',
@@ -208,6 +238,59 @@ export async function executeMissionStep(job) {
       : 'Mission step completed from a verified executor result.',
     metadata: { stepIndex, adapter },
   });
+
+  if (updated.status === 'succeeded' && updated.metadata?.factory === 'children-v1' && updated.metadata?.approvalMissionId) {
+    const imageKeys = (Array.isArray(updated.metadata.images) ? updated.metadata.images : [])
+      .map(item => String(item?.media?.path || item?.media?.key || '').trim())
+      .filter(key => key.startsWith(`jarvis/${userId}/`));
+    const videoStatus = String(updated.metadata?.videoStatus || '').trim();
+
+    if (imageKeys.length && !['queued', 'running', 'succeeded'].includes(videoStatus)) {
+      const scenePrompts = Array.isArray(updated.steps)
+        ? updated.steps.map(step => String(step?.prompt || '').trim().slice(0, 4000))
+        : [];
+      const sceneDurations = imageKeys.map(() => 5);
+      const videoJob = await queueVideoJobForUser(userId, String(updated.metadata.projectId), {
+        operation: 'generate_children_episode',
+        mission_id: updated.id,
+        image_keys: imageKeys,
+        scene_prompts: scenePrompts,
+        scene_durations: sceneDurations,
+        narration_text: String(updated.metadata.story || '').slice(0, 20_000),
+        include_voice: true,
+        provider: 'higgsfield',
+        priority: 8,
+      });
+
+      let videoDispatch = { queued: false, provider: 'supabase' };
+      if (videoJob?.id && isRedisConfigured()) {
+        try {
+          videoDispatch = {
+            queued: true,
+            provider: 'upstash_redis',
+            message: await enqueueJob(videoJob.id, videoJob.type),
+          };
+        } catch (queueError) {
+          console.error('JARVIS Children Factory video Redis dispatch error:', queueError);
+          videoDispatch = { queued: false, provider: 'supabase', fallback: 'redis_unavailable' };
+        }
+      }
+
+      const videoMetadata = {
+        ...(updated.metadata || {}),
+        factoryStage: 'video',
+        videoStatus: 'queued',
+        videoJobId: String(videoJob?.id || ''),
+        videoProvider: 'higgsfield',
+        videoDispatch,
+      };
+      await updateMissionForUser(userId, updated.id, { ...updated, metadata: videoMetadata }, {
+        eventType: 'factory.video_queued',
+        message: 'Children Factory images verified; the AI video and narration job was queued.',
+        metadata: { videoJobId: videoJob?.id || null, imageCount: imageKeys.length, provider: 'higgsfield' },
+      });
+    }
+  }
 
   let nextJob = null;
   if (updated.status !== 'succeeded' && updated.currentStep >= 0) {

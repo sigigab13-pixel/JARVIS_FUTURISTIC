@@ -40,3 +40,35 @@ test('provides prompt-safe routing context', () => {
   });
   assert.match(context, /web_intelligence/);
 });
+
+
+test('routes children content production to Children Factory intent', () => {
+  const route = routeIntent({
+    messages: [{ role: 'user', content: 'Make a fun rhyming video for children about animals' }],
+    availableCapabilities: [
+      {
+        id: 'children_factory',
+        description: "Prepare children's stories, rhymes, images, and approval-gated publish packages.",
+        keywords: ['children', 'rhyme', 'video'],
+      },
+    ],
+  });
+  assert.equal(route.mode, 'create');
+  assert.equal(route.intent, 'children-factory');
+  assert.ok(route.candidateCapabilities.some(item => item.id === 'children_factory'));
+});
+
+test('keeps an explicit child image request on the image path', () => {
+  const route = routeIntent({
+    messages: [{ role: 'user', content: 'Create a picture for children of a friendly lion' }],
+    availableCapabilities: [
+      { id: 'image', description: 'Generate and edit images.', keywords: ['image', 'picture', 'photo'] },
+      {
+        id: 'children_factory',
+        description: "Prepare children's stories, rhymes, images, and approval-gated publish packages.",
+        keywords: ['children', 'rhyme', 'video'],
+      },
+    ],
+  });
+  assert.equal(route.intent, 'image');
+});

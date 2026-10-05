@@ -11,12 +11,12 @@ on:
 
 concurrency:
   group: jarvis-main-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   worker:
     runs-on: ubuntu-latest
-    timeout-minutes: 4
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
@@ -36,11 +36,15 @@ jobs:
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
           UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
           UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+          HUGGINGFACE_API_TOKEN: ${{ secrets.HUGGINGFACE_API_TOKEN }}
+          HIGGSFIELD_API_KEY: ${{ secrets.HIGGSFIELD_API_KEY }}
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
           JARVIS_WORKER_ONCE: "1"
           JARVIS_WORKER_HEARTBEAT_MS: "15000"
           JARVIS_WORKER_CONCURRENCY: "4"
           JARVIS_WORKER_MAX_JOBS_PER_RUN: "24"
-          JARVIS_WORKER_MAX_RUNTIME_MS: "210000"
+          JARVIS_WORKER_MAX_RUNTIME_MS: "540000"
           JARVIS_ROUTINE_BATCH_LIMIT: "10"
         run: |
           npm run worker

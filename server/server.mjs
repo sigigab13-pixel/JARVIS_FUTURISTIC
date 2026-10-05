@@ -50,12 +50,16 @@ import {
   updateRoutineForUser,
 } from './store.mjs';
 import { enqueueJob, isRedisConfigured } from './queue.mjs';
+import { isHiggsfieldConfigured } from './higgsfield.mjs';
+import { isElevenLabsConfigured } from './elevenlabs.mjs';
 import { createMediaKey, getMedia, isSupabaseStorageConfigured, putMedia } from './media.mjs';
 import { capabilityContextForPrompt, getCapabilityRegistry, getAvailableCapabilities, rankCapabilitiesForIntent } from './capabilities.mjs';
 import { routeContextForPrompt, routeIntent } from './intent-router.mjs';
 import { createMissionState, transitionMission, advanceMissionStep } from './mission-runtime.mjs';
 import { preflightMission, getMissionAdapters } from './mission-executor.mjs';
+import { prepareMissionAction } from './mission-actions.mjs';
 import { generateHuggingFaceImage, HF_IMAGE_MODELS, HF_IMAGE_EDIT_MODELS, HF_IMAGE_PROVIDERS } from './image-generator.mjs';
+import { buildChildrenFactoryImageSteps } from './factory-runtime.mjs';
 import { getYouTubeAccessToken, getYouTubeAnalytics, getYouTubeChannel, uploadYouTubeVideo } from './youtube.mjs';
 
 const PORT = Number(process.env.PORT || 10000);
@@ -97,6 +101,31 @@ function getJarvisUserId(req) {
 
 function jarvisCookie(userId) {
   return `jarvis_user_id=${encodeURIComponent(userId)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000; Secure`;
+}
+
+async function queueMissionExecution(userId, mission) {
+  const job = await queueMissionStepForUser(userId, mission);
+  if (!job?.id) {
+    throw Object.assign(new Error('Mission has no executable step to queue.'), {
+      statusCode: 409,
+      code: 'MISSION_STEP_NOT_QUEUEABLE',
+    });
+  }
+
+  let dispatch = { queued: false, provider: 'supabase' };
+  if (isRedisConfigured()) {
+    try {
+      dispatch = {
+        queued: true,
+        provider: 'upstash_redis',
+        message: await enqueueJob(job.id, job.type),
+      };
+    } catch (queueError) {
+      console.error('JARVIS mission Redis dispatch error:', queueError);
+      dispatch = { queued: false, provider: 'supabase', fallback: 'redis_unavailable' };
+    }
+  }
+  return { job, dispatch };
 }
 
 async function requireAuthenticatedJarvisUser(req) {
@@ -400,8 +429,26 @@ export async function handleApi(req, res, pathname, url) {
         if (mission.metadata?.factory && mission.metadata.factory !== 'children-v1') return json(res, 409, { error: 'The supplied mission is not a Children Factory publishing mission.', code: 'VIDEO_MISSION_MISMATCH' });
         if (mission.metadata?.projectId && mission.metadata.projectId !== projectId) return json(res, 409, { error: 'The render project does not match the selected mission.', code: 'VIDEO_PROJECT_MISMATCH' });
       }
+      const provider = String(process.env.VIDEO_PROVIDER || 'higgsfield').trim().toLowerCase();
+      const includeVoice = Boolean(body?.includeVoice);
+      const narrationText = String(body?.narrationText || '').trim().slice(0, 20_000);
+      if (provider === 'higgsfield' && !isHiggsfieldConfigured()) {
+        return json(res, 503, { error: 'Higgsfield AI video generation is not configured on the server.', code: 'HIGGSFIELD_NOT_CONFIGURED' });
+      }
+      if (includeVoice && !narrationText) {
+        return json(res, 400, { error: 'Narration text is required when voice generation is enabled.', code: 'NARRATION_TEXT_REQUIRED' });
+      }
+      if (includeVoice && !isElevenLabsConfigured()) {
+        return json(res, 503, { error: 'ElevenLabs narration is not configured on the server.', code: 'ELEVENLABS_NOT_CONFIGURED' });
+      }
+      if (!['higgsfield', 'ffmpeg'].includes(provider)) {
+        return json(res, 503, { error: `Unsupported video provider: ${provider}.`, code: 'VIDEO_PROVIDER_UNSUPPORTED' });
+      }
       const job = await queueVideoJobForUser(jarvisUser.id, projectId, {
         operation: 'render',
+        provider,
+        include_voice: includeVoice,
+        narration_text: narrationText || null,
         mission_id: missionId || null,
         image_keys: imageKeys,
         format: project.format,
@@ -419,8 +466,11 @@ export async function handleApi(req, res, pathname, url) {
       return json(res, 202, {
         job,
         dispatch,
-        renderer: 'ffmpeg-image-sequence-v1',
-        note: 'The worker will render the supplied stored images into a 16:9 MP4 and save the verified video asset to JARVIS media storage.',
+        renderer: provider === 'higgsfield' ? 'higgsfield-image-to-video' : 'ffmpeg-image-sequence-v1',
+        provider,
+        note: provider === 'higgsfield'
+          ? 'The worker will animate each stored story scene through Higgsfield, add the requested ElevenLabs narration, and assemble the verified episode into a 16:9 MP4.'
+          : 'The worker will render the supplied stored images into a 16:9 MP4 as an explicit local fallback renderer.',
       });
     }
 
@@ -563,23 +613,34 @@ export async function handleApi(req, res, pathname, url) {
           mission: current,
         }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
       }
-      const next = transitionMission(current, 'queued');
-      const queuedJob = await queueMissionStepForUser(jarvisUser.id, next);
-      const mission = await updateMissionForUser(jarvisUser.id, missionId, next, {
-        eventType: 'mission.queued',
-        message: 'Mission queued with its first durable execution step.',
-        metadata: { jobId: queuedJob?.id || null, stepIndex: next.currentStep },
-      });
-      let dispatch = { queued: false, provider: 'supabase' };
-      if (queuedJob?.id && isRedisConfigured()) {
-        try {
-          dispatch = { queued: true, provider: 'upstash_redis', message: await enqueueJob(queuedJob.id, queuedJob.type) };
-        } catch (queueError) {
-          console.error('JARVIS mission Redis dispatch error:', queueError);
-          dispatch = { queued: false, provider: 'supabase', fallback: 'redis_unavailable' };
+
+      let mission = null;
+      try {
+        const next = prepareMissionAction(current, 'start').next;
+        mission = await updateMissionForUser(jarvisUser.id, missionId, next, {
+          eventType: 'mission.queued',
+          message: 'Mission queued with its first durable execution step.',
+          metadata: { stepIndex: next.currentStep },
+        });
+        const execution = await queueMissionExecution(jarvisUser.id, mission);
+        return json(res, 202, {
+          mission,
+          job: execution.job,
+          dispatch: execution.dispatch,
+        }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+      } catch (error) {
+        if (mission?.status === 'queued') {
+          await updateMissionForUser(jarvisUser.id, missionId, current, {
+            eventType: 'mission.queue_failed',
+            message: 'Mission queueing failed, so JARVIS restored the previous mission state.',
+            metadata: { error: error instanceof Error ? error.message : String(error) },
+          }).catch(rollbackError => console.error('JARVIS mission rollback error:', rollbackError));
         }
+        return json(res, Number(error?.statusCode) || 503, {
+          error: error instanceof Error ? error.message : 'Mission could not be queued.',
+          code: error?.code || 'MISSION_QUEUE_FAILED',
+        }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
       }
-      return json(res, 202, { mission, job: queuedJob, dispatch }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
     }
 
     if (action === 'request-approval') {
@@ -601,18 +662,54 @@ export async function handleApi(req, res, pathname, url) {
       if (current.status !== 'waiting_approval') {
         return json(res, 409, { error: 'Mission is not waiting for approval.', code: 'MISSION_NOT_WAITING_FOR_APPROVAL' });
       }
-      const next = transitionMission(current, 'running');
-      next.approval = {
-        ...(current.approval || {}),
-        required: true,
-        status: 'approved',
-        approvedAt: new Date().toISOString(),
-      };
-      const mission = await updateMissionForUser(jarvisUser.id, missionId, next, {
-        eventType: 'mission.approved',
-        message: 'Mission approval recorded. Execution remains subject to tool-boundary authorization.',
-      });
-      return json(res, 200, { mission }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+
+      let mission = null;
+      try {
+        const next = prepareMissionAction(current, 'approve').next;
+        const preflight = preflightMission(next);
+        if (!preflight.ok) {
+          return json(res, 409, {
+            error: preflight.reason,
+            code: 'MISSION_PREFLIGHT_BLOCKED',
+            supportedAdapters: getMissionAdapters(),
+            preflight,
+            mission: current,
+          }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+        }
+        mission = await updateMissionForUser(jarvisUser.id, missionId, next, {
+          eventType: 'mission.approved',
+          message: next.status === 'succeeded'
+            ? 'Children Factory publishing approval recorded. Publishing still requires a separate explicit action.'
+            : 'Mission approval recorded and the first execution step is being queued.',
+        });
+
+        if (mission.status === 'succeeded' && mission.metadata?.factory === 'children-v1' && mission.metadata?.factoryStage === 'approval') {
+          return json(res, 200, {
+            mission,
+            approved: true,
+            execution: { queued: false, provider: 'none', reason: 'approval_complete' },
+          }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+        }
+
+        const execution = await queueMissionExecution(jarvisUser.id, mission);
+        return json(res, 202, {
+          mission,
+          job: execution.job,
+          dispatch: execution.dispatch,
+        }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+      } catch (error) {
+        if (mission?.status === 'running') {
+          await updateMissionForUser(jarvisUser.id, missionId, current, {
+            eventType: 'mission.queue_failed',
+            message: 'Mission approval was not queued for execution, so JARVIS restored the approval state.',
+            metadata: { error: error instanceof Error ? error.message : String(error) },
+          }).catch(rollbackError => console.error('JARVIS mission rollback error:', rollbackError));
+        }
+        return json(res, Number(error?.statusCode) || 503, {
+          error: error instanceof Error ? error.message : 'Approved mission could not be queued.',
+          code: error?.code || 'MISSION_QUEUE_FAILED',
+        }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+      }
     }
 
     if (action === 'pause') {
@@ -641,12 +738,43 @@ export async function handleApi(req, res, pathname, url) {
           mission: current,
         }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
       }
-      const next = transitionMission(current, 'queued');
-      const mission = await updateMissionForUser(jarvisUser.id, missionId, next, {
-        eventType: action === 'resume' ? 'mission.resumed' : 'mission.retried',
-        message: action === 'resume' ? 'Mission resumed and queued for execution.' : 'Failed mission retried and queued for execution.',
-      });
-      return json(res, 202, { mission }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+
+      let mission = null;
+      try {
+        const next = prepareMissionAction(current, action).next;
+        const preflight = preflightMission(next);
+        if (!preflight.ok) {
+          return json(res, 409, {
+            error: preflight.reason,
+            code: 'MISSION_PREFLIGHT_BLOCKED',
+            supportedAdapters: getMissionAdapters(),
+            preflight,
+            mission: current,
+          }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+        }
+        mission = await updateMissionForUser(jarvisUser.id, missionId, next, {
+          eventType: action === 'resume' ? 'mission.resumed' : 'mission.retried',
+          message: action === 'resume' ? 'Mission resumed and is being queued for execution.' : 'Failed mission retried and is being queued for execution.',
+        });
+        const execution = await queueMissionExecution(jarvisUser.id, mission);
+        return json(res, 202, {
+          mission,
+          job: execution.job,
+          dispatch: execution.dispatch,
+        }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+      } catch (error) {
+        if (mission && ['queued'].includes(mission.status)) {
+          await updateMissionForUser(jarvisUser.id, missionId, current, {
+            eventType: 'mission.queue_failed',
+            message: 'Mission queueing failed, so JARVIS restored the previous mission state.',
+            metadata: { error: error instanceof Error ? error.message : String(error) },
+          }).catch(rollbackError => console.error('JARVIS mission rollback error:', rollbackError));
+        }
+        return json(res, Number(error?.statusCode) || 503, {
+          error: error instanceof Error ? error.message : 'Mission could not be queued.',
+          code: error?.code || 'MISSION_QUEUE_FAILED',
+        }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+      }
     }
 
     if (action === 'cancel') {
@@ -687,6 +815,120 @@ export async function handleApi(req, res, pathname, url) {
     }
 
     return json(res, 404, { error: 'Mission action not found.' });
+  }
+
+  const childrenFactoryMissionMatch = pathname.match(/^\/api\/factory\/children\/([0-9a-f-]{36})$/i);
+  if (req.method === 'GET' && childrenFactoryMissionMatch) {
+    const { jarvisUser } = await requireAuthenticatedJarvisUser(req);
+    const mission = await getMissionForUser(jarvisUser.id, childrenFactoryMissionMatch[1]);
+    if (!mission) return json(res, 404, { error: 'Children Factory mission not found.' });
+    if (mission.metadata?.factory !== 'children-v1') {
+      return json(res, 409, { error: 'That mission is not a Children Factory mission.', code: 'CHILDREN_FACTORY_MISSION_MISMATCH' });
+    }
+
+    const approvalMissionId = String(mission.metadata?.approvalMissionId || '').trim();
+    const approvalMission = approvalMissionId
+      ? await getMissionForUser(jarvisUser.id, approvalMissionId)
+      : null;
+    const images = Array.isArray(mission.metadata?.images)
+      ? mission.metadata.images
+      : Array.isArray(approvalMission?.metadata?.images)
+        ? approvalMission.metadata.images
+        : [];
+
+    if (mission.status === 'failed') {
+      return json(res, 200, {
+        factory: 'children-v1',
+        status: 'failed',
+        buildMission: mission,
+        error: mission.lastEvidence?.error?.message || mission.metadata?.lastFailure?.message || 'Children Factory build failed.',
+      }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+    }
+
+    const videoStatus = String(mission.metadata?.videoStatus || '').trim();
+    if (videoStatus === 'failed') {
+      return json(res, 200, {
+        factory: 'children-v1',
+        status: 'video_failed',
+        buildMission: mission,
+        draft: {
+          project: { id: mission.metadata?.projectId || null, title: mission.metadata?.title || 'Children Story' },
+          character: mission.metadata?.character || null,
+          story: mission.metadata?.story || '',
+          characterBible: mission.metadata?.characterBible || null,
+          images,
+          renderedVideo: mission.metadata?.renderedVideo || null,
+        },
+        video: {
+          status: 'failed',
+          jobId: mission.metadata?.videoJobId || null,
+          error: mission.metadata?.lastVideoFailure?.message || 'AI video generation failed.',
+        },
+        approvalGate: null,
+      }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+    }
+
+    if (videoStatus === 'queued' || videoStatus === 'running') {
+      return json(res, 200, {
+        factory: 'children-v1',
+        status: 'building_video',
+        buildMission: mission,
+        draft: {
+          project: { id: mission.metadata?.projectId || null, title: mission.metadata?.title || 'Children Story' },
+          character: mission.metadata?.character || null,
+          story: mission.metadata?.story || '',
+          characterBible: mission.metadata?.characterBible || null,
+          images,
+          renderedVideo: mission.metadata?.renderedVideo || null,
+        },
+        video: {
+          status: videoStatus,
+          jobId: mission.metadata?.videoJobId || null,
+          provider: mission.metadata?.videoProvider || 'higgsfield',
+        },
+        approvalGate: null,
+      }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+    }
+
+    if (approvalMission?.status === 'waiting_approval' || approvalMission?.approval?.status === 'pending' || approvalMission?.approval?.status === 'approved') {
+      return json(res, 200, {
+        factory: 'children-v1',
+        status: approvalMission.approval?.status === 'approved' ? 'approved' : 'awaiting_approval',
+        buildMission: mission,
+        draft: {
+          project: { id: mission.metadata?.projectId || null, title: mission.metadata?.title || 'Children Story' },
+          character: mission.metadata?.character || null,
+          story: mission.metadata?.story || '',
+          characterBible: mission.metadata?.characterBible || null,
+          images,
+        },
+        renderedVideo: mission.metadata?.renderedVideo || approvalMission?.metadata?.renderedVideo || null,
+        approvalGate: {
+          required: true,
+          status: approvalMission.approval?.status === 'approved' ? 'approved' : 'awaiting_approval',
+          missionId: approvalMission.id,
+          label: 'Approve Draft for Publishing',
+          autoPublish: false,
+          publishingProvider: 'youtube',
+          note: 'Approval records permission to publish this draft to YouTube. JARVIS never publishes automatically.',
+        },
+        mission: approvalMission,
+      }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+    }
+
+    return json(res, 200, {
+      factory: 'children-v1',
+      status: mission.status === 'succeeded' ? 'finalizing_approval' : 'building',
+      buildMission: mission,
+      draft: {
+        project: { id: mission.metadata?.projectId || null, title: mission.metadata?.title || 'Children Story' },
+        character: mission.metadata?.character || null,
+        story: mission.metadata?.story || '',
+        characterBible: mission.metadata?.characterBible || null,
+        images,
+      },
+      approvalGate: null,
+    }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
   }
 
   if (req.method === 'POST' && pathname === '/api/factory/children') {
@@ -737,121 +979,89 @@ export async function handleApi(req, res, pathname, url) {
         },
       });
 
-      const imageResults = [];
-      const characterPrompt = [
-        'Create a child-friendly storybook illustration.',
-        'Keep this exact character consistent in every image:',
-        'Name: ' + draft.character.name,
-        'Species: ' + draft.character.species,
-        'Color: ' + draft.character.color,
-        'Clothes: ' + draft.character.clothes,
-        'Description: ' + draft.character.description,
-        'Style: warm, colorful, friendly, simple storybook art.',
-        'No text, no watermark.',
-      ].join(' ');
+      const buildMissionId = crypto.randomUUID();
+      const approvalMissionId = crypto.randomUUID();
+      const imageSteps = buildChildrenFactoryImageSteps({
+        story: draft.story,
+        character: draft.character,
+        count: 3,
+      });
 
-      for (let index = 1; index <= 3; index += 1) {
-        const blob = await generateHuggingFaceImage(
-          characterPrompt + ' Illustration ' + index + ' should depict a different moment from this story: ' + draft.story.slice(0, 1800)
-        );
-        const buffer = Buffer.from(await blob.arrayBuffer());
-        const mimeType = blob.type || 'image/png';
-        const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
-        let media = null;
-        if (isSupabaseStorageConfigured()) {
-          const extension = mimeType.includes('jpeg') ? 'jpg' : mimeType.includes('webp') ? 'webp' : 'png';
-          const key = createMediaKey({
-            userId: jarvisUser.id,
-            kind: 'children-factory',
-            extension,
-            id: sha256,
-          });
-          media = await putMedia({
-            key,
-            body: buffer,
-            contentType: mimeType,
-            metadata: {
-              user_id: jarvisUser.id,
-              source: 'children_factory_v1',
-              sha256,
-              character: draft.character.name,
-              scene: index,
-            },
-            upsert: true,
-          });
-        } else {
-          throw Object.assign(new Error('Supabase Storage is not configured for Children Factory assets.'), { statusCode: 503 });
-        }
-        await consumeImageGeneration(jarvisUser.id, {
-          prompt: `${draft.title} — Children Factory scene ${index}`.slice(0, 500),
-          mode: 'children-factory-v1',
-          sha256,
-          media_path: media?.path || null,
-        });
-        imageResults.push({
-          scene: index,
-          sha256,
-          media,
-        });
-      }
+      const buildState = createMissionState({
+        missionId: buildMissionId,
+        userId: jarvisUser.id,
+        goal: 'Children Factory: build ' + draft.title,
+        autonomy: 'execute_within_policy',
+        steps: imageSteps,
+      });
+      buildState.approval = { required: false, status: 'not_required' };
+      buildState.metadata = {
+        factory: 'children-v1',
+        factoryStage: 'build',
+        title: draft.title,
+        projectId: project.id,
+        characterId: character?.id || null,
+        character: character || null,
+        topic,
+        age,
+        story: draft.story,
+        characterBible: draft.character,
+        images: [],
+        factoryBuild: { status: 'queued', completedScenes: 0, totalScenes: imageSteps.length },
+        approvalMissionId,
+      };
 
-      const state = createMissionState({
-        missionId: crypto.randomUUID(),
+      const approvalState = createMissionState({
+        missionId: approvalMissionId,
         userId: jarvisUser.id,
         goal: 'Children Factory: approve and publish ' + draft.title,
         autonomy: 'execute_with_approval',
         steps: [],
       });
-      state.approval = {
+      approvalState.approval = {
         required: true,
         status: 'not_requested',
         requestedAt: null,
         approvedAt: null,
         action: 'publish',
       };
-      state.metadata = {
+      approvalState.metadata = {
         factory: 'children-v1',
+        factoryStage: 'approval',
         projectId: project.id,
-        characterId: character?.id || null,
+        buildMissionId,
         topic,
         age,
+        title: draft.title,
         story: draft.story,
+        characterId: character?.id || null,
         characterBible: draft.character,
-        images: imageResults,
+        images: [],
       };
-      const createdMission = await createMissionForUser(jarvisUser.id, state);
-      const approvalMission = transitionMission(createdMission, 'waiting_approval');
-      approvalMission.approval = {
-        ...(createdMission.approval || {}),
-        required: true,
-        status: 'pending',
-        requestedAt: new Date().toISOString(),
-        action: 'publish',
-      };
-      const mission = await updateMissionForUser(jarvisUser.id, createdMission.id, approvalMission, {
-        eventType: 'mission.approval_requested',
-        message: 'Children Factory draft is ready for approval before any publishing action.',
-      });
 
-      return json(res, 201, {
+      await createMissionForUser(jarvisUser.id, approvalState);
+      const queuedState = transitionMission(buildState, 'queued');
+      const buildMission = await updateMissionForUser(jarvisUser.id, buildMissionId, queuedState, {
+        eventType: 'mission.queued',
+        message: 'Children Factory build queued as durable image-generation steps.',
+        metadata: { approvalMissionId, stepCount: imageSteps.length },
+      });
+      const execution = await queueMissionExecution(jarvisUser.id, buildMission);
+
+      return json(res, 202, {
         factory: 'children-v1',
-        status: 'awaiting_approval',
+        status: 'building',
+        buildMission,
+        dispatch: execution.dispatch,
+        job: execution.job,
         draft: {
           project,
           character,
           story: draft.story,
           characterBible: draft.character,
-          images: imageResults,
+          images: [],
         },
-        approvalGate: {
-          required: true,
-          status: 'awaiting_approval',
-          missionId: mission.id,
-          label: 'Approve Draft for Publishing',
-          autoPublish: false,
-          publishingProvider: 'youtube',
-          note: 'Approval records permission to publish this draft to YouTube. JARVIS never publishes automatically.'
-        },
+        approvalGate: null,
       }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
     } catch (error) {
       console.error('JARVIS Children Factory error:', error);
@@ -1026,7 +1236,7 @@ export async function handleApi(req, res, pathname, url) {
       user: authenticated?.jarvisUser || null,
     });
 
-    const childrenFactoryRoute = route.intent === 'children-story';
+    const childrenFactoryRoute = route.intent === 'children-factory';
 
     const imageRequest = /\b(generate|create|make|draw|illustrate|render)\b[\\s\\S]{0,120}\b(image|picture|photo|illustration)\b|\b(image|picture|photo|illustration)\b[\\s\\S]{0,120}\b(generate|create|make|draw|illustrate|render)\b/i.test(latestUserMessage);
     if (imageRequest) {
@@ -1119,6 +1329,9 @@ export async function handleApi(req, res, pathname, url) {
         ? `Likely capabilities for the current request (hints, not execution): ${intentCandidates.map(item => item.id).join(', ')}`
         : 'No capability was confidently identified from simple routing hints; use reasoning and available tools rather than inventing a capability.',
       routeContextForPrompt(route),
+      childrenFactoryRoute
+        ? "This request targets the Children's Content Factory. Prefer the existing approval-gated factory workflow over presenting a generic chat reply as the finished production result. Never claim that story, images, video, or publishing happened unless a connected JARVIS provider actually confirms it."
+        : "",
       "The JARVIS application provides you with the current conversation messages and, when available, relevant long-term memories retrieved from its persistent memory system.",
       "Use the supplied conversation and memory context to maintain continuity. Do not claim that you cannot remember previous conversations when relevant history or memory is supplied.",
       "Do not describe yourself as ChatGPT, Claude, Hugging Face, or another underlying model unless the user explicitly asks which model/provider is being used.",

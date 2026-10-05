@@ -4,7 +4,10 @@ const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
 const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || '';
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const SUPABASE_SERVER_KEY = SUPABASE_SECRET_KEY || SUPABASE_SERVICE_ROLE_KEY;
-const configured = Boolean(SUPABASE_URL && SUPABASE_SERVER_KEY);
+const productionRuntime = process.env.VERCEL === '1' || process.env.NODE_ENV === 'production';
+const configured = productionRuntime
+  ? true
+  : Boolean(SUPABASE_URL && SUPABASE_SERVER_KEY);
 
 const memory = {
   oauth: new Map(),
@@ -21,6 +24,12 @@ export function persistenceMode() {
 
 async function request(pathname, options = {}) {
   if (!configured) return null;
+  if (!SUPABASE_URL || !SUPABASE_SERVER_KEY) {
+    throw Object.assign(new Error('Supabase persistence is not configured on this deployment.'), {
+      statusCode: 503,
+      code: 'SUPABASE_PERSISTENCE_NOT_CONFIGURED',
+    });
+  }
   const response = await fetch(`${SUPABASE_URL}/rest/v1/${pathname}`, {
     ...options,
     headers: {
@@ -118,13 +127,58 @@ export async function ensureJarvisAuthUser(authUser) {
     });
     return { ...existing[0], name, email };
   }
+
+  if (email) {
+    const existingByEmail = await request('jarvis_users?select=id,name,email,preferences,auth_user_id&email=eq.' + encodeURIComponent(email) + '&limit=2');
+    if (existingByEmail?.length) {
+      const emailRow = existingByEmail[0];
+      if (emailRow.auth_user_id && emailRow.auth_user_id !== authUserId) {
+        throw Object.assign(new Error('This email is already linked to a different JARVIS sign-in identity.'), {
+          statusCode: 409,
+          code: 'ACCOUNT_IDENTITY_CONFLICT',
+        });
+      }
+      if (!authUser?.email_confirmed_at && !authUser?.confirmed_at) {
+        throw Object.assign(new Error('The sign-in email must be confirmed before an existing JARVIS account can be linked.'), {
+          statusCode: 409,
+          code: 'ACCOUNT_EMAIL_NOT_CONFIRMED',
+        });
+      }
+      await request('jarvis_users?id=eq.' + encodeURIComponent(emailRow.id), {
+        method: 'PATCH',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({ name, email, auth_user_id: authUserId, updated_at: new Date().toISOString() }),
+      });
+      return { ...emailRow, name, email, auth_user_id: authUserId };
+    }
+  }
+
   const id = crypto.randomUUID();
   const rows = await request('jarvis_users', {
     method: 'POST',
-    headers: { Prefer: 'return=representation' },
+    headers: { Prefer: 'resolution=ignore-duplicates,return=representation' },
     body: JSON.stringify({ id, name, email, auth_user_id: authUserId, preferences: {} }),
   });
-  return rows?.[0] || { id, name, email, auth_user_id: authUserId, preferences: {} };
+  if (rows?.[0]) return rows[0];
+
+  const reconciled = await request('jarvis_users?select=id,name,email,preferences,auth_user_id&auth_user_id=eq.' + encodeURIComponent(authUserId) + '&limit=1');
+  if (reconciled?.[0]) return reconciled[0];
+  if (email) {
+    const byEmail = await request('jarvis_users?select=id,name,email,preferences,auth_user_id&email=eq.' + encodeURIComponent(email) + '&limit=1');
+    if (byEmail?.[0] && (!byEmail[0].auth_user_id || byEmail[0].auth_user_id === authUserId)) {
+      await request('jarvis_users?id=eq.' + encodeURIComponent(byEmail[0].id), {
+        method: 'PATCH',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({ name, email, auth_user_id: authUserId, updated_at: new Date().toISOString() }),
+      });
+      return { ...byEmail[0], name, email, auth_user_id: authUserId };
+    }
+  }
+
+  throw Object.assign(new Error('JARVIS could not reconcile the authenticated user profile.'), {
+    statusCode: 409,
+    code: 'ACCOUNT_RECONCILIATION_FAILED',
+  });
 }
 
 export async function getJarvisPreferences(userId) {
@@ -172,7 +226,7 @@ export async function getOrCreateConversation(userId) {
     if (!memory.conversations.has(userId)) memory.conversations.set(userId, []);
     return { id: userId };
   }
-  const rows = await request(`conversations?select=id,title&user_id=eq.${encodeURIComponent(userId)}&order=created_at.asc&limit=1`);
+  const rows = await request(`conversations?select=id,title&user_id=eq.${encodeURIComponent(userId)}&order=updated_at.desc,created_at.desc&limit=1`);
   if (rows?.[0]) return rows[0];
   const created = await request('conversations', {
     method: 'POST',
@@ -508,32 +562,29 @@ export async function consumeImageGeneration(userId, metadata = {}) {
     return { ...entitlement, credits_remaining: remaining - 1 };
   }
 
-  const nextRemaining = remaining - 1;
-  await request(
-    'jarvis_entitlements?user_id=eq.' + encodeURIComponent(userId),
-    {
-      method: 'PATCH',
-      headers: { Prefer: 'return=minimal' },
-      body: JSON.stringify({
-        credits_remaining: nextRemaining,
-        updated_at: new Date().toISOString(),
-      }),
+  try {
+    const result = await rpc('consume_jarvis_image_credit', {
+      p_user_id: userId,
+      p_operation: 'image_generation',
+      p_units: 1,
+      p_credits_charged: 1,
+      p_metadata: metadata && typeof metadata === 'object' ? metadata : {},
+    });
+    const row = Array.isArray(result) ? result[0] : result;
+    const nextRemaining = Number(row?.credits_remaining);
+    if (!Number.isInteger(nextRemaining) || nextRemaining < 0) {
+      throw new Error('Image credit service returned an invalid balance.');
     }
-  );
-
-  await request('jarvis_usage_ledger', {
-    method: 'POST',
-    headers: { Prefer: 'return=minimal' },
-    body: JSON.stringify({
-      user_id: userId,
-      operation: 'image_generation',
-      units: 1,
-      credits_charged: 1,
-      metadata,
-    }),
-  });
-
-  return { ...entitlement, credits_remaining: nextRemaining };
+    return { ...entitlement, credits_remaining: nextRemaining };
+  } catch (error) {
+    if (String(error?.message || '').includes('IMAGE_ALLOWANCE_EXHAUSTED')) {
+      throw Object.assign(new Error('Your image-generation allowance is used up for this billing period.'), {
+        statusCode: 402,
+        code: 'IMAGE_ALLOWANCE_EXHAUSTED',
+      });
+    }
+    throw error;
+  }
 }
 
 
@@ -807,7 +858,7 @@ export async function queueVideoJobForUser(userId, projectId, payload = {}) {
       priority: Number(payload.priority || 5),
       payload: jobPayload,
       attempts: 0,
-      max_attempts: 3,
+      max_attempts: String(payload.provider || '').toLowerCase() === 'higgsfield' || String(payload.include_voice || '').toLowerCase() === 'true' ? 1 : 3,
       scheduled_at: new Date().toISOString(),
     }),
   });

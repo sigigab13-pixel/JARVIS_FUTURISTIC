@@ -7,6 +7,7 @@ const caps = [
   { id: 'youtube', description: 'Upload and publish videos to YouTube.', keywords: ['youtube', 'upload', 'publish'] },
   { id: 'web_intelligence', description: 'Search current information on the public web.', keywords: ['search', 'current', 'web', 'latest', 'research'] },
   { id: 'business', description: 'Manage business clients and workflows.', keywords: ['business', 'client', 'customer', 'manage'] },
+  { id: 'children_factory', description: "Prepare children's stories, rhymes, images, and approval-gated publish packages.", keywords: ['children', 'kids', 'story', 'rhyme', 'video'] },
 ];
 
 function route(prompt) {
@@ -23,12 +24,18 @@ function expectIntent(prompts, intent) {
   }
 }
 
-test('children factory prompts route away from generic chat', () => {
+test('children production prompts route to the Children Factory', () => {
   expectIntent([
-    'make a bedtime story for a 5yr old',
-    'write a nursery rhyme for kids about kindness',
-    'create a story for children aged 7 about sharing',
+    'make a bedtime story video for a 5yr old',
+    'write a nursery rhyme video for kids about kindness',
+    'create a story animation for children aged 7 about sharing',
+  ], 'children-factory');
+});
+
+test('simple child storytelling stays a story intent', () => {
+  expectIntent([
     'give me a gentle bedtime tale for my little brother',
+    'tell me a short story for a child about friendship',
   ], 'children-story');
 });
 
