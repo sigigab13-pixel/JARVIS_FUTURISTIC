@@ -1244,3 +1244,22 @@ body {
   .chat-tools { padding-left: 16px; padding-right: 16px; }
   .composer { margin-left: 12px; margin-right: 12px; }
 }
+
+
+.chat-generated-image {
+  margin-top: 10px;
+  width: min(560px, 100%);
+  overflow: hidden;
+  border: 1px solid rgba(140, 160, 174, .14);
+  border-radius: 14px;
+  background: #080b0f;
+  box-shadow: 0 10px 26px rgba(0,0,0,.20);
+}
+
+.chat-generated-image img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 620px;
+  object-fit: contain;
+}
