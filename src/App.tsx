@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import EmpireDashboard from './EmpireDashboard';
 import CapabilityCenter from './CapabilityCenter';
@@ -88,7 +88,7 @@ function renderInlineMarkdown(value: string) {
 
 function renderRichMessage(content: string) {
   const lines = String(content || '').split(/\\r?\\n/);
-  const blocks: React.ReactNode[] = [];
+  const blocks: ReactNode[] = [];
   let list: { ordered: boolean; text: string }[] = [];
 
   const flushList = () => {
