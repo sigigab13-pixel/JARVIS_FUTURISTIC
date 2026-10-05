@@ -1,6 +1,33 @@
 # JARVIS Futuristic — Master Build Queue
 
 
+# ⚡ FAST-TRACK V1 — TIME-LIMITED RELEASE SCOPE
+
+**Status:** ACTIVE EXECUTION
+**Locked:** 2026-10-05
+
+Because development time is limited, JARVIS will first ship a focused V1 instead of attempting the entire master roadmap at once.
+
+## V1 Finish Line
+- [x] Production Vercel web app and API deployment verified.
+- [x] Supabase authentication foundation.
+- [x] Persistent JARVIS user/data foundation.
+- [x] Core chat/API architecture.
+- [x] Hugging Face AI fallback path and diagnostics foundation.
+- [x] Children Factory foundation: story, character bible, sequential image assets, approval gate, first MP4 renderer.
+- [x] YouTube publishing foundation.
+- [x] Upstash queue + GitHub worker foundation.
+- [ ] Core permission/approval surface exposed cleanly in the product.
+- [ ] Basic Repair Office / health dashboard with safe recovery actions.
+- [ ] Unified natural-language routing for the supported V1 capabilities.
+- [ ] End-to-end Children Factory demo path from idea to publish-ready package.
+- [ ] Final V1 UI polish and release QA.
+
+## Deferred until after V1
+Business Manager expansion, full Personal Assistant, advanced multi-scene AI video motion, lip-sync, broad social publishing, knowledge graph, advanced proactive intelligence, teams, white-label, and other large roadmap items remain tracked below but are not blockers for V1.
+
+---
+
 # ROADMAP LOCK — MYTHOS EXECUTION PHASE
 
 **Status:** FROZEN FOR IMPLEMENTATION  
