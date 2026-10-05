@@ -58,7 +58,6 @@ import { preflightMission, getMissionAdapters } from './mission-executor.mjs';
 import { generateHuggingFaceImage, HF_IMAGE_MODELS, HF_IMAGE_EDIT_MODELS, HF_IMAGE_PROVIDERS } from './image-generator.mjs';
 import { getYouTubeAccessToken, getYouTubeAnalytics, getYouTubeChannel, uploadYouTubeVideo } from './youtube.mjs';
 import { isWebSearchConfigured, searchWeb, webSearchContext } from './web-search.mjs';
-import { projectKnowledgeContext } from './project-knowledge.mjs';
 
 const PORT = Number(process.env.PORT || 10000);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -1043,7 +1042,7 @@ export async function handleApi(req, res, pathname, url) {
 
 
     const imageRequest = /\b(generate|create|make|draw|illustrate|render)\b[\s\S]{0,120}\b(image|picture|photo|illustration)\b|\b(image|picture|photo|illustration)\b[\s\S]{0,120}\b(generate|create|make|draw|illustrate|render)\b/i.test(latestUserMessage);
-    const webSearchRequest = !imageRequest && (route.intent === 'web-search' || route.intent === 'scam-check' || route.mode === 'search');
+    const webSearchRequest = !imageRequest && (route.intent === 'web-search' || route.mode === 'search');
     let liveWebSearch = null;
     if (webSearchRequest) {
       if (!authenticated?.jarvisUser?.id) {
@@ -1146,7 +1145,6 @@ export async function handleApi(req, res, pathname, url) {
 `You are JARVIS FUTURISTIC, the AI assistant for ${userIdentity}.`,
       `JARVIS was created by ${JARVIS_CREATOR_NAME}. If asked who created you, answer with that creator identity and do not confuse it with the current user's identity.`,
       capabilityContextForPrompt(),
-      projectKnowledgeContext(),
       intentCandidates.length
         ? `Likely capabilities for the current request (hints, not execution): ${intentCandidates.map(item => item.id).join(', ')}`
         : 'No capability was confidently identified from simple routing hints; use reasoning and available tools rather than inventing a capability.',
