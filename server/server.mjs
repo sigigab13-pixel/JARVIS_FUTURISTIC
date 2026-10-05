@@ -168,6 +168,17 @@ function safePath(urlPath) {
   return target.startsWith(DIST) ? target : null;
 }
 
+export function buildChildrenFactoryPipeline({ renderQueued = false, renderCompleted = false, approvalStatus = 'pending', published = false } = {}) {
+  return [
+    { id: 'story', label: 'Story', status: 'completed' },
+    { id: 'character_bible', label: 'Character Bible', status: 'completed' },
+    { id: 'scene_assets', label: 'Scene Assets', status: 'completed' },
+    { id: 'render', label: '9:16 Render', status: renderCompleted ? 'completed' : renderQueued ? 'queued' : 'pending' },
+    { id: 'approval', label: 'Approval', status: published ? 'completed' : approvalStatus },
+    { id: 'publish', label: 'Publish', status: published ? 'completed' : 'blocked' },
+  ];
+}
+
 async function generateChildrenFactoryDraft(topic, age) {
   const hfToken = process.env.HUGGINGFACE_API_TOKEN || process.env.HF_TOKEN || '';
   if (!hfToken) {
@@ -818,6 +829,7 @@ export async function handleApi(req, res, pathname, url) {
         story: draft.story,
         characterBible: draft.character,
         images: imageResults,
+        pipeline: buildChildrenFactoryPipeline({ approvalStatus: 'pending' }),
       };
       const createdMission = await createMissionForUser(jarvisUser.id, state);
       const approvalMission = transitionMission(createdMission, 'waiting_approval');
@@ -842,6 +854,7 @@ export async function handleApi(req, res, pathname, url) {
           story: draft.story,
           characterBible: draft.character,
           images: imageResults,
+          pipeline: buildChildrenFactoryPipeline({ approvalStatus: 'pending' }),
         },
         approvalGate: {
           required: true,
