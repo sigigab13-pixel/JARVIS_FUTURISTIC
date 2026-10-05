@@ -1244,3 +1244,159 @@ body {
   .chat-tools { padding-left: 16px; padding-right: 16px; }
   .composer { margin-left: 12px; margin-right: 12px; }
 }
+
+/* Readable Chat Theme — 2026-10-05 */
+body {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(102, 168, 193, 0.055), transparent 30%),
+    linear-gradient(180deg, #0b0f13 0%, #0d1116 48%, #0a0e12 100%);
+}
+
+.jarvis-shell {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.012), transparent 22%),
+    linear-gradient(180deg, #0d1217 0%, #0b1015 100%);
+}
+
+.jarvis-shell::before {
+  width: 68vw;
+  height: 68vw;
+  left: -25vw;
+  top: -16vh;
+  opacity: .55;
+  background: radial-gradient(circle, rgba(91, 164, 194, .07), transparent 68%);
+  filter: blur(18px);
+}
+
+.topbar {
+  height: 58px;
+  padding: 0 20px;
+  background: rgba(11, 15, 20, .92);
+  border-bottom: 1px solid rgba(140, 160, 174, .10);
+}
+
+.dashboard.single-chat {
+  width: min(900px, 100%);
+}
+
+.chat-head {
+  padding: 30px 28px 10px;
+}
+
+.chat-head h1 {
+  font-size: clamp(27px, 3.6vw, 36px);
+  font-weight: 450;
+  letter-spacing: -.035em;
+}
+
+.chat-subtitle {
+  font-size: 11px;
+  color: #8b959e;
+}
+
+.messages {
+  max-width: 900px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 20px 28px 14px;
+}
+
+.message-row {
+  max-width: 760px;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.message-badge {
+  flex-basis: 24px;
+  width: 24px;
+  height: 24px;
+  font-size: 8px;
+  color: #8d9aa4;
+}
+
+.bubble {
+  padding: 0;
+}
+
+.bubble span {
+  font-size: 8px;
+  letter-spacing: .10em;
+  opacity: .62;
+}
+
+.message-content {
+  margin-top: 6px;
+  color: #d9dee2;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.68;
+  max-width: 720px;
+}
+
+.user .message-content {
+  color: #edf1f4;
+}
+
+.rich-paragraph {
+  margin: 0 0 13px;
+}
+
+.rich-paragraph:last-child {
+  margin-bottom: 0;
+}
+
+.rich-heading {
+  margin: 2px 0 10px;
+  color: #f0f3f5;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.rich-heading strong {
+  font-weight: 650;
+}
+
+.rich-list {
+  margin: 4px 0 14px;
+  padding-left: 22px;
+}
+
+.rich-list li {
+  margin: 5px 0;
+  padding-left: 3px;
+}
+
+.message-content strong {
+  color: #f2f5f7;
+  font-weight: 650;
+}
+
+.message-content em {
+  color: #c6cdd2;
+}
+
+.rich-spacer {
+  height: 4px;
+}
+
+.composer {
+  margin: 0 28px;
+  background: rgba(17, 22, 28, .97);
+  border-color: rgba(140, 160, 174, .15);
+  box-shadow: 0 10px 28px rgba(0,0,0,.22);
+}
+
+.hint {
+  color: #66727b;
+}
+
+@media (max-width: 760px) {
+  .topbar { height: 54px; padding: 0 14px; }
+  .chat-head { padding: 22px 16px 8px; }
+  .messages { padding: 16px 16px 8px; }
+  .message-content { font-size: 15px; line-height: 1.64; }
+  .rich-heading { font-size: 17px; }
+  .composer { margin-left: 12px; margin-right: 12px; }
+}
