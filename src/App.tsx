@@ -1445,20 +1445,26 @@ function App() {
             </div>
             {factoryError && <div className="lock-note"><AlertTriangle size={16} /><span>{factoryError}</span></div>}
             {factoryDraft?.draft && <article className="security-card" style={{ display:'block', marginTop:12 }}>
-              <span className="eyebrow">DRAFT READY</span>
+              <span className="eyebrow">{factoryDraft.status === 'scenes_queued' ? 'SCENES IN PROGRESS' : 'CHILDREN FACTORY DRAFT'}</span>
               <h3>{factoryDraft.draft.project?.title || 'Children Story'}</h3>
               <p style={{ whiteSpace:'pre-wrap' }}>{factoryDraft.draft.story}</p>
-              <div style={{ display:'grid', gap:6 }}><b>Character Bible</b><span>{factoryDraft.draft.characterBible?.name} · {factoryDraft.draft.characterBible?.species} · {factoryDraft.draft.characterBible?.color} · {factoryDraft.draft.characterBible?.clothes}</span></div>
+              <div style={{ display:'grid', gap:6 }}>
+                <b>Character Bible</b>
+                <span>{factoryDraft.draft.characterBible?.name} · {factoryDraft.draft.characterBible?.species} · {factoryDraft.draft.characterBible?.color} · {factoryDraft.draft.characterBible?.clothes}</span>
+                <span>Scene assets: {(factoryDraft.draft.images || []).length}/3 · {String(((factoryDraft.draft.pipeline || []).find((stage:any) => stage.id === 'scene_assets') || {}).status || 'unknown')}</span>
+              </div>
               <div style={{ display:'grid', gridTemplateColumns:'repeat(3,minmax(0,1fr))', gap:8, marginTop:12 }}>
                 {(factoryDraft.draft.images || []).map((item:any) => item.media?.url ? <img key={item.scene} src={item.media.url} alt={'Children Factory scene '+item.scene} style={{ width:'100%', borderRadius:10 }} /> : <div key={item.scene} className="lock-note">Scene {item.scene} asset stored</div>)}
+                {(factoryDraft.draft.images || []).length < 3 && <div className="lock-note" style={{ gridColumn:'1 / -1' }}>JARVIS Worker is generating the remaining scene assets. The render gate stays locked until all 3 are verified.</div>}
               </div>
               <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:12 }}>
-                <button className="security-secondary" onClick={() => void renderChildrenFactoryVideo()} disabled={factoryBusy || !(factoryDraft && factoryDraft.draft && factoryDraft.draft.project && factoryDraft.draft.project.id) || !((factoryDraft && factoryDraft.draft && factoryDraft.draft.images) || []).length}>
-                  {factoryRenderJob && (factoryRenderJob.status === 'running' || factoryRenderJob.status === 'queued') ? 'Rendering 9:16 short…' : 'Render 9:16 Short'}
+                <button className="security-secondary" onClick={() => void renderChildrenFactoryVideo()} disabled={factoryBusy || !(factoryDraft && factoryDraft.draft && factoryDraft.draft.project && factoryDraft.draft.project.id) || ((factoryDraft.draft.images || []).length < 3) || String(((factoryDraft.draft.pipeline || []).find((stage:any) => stage.id === 'scene_assets') || {}).status || '') !== 'completed'}>
+                  {factoryDraft.draft.images?.length < 3 ? 'Waiting for scene assets…' : factoryRenderJob && (factoryRenderJob.status === 'running' || factoryRenderJob.status === 'queued') ? 'Rendering 9:16 short…' : 'Render 9:16 Short'}
                 </button>
                 {factoryDraft && factoryDraft.renderedVideo && factoryDraft.renderedVideo.mediaKey && <button className="security-secondary" onClick={() => { setYoutubeMissionId(String(factoryDraft.approvalGate && factoryDraft.approvalGate.missionId || '')); setYoutubeMediaKey(String(factoryDraft.renderedVideo.mediaKey)); setYoutubeTitle(String(factoryDraft.draft && factoryDraft.draft.project && factoryDraft.draft.project.title || '').slice(0,100)); setYoutubeDescription(String(factoryDraft.draft && factoryDraft.draft.story || '').slice(0,5000)); setFactoryOpen(false); void openYouTubeCenter(); }}>Open YouTube Publisher</button>}
               </div>
               {factoryRenderJob && <div className="security-status"><span>Render job: {factoryRenderJob.status}</span></div>}
+              {factoryDraft?.mission?.status === 'failed' && <div className="lock-note" style={{ marginTop:12 }}><AlertTriangle size={16} /><span>{String(factoryDraft.mission?.metadata?.factoryFailure?.message || 'Children Factory stopped after bounded retries. Partial progress was preserved.')}</span></div>}
               <div className="lock-note" style={{ marginTop:12 }}><LockKeyhole size={16} /><span>Rendering creates a stored 9:16 MP4. Publishing is still separate and requires an approved mission.</span></div>
             </article>}
             <div style={{ display:'grid', gap:10, marginTop:16 }}>
