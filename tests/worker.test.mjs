@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorkerId, executeJob, getVideoRenderGeometry, buildVideoFilter } from '../server/worker.mjs';
-import { buildChildrenFactoryPipeline } from '../server/server.mjs';
+import { buildChildrenFactoryPipeline, canPublishChildrenFactoryMission } from '../server/server.mjs';
 
 test('worker creates unique stable ids', () => {
   const a = createWorkerId();
@@ -64,7 +64,8 @@ test('Children Factory pipeline starts render-pending and publish-blocked', () =
       ['character_bible', 'completed'],
       ['scene_assets', 'completed'],
       ['render', 'pending'],
-      ['approval', 'pending'],
+      ['verified_video', 'blocked'],
+      ['approval', 'blocked'],
       ['publish', 'blocked'],
     ],
   );
@@ -73,5 +74,43 @@ test('Children Factory pipeline starts render-pending and publish-blocked', () =
 test('Children Factory pipeline marks queued render without unlocking publish', () => {
   const pipeline = buildChildrenFactoryPipeline({ renderQueued: true });
   assert.equal(pipeline.find(stage => stage.id === 'render')?.status, 'queued');
+  assert.equal(pipeline.find(stage => stage.id === 'verified_video')?.status, 'blocked');
   assert.equal(pipeline.find(stage => stage.id === 'publish')?.status, 'blocked');
+});
+
+
+test('Children Factory cannot publish before a verified video', () => {
+  const base = {
+    approval: { status: 'approved' },
+    metadata: {
+      factory: 'children-v1',
+      pipeline: { render: 'completed', verified_video: 'blocked' },
+      verifiedVideo: null,
+    },
+  };
+  assert.equal(canPublishChildrenFactoryMission(base), false);
+});
+
+test('Children Factory cannot publish before approval', () => {
+  const base = {
+    approval: { status: 'pending' },
+    metadata: {
+      factory: 'children-v1',
+      pipeline: { render: 'completed', verified_video: 'completed' },
+      verifiedVideo: { mediaKey: 'jarvis/user/video.mp4' },
+    },
+  };
+  assert.equal(canPublishChildrenFactoryMission(base), false);
+});
+
+test('Children Factory can publish only after verified video and approval', () => {
+  const mission = {
+    approval: { status: 'approved' },
+    metadata: {
+      factory: 'children-v1',
+      pipeline: { render: 'completed', verified_video: 'completed' },
+      verifiedVideo: { mediaKey: 'jarvis/user/video.mp4' },
+    },
+  };
+  assert.equal(canPublishChildrenFactoryMission(mission), true);
 });
