@@ -34,7 +34,7 @@ import {
   Apple,
 } from 'lucide-react';
 
-type Message = { role: 'user' | 'assistant'; content: string };
+type Message = { role: 'user' | 'assistant'; content: string; image?: { data: string; mimeType: string } };
 
 function safeText(value: unknown, fallback = ''): string {
   if (typeof value === 'string') return value;
@@ -51,13 +51,19 @@ function safeText(value: unknown, fallback = ''): string {
   return String(value);
 }
 
+
+function looksLikeImageGenerationRequest(value: string): boolean {
+  return /\\b(generate|create|make|draw|illustrate|render)\\b[\\s\\S]{0,120}\\b(image|picture|photo|illustration)\\b|\\b(image|picture|photo|illustration)\\b[\\s\\S]{0,120}\\b(generate|create|make|draw|illustrate|render)\\b/i.test(value);
+}
+
 function normalizeMessages(value: unknown, fallback: Message[] = starter): Message[] {
   if (!Array.isArray(value)) return fallback;
   return value
     .map((item: any) => {
       if (item?.role !== 'user' && item?.role !== 'assistant') return null;
       const content = safeText(item?.content).trim();
-      return content ? { role: item.role, content } : null;
+      const image = item?.image?.data && item?.image?.mimeType ? { data: String(item.image.data), mimeType: String(item.image.mimeType) } : undefined;
+      return content || image ? { role: item.role, content, ...(image ? { image } : {}) } : null;
     })
     .filter(Boolean) as Message[];
 }
@@ -313,7 +319,8 @@ function App() {
 
   useEffect(() => {
     if (!session?.user?.id) return;
-    localStorage.setItem(`jarvis-history:${session.user.id}`, JSON.stringify(messages));
+    const memorySafeMessages = messages.map(message => ({ role: message.role, content: message.content }));
+    localStorage.setItem(`jarvis-history:${session.user.id}`, JSON.stringify(memorySafeMessages));
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, busy]);
 
@@ -657,6 +664,35 @@ function App() {
     setMessages(next);
     setInput('');
     setBusy(true);
+
+    if (looksLikeImageGenerationRequest(clean)) {
+      try {
+        const response = await api.post('/api/image/generate', { prompt: clean });
+        const generated = response.data?.image;
+        if (!generated?.data || !generated?.mimeType) throw new Error('Invalid image response');
+        const image = { data: String(generated.data), mimeType: String(generated.mimeType) };
+        const answer = 'Done — I generated the image here in the chat.';
+        setMessages(current => [
+          ...current,
+          { role: 'assistant', content: answer, image },
+        ]);
+        setInput('');
+        if (voiceEnabled) void speak(answer);
+      } catch (error: any) {
+        const detail = String(error?.response?.data?.error || error?.message || '').trim();
+        setMessages(current => [
+          ...current,
+          {
+            role: 'assistant',
+            content: detail ? `JARVIS image generation error: ${detail}` : 'JARVIS could not generate the image right now. Please try again.',
+          },
+        ]);
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
     try {
       let response;
       let lastError: unknown;
@@ -1179,7 +1215,12 @@ function App() {
                 <div className="message-badge">{message.role === 'user' ? 'S' : 'J'}</div>
                 <div className="bubble">
                   <span>{message.role === 'user' ? 'YOU' : 'JARVIS'}</span>
-                  <p>{message.content}</p>
+                  {message.content && <p>{message.content}</p>}
+                  {message.image?.data && message.image?.mimeType && (
+                    <div className="chat-generated-image">
+                      <img src={\`data:\${message.image.mimeType};base64,\${message.image.data}\`} alt="JARVIS generated result" />
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
