@@ -117,13 +117,13 @@ export async function executeChildrenFactoryScene(job) {
   if (!userId || !missionId || !projectId || !Number.isInteger(scene) || scene < 1 || scene > totalScenes) {
     throw new Error('Children Factory scene job is missing a valid mission, project, user, or scene identity.');
   }
-  if (!isSupabaseStorageConfigured()) {
-    throw new Error('Supabase Storage is not configured for Children Factory assets.');
-  }
 
   const mission = await getMissionForUser(userId, missionId);
   if (!mission || mission.metadata?.factory !== 'children-v1' || String(mission.metadata?.projectId || '') !== projectId) {
     throw new Error('Children Factory mission was not found or does not belong to this video project.');
+  }
+  if (!isSupabaseStorageConfigured()) {
+    throw new Error('Supabase Storage is not configured for Children Factory assets.');
   }
   if (['failed', 'canceled', 'succeeded'].includes(String(mission.status || ''))) {
     return {
