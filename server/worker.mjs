@@ -44,6 +44,11 @@ export function createWorkerId(prefix = 'jarvis-worker') {
   return `${prefix}-${crypto.randomUUID()}`;
 }
 
+function updateChildrenFactoryPipeline(pipeline, updates = {}) {
+  const stages = Array.isArray(pipeline) ? pipeline.map(stage => ({ ...stage })) : [];
+  return stages.map(stage => updates[stage.id] ? { ...stage, status: updates[stage.id] } : stage);
+}
+
 export function getVideoRenderGeometry(format = '16:9') {
   return String(format).trim() === '9:16'
     ? { width: 1080, height: 1920, label: '9:16' }
@@ -151,6 +156,11 @@ async function executeVideoPipeline(job) {
           jobId: String(job?.id || ''),
           renderedAt: new Date().toISOString(),
         },
+        pipeline: updateChildrenFactoryPipeline(mission.metadata?.pipeline, {
+          render: 'completed',
+          approval: 'pending',
+          publish: 'blocked',
+        }),
       };
       await updateMissionForUser(userId, mission.id, { ...mission, metadata }, {
         eventType: 'video.rendered',
