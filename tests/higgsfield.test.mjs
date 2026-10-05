@@ -51,12 +51,10 @@ test('Higgsfield media-key bridge signs JARVIS assets before submission', async 
     calls.push({ url: target, options });
 
     if (target.includes('/storage/v1/object/sign/')) {
-      return new Response(JSON.stringify({
-        signedUrls: [{
-          path: 'jarvis/11111111-1111-4111-8111-111111111111/children-factory/scene-1.png',
-          signedURL: '/object/sign/jarvis-media/signed-scene-1',
-        }],
-      }), {
+      return new Response(JSON.stringify([{
+        path: 'jarvis/11111111-1111-4111-8111-111111111111/children-factory/scene-1.png',
+        signedURL: '/object/sign/jarvis-media/signed-scene-1',
+      }]), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
