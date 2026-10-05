@@ -156,9 +156,18 @@ async function executeVideoPipeline(job) {
           jobId: String(job?.id || ''),
           renderedAt: new Date().toISOString(),
         },
+        verifiedVideo: {
+          mediaKey,
+          sha256,
+          verifiedAt: new Date().toISOString(),
+          format: result.format,
+          width: result.width,
+          height: result.height,
+        },
         pipeline: updateChildrenFactoryPipeline(mission.metadata?.pipeline, {
           render: 'completed',
-          approval: 'pending',
+          verified_video: 'completed',
+          approval: 'blocked',
           publish: 'blocked',
         }),
       };
