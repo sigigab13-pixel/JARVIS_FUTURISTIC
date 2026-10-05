@@ -7,11 +7,6 @@ import {
 } from '../server/monetization/youtube-revenue-tracker.mjs';
 import { buildKdpExport } from '../server/monetization/kdp-exporter.mjs';
 import { buildMerchExport } from '../server/monetization/merch-generator.mjs';
-import {
-  getSubscriptionPlans,
-  getSubscriptionPlan,
-  getBillingStatus,
-} from '../server/monetization/subscription-plans.mjs';
 import { getMonetizationOfficeConfig } from '../server/monetization-office.mjs';
 
 test('revenue tracker estimates from supplied RPM without claiming a payout', () => {
@@ -85,19 +80,16 @@ test('merch exporter creates product placeholders from a character', () => {
   assert.equal(result.artworkBrief.keepCharacterConsistent, true);
 });
 
-test('subscription catalog is non-billing and exposes the proposed plans', () => {
-  const plans = getSubscriptionPlans();
-  assert.deepEqual(plans.map(plan => plan.code), ['free', 'creator', 'studio']);
-  assert.equal(getSubscriptionPlan('creator').monthlyPrice, 19);
-  assert.equal(getSubscriptionPlan('studio').monthlyPrice, 99);
-  assert.equal(getBillingStatus().enabled, false);
+test('monetization office uses the existing JARVIS pricing source', () => {
+  const config = getMonetizationOfficeConfig();
+  assert.equal(config.pricingSource, '/api/plans');
+  assert.equal(config.transactionsEnabled, false);
 });
 
 test('monetization office config keeps charging and external transactions disabled', () => {
   const config = getMonetizationOfficeConfig();
   assert.equal(config.office, 'monetization');
-  assert.equal(config.autoCharge, false);
-  assert.equal(config.autoPublish, false);
+  assert.equal(config.transactionsEnabled, false);
   assert.equal(config.externalMerchOrder, false);
   assert.equal(config.externalKdpSubmission, false);
 });
