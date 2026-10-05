@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createWorkerId, executeJob, getVideoRenderGeometry } from '../server/worker.mjs';
+import { createWorkerId, executeJob, getVideoRenderGeometry, buildVideoFilter } from '../server/worker.mjs';
 
 test('worker creates unique stable ids', () => {
   const a = createWorkerId();
@@ -41,4 +41,14 @@ test('legacy video projects keep landscape geometry by default', () => {
     height: 720,
     label: '16:9',
   });
+});
+
+
+test('Children Factory motion filter fills the vertical frame and uses zoompan', () => {
+  const geometry = getVideoRenderGeometry('9:16');
+  const filter = buildVideoFilter(0, geometry);
+  assert.match(filter, /scale=1080:1920/);
+  assert.match(filter, /crop=1080:1920/);
+  assert.match(filter, /zoompan=/);
+  assert.match(filter, /s=1080x1920/);
 });
