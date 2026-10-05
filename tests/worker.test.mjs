@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorkerId, executeJob, getVideoRenderGeometry, buildVideoFilter } from '../server/worker.mjs';
+import { buildChildrenFactoryPipeline } from '../server/server.mjs';
 
 test('worker creates unique stable ids', () => {
   const a = createWorkerId();
@@ -51,4 +52,26 @@ test('Children Factory motion filter fills the vertical frame and uses zoompan',
   assert.match(filter, /crop=1080:1920/);
   assert.match(filter, /zoompan=/);
   assert.match(filter, /s=1080x1920/);
+});
+
+
+test('Children Factory pipeline starts render-pending and publish-blocked', () => {
+  const pipeline = buildChildrenFactoryPipeline();
+  assert.deepEqual(
+    pipeline.map(stage => [stage.id, stage.status]),
+    [
+      ['story', 'completed'],
+      ['character_bible', 'completed'],
+      ['scene_assets', 'completed'],
+      ['render', 'pending'],
+      ['approval', 'pending'],
+      ['publish', 'blocked'],
+    ],
+  );
+});
+
+test('Children Factory pipeline marks queued render without unlocking publish', () => {
+  const pipeline = buildChildrenFactoryPipeline({ renderQueued: true });
+  assert.equal(pipeline.find(stage => stage.id === 'render')?.status, 'queued');
+  assert.equal(pipeline.find(stage => stage.id === 'publish')?.status, 'blocked');
 });
