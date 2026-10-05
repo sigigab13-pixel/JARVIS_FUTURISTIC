@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { normalizeMissionForStorage } from './mission-runtime.mjs';
 import { nextRunAt } from './routine-scheduler.mjs';
 const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
@@ -121,7 +122,7 @@ export async function ensureJarvisAuthUser(authUser) {
   const id = crypto.randomUUID();
   const rows = await request('jarvis_users', {
     method: 'POST',
-    headers: { Prefer: 'return=representation' },
+    headers: { Prefer: 'resolution=ignore-duplicates,return=representation' },
     body: JSON.stringify({ id, name, email, auth_user_id: authUserId, preferences: {} }),
   });
   return rows?.[0] || { id, name, email, auth_user_id: authUserId, preferences: {} };
@@ -792,11 +793,34 @@ export async function getJobForUser(userId, jobId) {
   };
 }
 
-export async function queueVideoJobForUser(userId, projectId, payload = {}) {
+
+function stableJson(value) {
+  if (Array.isArray(value)) return value.map(stableJson);
+  if (value && typeof value === 'object') {
+    return Object.keys(value).sort().reduce((out, key) => {
+      out[key] = stableJson(value[key]);
+      return out;
+    }, {});
+  }
+  return value;
+}
+
+export function buildVideoJobIdempotencyKey(projectId, payload = {}, suppliedKey = '') {
+  const operation = String(payload?.operation || 'unknown').trim().slice(0, 80) || 'unknown';
+  const explicit = String(suppliedKey || '').trim().slice(0, 160);
+  if (explicit) return `video:${projectId}:${operation}:client:${explicit}`;
+  const digest = createHash('sha256')
+    .update(JSON.stringify(stableJson(payload)))
+    .digest('hex');
+  return `video:${projectId}:${operation}:payload:${digest}`;
+}
+
+export async function queueVideoJobForUser(userId, projectId, payload = {}, suppliedIdempotencyKey = '') {
   const project = await getVideoProjectForUser(userId, projectId);
   if (!project) throw Object.assign(new Error('Video project not found.'), { statusCode: 404 });
   const jobPayload = { project_id: projectId, pipeline: 'jarvis_video_engine', ...payload };
-  if (!configured) return { id: crypto.randomUUID(), user_id: userId, type: 'video_pipeline', status: 'queued', payload: jobPayload };
+  const idempotencyKey = buildVideoJobIdempotencyKey(projectId, jobPayload, suppliedIdempotencyKey);
+  if (!configured) return { id: crypto.randomUUID(), user_id: userId, type: 'video_pipeline', status: 'queued', payload: jobPayload, idempotency_key: idempotencyKey };
   const rows = await request('jobs', {
     method: 'POST',
     headers: { Prefer: 'return=representation' },
@@ -808,10 +832,14 @@ export async function queueVideoJobForUser(userId, projectId, payload = {}) {
       payload: jobPayload,
       attempts: 0,
       max_attempts: 3,
+      idempotency_key: idempotencyKey,
       scheduled_at: new Date().toISOString(),
     }),
   });
-  return rows?.[0] || null;
+  return rows?.[0] || (await request(
+    'jobs?select=*&user_id=eq.' + encodeURIComponent(userId) +
+    '&idempotency_key=eq.' + encodeURIComponent(idempotencyKey) + '&limit=1'
+  ))?.[0] || null;
 }
 
 function missionStateFromRow(row) {
