@@ -163,6 +163,7 @@ function App() {
   const [missionError, setMissionError] = useState('');
   const [factoryOpen, setFactoryOpen] = useState(false);
   const [factoryTopic, setFactoryTopic] = useState('');
+  const [factoryContentType, setFactoryContentType] = useState('story');
   const [factoryAge, setFactoryAge] = useState(5);
   const [factoryBusy, setFactoryBusy] = useState(false);
   const [factoryError, setFactoryError] = useState('');
@@ -537,7 +538,7 @@ function App() {
     setFactoryError('');
     setFactoryDraft(null);
     try {
-      const response = await api.post('/api/factory/children', { topic, age: factoryAge });
+      const response = await api.post('/api/factory/children', { topic, contentType: factoryContentType, age: factoryAge });
       setFactoryDraft(response.data);
       setFactoryTopic('');
       await loadMissions();
@@ -1412,13 +1413,16 @@ function App() {
               <div>
                 <span className="eyebrow">CHILDREN CONTENT FACTORY V1</span>
                 <h2>JARVIS Children Factory</h2>
-                <p>Topic → story → character bible → 3 consistent images → approval.</p>
+                <p>Topic → children content → character bible → 3 consistent images → approval.</p>
               </div>
               <button className="close-security" onClick={() => setFactoryOpen(false)} aria-label="Close Children Factory"><X size={18} /></button>
             </div>
             <div style={{ display:'grid', gap:10, marginBottom:18 }}>
               <textarea value={factoryTopic} onChange={e => setFactoryTopic(e.target.value.slice(0,500))} placeholder="Example: A little lion learns not to be afraid of water" rows={3} />
               <div style={{ display:'flex', gap:10, alignItems:'center', flexWrap:'wrap' }}>
+                <label>Content <select value={factoryContentType} onChange={e => setFactoryContentType(e.target.value)}>
+                  <option value="story">Story</option><option value="rhyme">Rhyme</option><option value="educational">Educational</option><option value="bedtime">Bedtime</option><option value="moral">Moral</option><option value="adventure">Adventure</option>
+                </select></label>
                 <label>Age <select value={factoryAge} onChange={e => setFactoryAge(Number(e.target.value))}>{[3,4,5,6,7,8,9,10,11,12].map(age => <option key={age} value={age}>{age}</option>)}</select></label>
                 <button className="security-primary" onClick={() => void createChildrenFactory()} disabled={factoryBusy || !factoryTopic.trim()}><Sparkles size={16} /> {factoryBusy ? 'Creating…' : 'Create Children Draft'}</button>
               </div>
@@ -1426,8 +1430,8 @@ function App() {
             {factoryError && <div className="lock-note"><AlertTriangle size={16} /><span>{factoryError}</span></div>}
             {factoryDraft?.draft && <article className="security-card" style={{ display:'block', marginTop:12 }}>
               <span className="eyebrow">DRAFT READY</span>
-              <h3>{factoryDraft.draft.project?.title || 'Children Story'}</h3>
-              <p style={{ whiteSpace:'pre-wrap' }}>{factoryDraft.draft.story}</p>
+              <h3>{factoryDraft.draft.project?.title || 'Children Content'}</h3>
+              <p style={{ whiteSpace:'pre-wrap' }}><b>{String(factoryDraft.draft.contentType || factoryContentType).toUpperCase()}</b> · {factoryDraft.draft.story}</p>
               <div style={{ display:'grid', gap:6 }}><b>Character Bible</b><span>{factoryDraft.draft.characterBible?.name} · {factoryDraft.draft.characterBible?.species} · {factoryDraft.draft.characterBible?.color} · {factoryDraft.draft.characterBible?.clothes}</span></div>
               <div style={{ display:'grid', gridTemplateColumns:'repeat(3,minmax(0,1fr))', gap:8, marginTop:12 }}>
                 {(factoryDraft.draft.images || []).map((item:any) => item.media?.url ? <img key={item.scene} src={item.media.url} alt={'Children Factory scene '+item.scene} style={{ width:'100%', borderRadius:10 }} /> : <div key={item.scene} className="lock-note">Scene {item.scene} asset stored</div>)}
