@@ -1,3 +1,5 @@
+import { createSignedMediaUrls } from './media.mjs';
+
 const API_BASE = 'https://api.higgsfield.ai';
 
 function credential() {
@@ -115,6 +117,47 @@ export function buildHiggsfieldRequest({
       generate_audio: Boolean(generateAudio),
     },
   };
+}
+
+export async function submitHiggsfieldVideoFromMediaKeys({
+  userId,
+  mediaKeys = [],
+  prompt = '',
+  duration = 5,
+  resolution = '720p',
+  aspectRatio = '9:16',
+  outputFormat = 'mp4',
+  generateAudio = true,
+} = {}) {
+  if (!String(userId || '').trim()) {
+    throw Object.assign(new Error('JARVIS user identity is required for provider media signing.'), {
+      statusCode: 400,
+      provider: 'higgsfield',
+    });
+  }
+  const keys = Array.isArray(mediaKeys) ? mediaKeys.map(String).map(key => key.trim()).filter(Boolean).slice(0, 12) : [];
+  if (!keys.length) {
+    throw Object.assign(new Error('At least one JARVIS media key is required for Higgsfield video generation.'), {
+      statusCode: 400,
+      provider: 'higgsfield',
+    });
+  }
+
+  const imageUrls = await createSignedMediaUrls({
+    userId: String(userId),
+    keys,
+    expiresIn: 600,
+  });
+
+  return submitHiggsfieldVideo({
+    imageUrls,
+    prompt,
+    duration,
+    resolution,
+    aspectRatio,
+    outputFormat,
+    generateAudio,
+  });
 }
 
 export async function submitHiggsfieldVideo(options = {}) {
