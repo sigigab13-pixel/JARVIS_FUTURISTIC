@@ -146,6 +146,16 @@ export const video = {
     api.get(`/api/video/jobs/${encodeURIComponent(jobId)}`),
 };
 
+export const mediaProviders = {
+  status: async (capability?: string, preferred?: string[]) => {
+    const query = new URLSearchParams();
+    if (capability) query.set('capability', capability);
+    if (preferred?.length) query.set('preferred', preferred.join(','));
+    const suffix = query.toString() ? '?' + query.toString() : '';
+    return api.get('/api/media/providers' + suffix);
+  },
+};
+
 export const youtube = {
   status: async () => api.get('/api/youtube/status'),
   connect: async () => api.get('/api/youtube/connect'),

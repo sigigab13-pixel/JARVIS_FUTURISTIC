@@ -176,6 +176,23 @@ JARVIS is also being designed to help users manage businesses:
 
 The Brand Kit is intended to become a shared source of truth for generated images, videos, documents, and marketing content.
 
+## 🎛️ Media Provider Office
+
+The Media Provider Office is an isolated provider-selection layer for media generation.
+
+It currently defines provider slots for:
+
+- **JARVIS Internal** — always available as the safe baseline
+- **Everygen** — optional
+- **Higgsfield** — optional
+- **Viewmax** — optional
+
+Provider slots are selected by capability (image.generate, video.generate, voiceover.generate, or audio.generate) and can use a preferred-provider order with safe fallback.
+
+External providers are **not required for JARVIS to operate**. Everygen, Higgsfield, and Viewmax remain disabled unless their corresponding server configuration flags are enabled. The provider office reports configuration state; it does not falsely report an external service as healthy without a real adapter health check.
+
+The current phase is intentionally isolated from Children Factory rendering, approval, and publishing. It provides the seam needed to add external media adapters later without making them hard dependencies.
+
 ## 👧🏽 Children's Content Factory
 
 Children's rhymes, stories, educational content, and other age-appropriate media are a flagship JARVIS workflow.
