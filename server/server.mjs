@@ -796,7 +796,8 @@ export async function handleApi(req, res, pathname, url) {
         pipeline: buildChildrenFactoryPipeline({ sceneAssetsStatus: 'running', approvalStatus: 'blocked' }),
       };
 
-      let mission = await createMissionForUser(jarvisUser.id, state);
+      const runningState = transitionMission(transitionMission(state, 'queued'), 'running');
+      let mission = await createMissionForUser(jarvisUser.id, runningState);
       const imageResults = [];
       const characterPrompt = [
         'Create a child-friendly storybook illustration.',
