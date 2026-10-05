@@ -1,0 +1,97 @@
+name: JARVIS Parent Gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  parent-gate:
+    name: Parent Laws Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate Parent Gate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          pr_json="$RUNNER_TEMP/jarvis-pr.json"
+          curl --fail --silent --show-error             --retry 3             -H "Accept: application/vnd.github+json"             -H "Authorization: Bearer $GH_TOKEN"             -H "X-GitHub-Api-Version: 2022-11-28"             "$GITHUB_API_URL/repos/$REPOSITORY/pulls/$PR_NUMBER"             > "$pr_json"
+
+          node <<'NODE'
+          const fs = require('fs');
+
+          const payload = JSON.parse(
+            fs.readFileSync(process.env.RUNNER_TEMP + '/jarvis-pr.json', 'utf8')
+          );
+
+          const body = payload?.body || '';
+
+          const requiredSections = [
+            '# JARVIS Parent Gate',
+            '## Parent Gate — required before merge',
+            '## Evidence',
+            'docs/JARVIS_PARENT_LAWS.md',
+          ];
+
+          const missing = requiredSections.filter((section) => !body.includes(section));
+
+          if (missing.length) {
+            console.error('Parent Gate failed: required sections are missing:');
+            for (const item of missing) console.error(`- ${item}`);
+            process.exit(1);
+          }
+
+          const parentGateStart = body.indexOf(
+            '## Parent Gate — required before merge'
+          );
+          const stopConditionStart = body.indexOf('## Parent stop condition');
+
+          const gateSection =
+            stopConditionStart > parentGateStart
+              ? body.slice(parentGateStart, stopConditionStart)
+              : body.slice(parentGateStart);
+
+          const unchecked = gateSection
+            .split(/\\r?\\n/)
+            .filter((line) => line.trim().startsWith('- [ ]'));
+
+          if (unchecked.length) {
+            console.error(
+              `Parent Gate failed: ${unchecked.length} required checklist item(s) remain unchecked.`
+            );
+            for (const line of unchecked) console.error(line.trim());
+            process.exit(1);
+          }
+
+          const evidenceStart = body.indexOf('## Evidence');
+          const evidence = evidenceStart >= 0 ? body.slice(evidenceStart) : '';
+
+          const prompts = [
+            '**What changed?**',
+            '**What proves it works?**',
+            '**What can fail, and how is failure detected?**',
+            '**How does recovery/rollback work?**',
+            '**What are the cost/quota implications?**',
+            '**Which Parent Laws are especially relevant?**',
+          ];
+
+          const missingEvidence = prompts.filter((prompt) => !evidence.includes(prompt));
+
+          if (missingEvidence.length) {
+            console.error('Parent Gate failed: evidence prompts are missing:');
+            for (const item of missingEvidence) console.error(`- ${item}`);
+            process.exit(1);
+          }
+
+          console.log(
+            'Parent Gate passed: PR body contains the required checklist and evidence.'
+          );
+          NODE

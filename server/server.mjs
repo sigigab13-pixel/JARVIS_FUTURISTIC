@@ -366,6 +366,7 @@ export async function handleApi(req, res, pathname, url) {
         getVideoScenesForUser(jarvisUser.id, projectId),
       ]);
       const body = await parseBody(req);
+      const idempotencyKey = typeof req.headers['idempotency-key'] === 'string' ? req.headers['idempotency-key'] : '';
       const job = await queueVideoJobForUser(jarvisUser.id, projectId, {
         operation: 'plan',
         format: project.format,
@@ -374,7 +375,7 @@ export async function handleApi(req, res, pathname, url) {
         characters,
         scenes,
         request: body,
-      });
+      }, idempotencyKey);
       let dispatch = { queued: false, provider: 'supabase' };
       if (isRedisConfigured()) {
         try {
@@ -407,6 +408,7 @@ export async function handleApi(req, res, pathname, url) {
         return json(res, 503, { error: 'Supabase Storage is required before rendering a video.', code: 'VIDEO_STORAGE_UNAVAILABLE' });
       }
       const body = await parseBody(req);
+      const idempotencyKey = typeof req.headers['idempotency-key'] === 'string' ? req.headers['idempotency-key'] : '';
       const imageKeys = Array.isArray(body?.imageKeys) ? body.imageKeys.map(String).map(v => v.trim()).filter(Boolean).slice(0, 12) : [];
       const missionId = String(body?.missionId || '').trim();
       if (!imageKeys.length) return json(res, 400, { error: 'At least one stored image key is required.' });
@@ -427,7 +429,7 @@ export async function handleApi(req, res, pathname, url) {
         image_keys: imageKeys,
         format: project.format,
         title: project.title,
-      });
+      }, idempotencyKey);
       let dispatch = { queued: false, provider: 'supabase' };
       if (isRedisConfigured()) {
         try {
@@ -1589,7 +1591,11 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-if (process.env.VERCEL !== '1') {
+const isMainModule = process.argv[1]
+  ? fileURLToPath(import.meta.url) === path.resolve(process.argv[1])
+  : false;
+
+if (isMainModule && process.env.VERCEL !== '1' && process.env.NODE_ENV !== 'test') {
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`JARVIS listening on port ${PORT}`);
   });
