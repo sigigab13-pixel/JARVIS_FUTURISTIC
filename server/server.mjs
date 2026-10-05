@@ -51,6 +51,7 @@ import {
 } from './store.mjs';
 import { enqueueJob, isRedisConfigured } from './queue.mjs';
 import { createMediaKey, getMedia, isSupabaseStorageConfigured, putMedia } from './media.mjs';
+import { buildContentStrategy, scoreContentIdea, CONTENT_SERIES } from './content-strategy-office.mjs';
 import { capabilityContextForPrompt, getCapabilityRegistry, getAvailableCapabilities, rankCapabilitiesForIntent } from './capabilities.mjs';
 import { routeContextForPrompt, routeIntent } from './intent-router.mjs';
 import { createMissionState, transitionMission, advanceMissionStep } from './mission-runtime.mjs';
@@ -446,6 +447,39 @@ export async function handleApi(req, res, pathname, url) {
     }
 
     return json(res, 404, { error: 'Video Engine route not found.' });
+  }
+
+  if (req.method === 'GET' && pathname === '/api/content/strategy/config') {
+    await requireAuthenticatedJarvisUser(req);
+    return json(res, 200, {
+      office: 'content-strategy',
+      version: 'content-strategy-v1',
+      series: CONTENT_SERIES,
+      platforms: ['youtube', 'tiktok', 'facebook'],
+      formats: ['short', 'long', 'square'],
+      note: 'Strategy is planning-only. Rendering and publishing remain separate, approval-gated operations.',
+    });
+  }
+
+  if (req.method === 'POST' && pathname === '/api/content/strategy') {
+    await requireAuthenticatedJarvisUser(req);
+    const body = await parseBody(req);
+    try {
+      const strategy = buildContentStrategy(body);
+      return json(res, 200, { strategy });
+    } catch (error) {
+      return json(res, 400, { error: error instanceof Error ? error.message : 'Content strategy could not be built.' });
+    }
+  }
+
+  if (req.method === 'POST' && pathname === '/api/content/strategy/score') {
+    await requireAuthenticatedJarvisUser(req);
+    const body = await parseBody(req);
+    try {
+      return json(res, 200, { score: scoreContentIdea(body) });
+    } catch (error) {
+      return json(res, 400, { error: error instanceof Error ? error.message : 'Content idea could not be scored.' });
+    }
   }
 
   if (req.method === 'GET' && pathname === '/api/routines') {
