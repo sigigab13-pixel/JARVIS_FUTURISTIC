@@ -1,3 +1,4 @@
+import { createClient } from '@supabase/supabase-js';
 import crypto from 'node:crypto';
 
 const supabaseUrl = String(process.env.SUPABASE_URL || '').replace(/\/$/, '');
@@ -57,6 +58,48 @@ export async function getMedia({ key }) {
     body: Buffer.from(await response.arrayBuffer()),
     contentType: response.headers.get('content-type') || 'application/octet-stream',
   };
+}
+
+
+
+const supabaseAdmin = isSupabaseStorageConfigured()
+  ? createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false, autoRefreshToken: false } })
+  : null;
+
+function assertUserOwnedMediaKey(userId, key) {
+  const safeUserId = safeSegment(userId);
+  const cleanKey = String(key || '').trim();
+  if (!safeUserId || !cleanKey.startsWith(`jarvis/${safeUserId}/`)) {
+    throw new Error('Media asset ownership validation failed.');
+  }
+  return cleanKey;
+}
+
+export async function createSignedMediaUrl({ userId, key, expiresIn = 300 }) {
+  if (!isSupabaseStorageConfigured() || !supabaseAdmin) throw new Error('Supabase Storage is not configured.');
+  const cleanKey = assertUserOwnedMediaKey(userId, key);
+  const ttl = Math.min(3600, Math.max(60, Number(expiresIn) || 300));
+  const { data, error } = await supabaseAdmin.storage.from(bucket).createSignedUrl(cleanKey, ttl);
+  if (error || !data?.signedUrl) {
+    throw Object.assign(new Error(error?.message || 'Supabase Storage signing failed.'), { statusCode: 502 });
+  }
+  return data.signedUrl;
+}
+
+export async function createSignedMediaUrls({ userId, keys = [], expiresIn = 300 }) {
+  if (!isSupabaseStorageConfigured() || !supabaseAdmin) throw new Error('Supabase Storage is not configured.');
+  const cleanKeys = Array.isArray(keys) ? keys.map(key => assertUserOwnedMediaKey(userId, key)) : [];
+  if (!cleanKeys.length) return [];
+  const ttl = Math.min(3600, Math.max(60, Number(expiresIn) || 300));
+  const { data, error } = await supabaseAdmin.storage.from(bucket).createSignedUrls(cleanKeys, ttl);
+  if (error) {
+    throw Object.assign(new Error(error.message || 'Supabase Storage signing failed.'), { statusCode: 502 });
+  }
+  const signed = Array.isArray(data?.signedUrls) ? data.signedUrls : [];
+  if (signed.length !== cleanKeys.length || signed.some(item => !item?.signedUrl)) {
+    throw Object.assign(new Error('Supabase Storage returned an incomplete signed-URL set.'), { statusCode: 502 });
+  }
+  return signed.map(item => item.signedUrl);
 }
 
 export { bucket as supabaseMediaBucket };
