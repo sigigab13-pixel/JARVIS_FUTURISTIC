@@ -12,9 +12,11 @@ import {
   updateRoutineRunFromChildren,
   getMissionForUser,
   updateMissionForUser,
+  consumeImageGeneration,
 } from './store.mjs';
 import { executeMissionStep } from './mission-executor.mjs';
 import { createMediaKey, getMedia, isSupabaseStorageConfigured, putMedia } from './media.mjs';
+import { generateHuggingFaceImage } from './image-generator.mjs';
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
 const SUPABASE_SERVER_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -103,6 +105,128 @@ async function runFfmpeg(args) {
   });
 }
 
+async function executeChildrenFactoryScene(job) {
+  const payload = job?.payload && typeof job.payload === 'object' ? job.payload : {};
+  const userId = String(job?.user_id || payload.user_id || '').trim();
+  const missionId = String(payload.mission_id || '').trim();
+  const projectId = String(payload.project_id || '').trim();
+  const scene = Number(payload.scene || 0);
+  const totalScenes = Math.min(12, Math.max(1, Number(payload.total_scenes || 3)));
+
+  if (!userId || !missionId || !projectId || !Number.isInteger(scene) || scene < 1 || scene > totalScenes) {
+    throw new Error('Children Factory scene job is missing a valid mission, project, user, or scene identity.');
+  }
+  if (!isSupabaseStorageConfigured()) {
+    throw new Error('Supabase Storage is not configured for Children Factory assets.');
+  }
+
+  const mission = await getMissionForUser(userId, missionId);
+  if (!mission || mission.metadata?.factory !== 'children-v1' || String(mission.metadata?.projectId || '') !== projectId) {
+    throw new Error('Children Factory mission was not found or does not belong to this video project.');
+  }
+
+  const existingImages = Array.isArray(mission.metadata?.images) ? mission.metadata.images : [];
+  const existing = existingImages.find(item => Number(item?.scene) === scene);
+  if (existing?.media?.path || existing?.media?.key) {
+    return {
+      scene,
+      skipped: true,
+      media: existing.media,
+      sha256: existing.sha256 || null,
+      missionId,
+    };
+  }
+
+  const character = payload.character && typeof payload.character === 'object' ? payload.character : {};
+  const story = String(payload.story || mission.metadata?.story || '').trim();
+  const title = String(payload.title || mission.goal || 'JARVIS Children Story').trim();
+  const characterPrompt = [
+    'Create a child-friendly storybook illustration.',
+    'Keep this exact character consistent in every image:',
+    'Name: ' + String(character.name || 'Main Character'),
+    'Species: ' + String(character.species || 'friendly character'),
+    'Color: ' + String(character.color || 'colorful'),
+    'Clothes: ' + String(character.clothes || 'simple child-friendly clothes'),
+    'Description: ' + String(character.description || ''),
+    'Style: warm, colorful, friendly, simple storybook art.',
+    'No text, no watermark.',
+    'Scene ' + String(scene) + ' of ' + String(totalScenes) + ' should depict a different moment from this story: ' + story.slice(0, 1800),
+  ].join(' ');
+
+  const blob = await generateHuggingFaceImage(characterPrompt);
+  const buffer = Buffer.from(await blob.arrayBuffer());
+  const mimeType = blob.type || 'image/png';
+  const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
+  const extension = mimeType.includes('jpeg') ? 'jpg' : mimeType.includes('webp') ? 'webp' : 'png';
+  const mediaKey = createMediaKey({
+    userId,
+    kind: 'children-factory',
+    extension,
+    id: missionId + '-scene-' + String(scene),
+  });
+  const media = await putMedia({
+    key: mediaKey,
+    body: buffer,
+    contentType: mimeType,
+    metadata: {
+      user_id: userId,
+      source: 'children_factory_v1',
+      sha256,
+      mission_id: missionId,
+      project_id: projectId,
+      scene,
+    },
+    upsert: true,
+  });
+
+  await consumeImageGeneration(userId, {
+    prompt: (title + ' — Children Factory scene ' + String(scene)).slice(0, 500),
+    mode: 'children-factory-v1',
+    sha256,
+    media_path: media?.path || null,
+    idempotency_key: 'children-factory:' + missionId + ':scene:' + String(scene),
+  });
+
+  const images = [
+    ...existingImages.filter(item => Number(item?.scene) !== scene),
+    { scene, sha256, media },
+  ].sort((a, b) => Number(a?.scene || 0) - Number(b?.scene || 0));
+
+  const metadata = {
+    ...(mission.metadata || {}),
+    images,
+    pipeline: updateChildrenFactoryPipeline(mission.metadata?.pipeline, {
+      scene_assets: images.length >= totalScenes ? 'completed' : 'running',
+      render: 'pending',
+      verified_video: 'blocked',
+      approval: 'blocked',
+      publish: 'blocked',
+    }),
+    lastSceneUpdate: {
+      scene,
+      totalScenes,
+      updatedAt: new Date().toISOString(),
+    },
+  };
+
+  await updateMissionForUser(userId, mission.id, { ...mission, metadata }, {
+    eventType: 'children_factory.scene_completed',
+    message: 'Children Factory scene ' + String(scene) + ' completed by the durable worker.',
+    metadata: { scene, sha256, mediaKey },
+  });
+
+  return {
+    scene,
+    skipped: false,
+    media,
+    mediaKey,
+    sha256,
+    missionId,
+    completedScenes: images.length,
+    totalScenes,
+  };
+}
+
 async function executeVideoPipeline(job) {
   const payload = job?.payload && typeof job.payload === 'object' ? job.payload : {};
   const userId = String(job?.user_id || payload.user_id || '').trim();
@@ -187,7 +311,10 @@ export async function executeJob(job) {
   const type = String(job?.type || '');
   const payload = job?.payload && typeof job.payload === 'object' ? job.payload : {};
 
-  if (type === 'video_pipeline') return executeVideoPipeline(job);
+  if (type === 'video_pipeline') {
+    if (payload.operation === 'children_factory_scene') return executeChildrenFactoryScene(job);
+    return executeVideoPipeline(job);
+  }
 
   if (type === 'routine_fanout') {
     return fanOutRoutineRun(job);
