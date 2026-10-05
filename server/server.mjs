@@ -1589,7 +1589,11 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-if (process.env.VERCEL !== '1') {
+const isMainModule = process.argv[1]
+  ? fileURLToPath(import.meta.url) === path.resolve(process.argv[1])
+  : false;
+
+if (isMainModule && process.env.VERCEL !== '1' && process.env.NODE_ENV !== 'test') {
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`JARVIS listening on port ${PORT}`);
   });
