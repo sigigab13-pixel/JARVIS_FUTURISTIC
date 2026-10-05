@@ -51,7 +51,7 @@ jobs:
               : body.slice(parentGateStart);
 
           const unchecked = gateSection
-            .split('\\n')
+            .split(/\\r?\\n/)
             .filter((line) => line.trim().startsWith('- [ ]'));
 
           if (unchecked.length) {
@@ -81,5 +81,7 @@ jobs:
             process.exit(1);
           }
 
-          console.log('Parent Gate passed: template, checklist, and evidence sections are present and complete.');
+          console.log(
+            'Parent Gate passed: template, checklist, and evidence sections are present and complete.'
+          );
           NODE
