@@ -72,6 +72,82 @@ function makeStarter(displayName = 'there'): Message[] {
 
 const starter: Message[] = makeStarter();
 
+
+function renderInlineMarkdown(value: string) {
+  const parts = value.split(/(\\*\\*[^*]+\\*\\*|\\*[^*]+\\*)/g);
+  return parts.map((part, index) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={index}>{part.slice(2, -2)}</strong>;
+    }
+    if (part.startsWith('*') && part.endsWith('*')) {
+      return <em key={index}>{part.slice(1, -1)}</em>;
+    }
+    return <span key={index}>{part}</span>;
+  });
+}
+
+function renderRichMessage(content: string) {
+  const lines = String(content || '').split(/\\r?\\n/);
+  const blocks: React.ReactNode[] = [];
+  let list: { ordered: boolean; text: string }[] = [];
+
+  const flushList = () => {
+    if (!list.length) return;
+    const ordered = list[0].ordered;
+    blocks.push(
+      <ol className="rich-list" key={blocks.length}>
+        {ordered
+          ? list.map((item, index) => <li key={index}>{renderInlineMarkdown(item.text)}</li>)
+          : null}
+      </ol>
+    );
+    if (!ordered) {
+      blocks.pop();
+      blocks.push(
+        <ul className="rich-list" key={blocks.length}>
+          {list.map((item, index) => <li key={index}>{renderInlineMarkdown(item.text)}</li>)}
+        </ul>
+      );
+    }
+    list = [];
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const orderedMatch = trimmed.match(/^\\d+\\.\\s+(.+)$/);
+    const bulletMatch = trimmed.match(/^[-*]\\s+(.+)$/);
+
+    if (orderedMatch || bulletMatch) {
+      const ordered = Boolean(orderedMatch);
+      if (list.length && list[0].ordered !== ordered) flushList();
+      list.push({ ordered, text: (orderedMatch || bulletMatch)![1] });
+      continue;
+    }
+
+    flushList();
+
+    if (!trimmed) {
+      blocks.push(<div className="rich-spacer" key={blocks.length} />);
+      continue;
+    }
+
+    const headingMatch = trimmed.match(/^#{1,3}\\s+(.+)$/);
+    if (headingMatch) {
+      blocks.push(
+        <h3 className="rich-heading" key={blocks.length}>{renderInlineMarkdown(headingMatch[1])}</h3>
+      );
+      continue;
+    }
+
+    blocks.push(
+      <p className="rich-paragraph" key={blocks.length}>{renderInlineMarkdown(trimmed)}</p>
+    );
+  }
+
+  flushList();
+  return blocks;
+}
+
 function App() {
   const [session, setSession] = useState<any>(null);
   const [authReady, setAuthReady] = useState(false);
@@ -1179,7 +1255,7 @@ function App() {
                 <div className="message-badge">{message.role === 'user' ? 'S' : 'J'}</div>
                 <div className="bubble">
                   <span>{message.role === 'user' ? 'YOU' : 'JARVIS'}</span>
-                  <p>{message.content}</p>
+                  <div className="message-content">{renderRichMessage(message.content)}</div>
                 </div>
               </div>
             ))}
