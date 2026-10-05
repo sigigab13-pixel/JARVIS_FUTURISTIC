@@ -75,11 +75,13 @@ const starter: Message[] = makeStarter();
 
 
 function looksLikeImageGenerationRequest(value: string): boolean {
-  return /\\b(generate|create|make|draw|illustrate|render)\\b[\\s\\S]{0,140}\\b(image|picture|photo|illustration)\\b|\\b(image|picture|photo|illustration)\\b[\\s\\S]{0,140}\\b(generate|create|make|draw|illustrate|render)\\b/i.test(value);
+  const hasImageAction = /\b(generate|create|make|draw|illustrate|render)\b/i.test(value);
+  const hasImageNoun = /\b(image|picture|photo|illustration)\b/i.test(value);
+  return hasImageAction && hasImageNoun;
 }
 
 function renderInlineMarkdown(value: string) {
-  const parts = value.split(/(\\*\\*[^*]+\\*\\*|\\*[^*]+\\*)/g);
+  const parts = value.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g);
   return parts.map((part, index) => {
     if (part.startsWith('**') && part.endsWith('**')) return <strong key={index}>{part.slice(2, -2)}</strong>;
     if (part.startsWith('*') && part.endsWith('*')) return <em key={index}>{part.slice(1, -1)}</em>;
@@ -88,7 +90,7 @@ function renderInlineMarkdown(value: string) {
 }
 
 function renderRichMessage(content: string): ReactNode[] {
-  const lines = String(content || '').split(/\\r?\\n/);
+  const lines = String(content || '').split(/\r?\n/);
   const blocks: ReactNode[] = [];
   let list: { ordered: boolean; text: string }[] = [];
 
@@ -106,8 +108,8 @@ function renderRichMessage(content: string): ReactNode[] {
 
   for (const line of lines) {
     const trimmed = line.trim();
-    const orderedMatch = trimmed.match(/^\\d+\\.\\s+(.+)$/);
-    const bulletMatch = trimmed.match(/^[-*]\\s+(.+)$/);
+    const orderedMatch = trimmed.match(/^\d+\.\s+(.+)$/);
+    const bulletMatch = trimmed.match(/^[-*]\s+(.+)$/);
 
     if (orderedMatch || bulletMatch) {
       const ordered = Boolean(orderedMatch);
@@ -123,7 +125,7 @@ function renderRichMessage(content: string): ReactNode[] {
       continue;
     }
 
-    const headingMatch = trimmed.match(/^#{1,3}\\s+(.+)$/);
+    const headingMatch = trimmed.match(/^#{1,3}\s+(.+)$/);
     if (headingMatch) {
       blocks.push(<h3 className="rich-heading" key={blocks.length}>{renderInlineMarkdown(headingMatch[1])}</h3>);
       continue;
