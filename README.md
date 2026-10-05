@@ -155,7 +155,7 @@ Its architecture includes:
 - Publishing
 - Performance memory
 
-The repository contains the foundation for persistent video projects, characters, assets and scenes, plus a real first render path: stored images can be queued to the worker, rendered by FFmpeg into a 16:9 MP4, stored with a SHA-256 identifier, and handed to the YouTube publisher. Full AI motion, voice, lip-sync, editing, and advanced rendering remain future adapters.
+The repository contains the foundation for persistent video projects, characters, assets and scenes, plus a provider-independent Higgsfield video adapter for server-side asynchronous video generation, plus a real first render path: stored images can be queued to the worker, rendered by FFmpeg into a 16:9 MP4, stored with a SHA-256 identifier, and handed to the YouTube publisher. Full AI motion, voice, lip-sync, editing, and advanced rendering remain future adapters.
 
 ## 💼 Business platform
 
