@@ -248,13 +248,13 @@ Prices and limits are subject to change as real operating costs and user demand 
 
 The Monetization Office is a planning and tracking layer for turning JARVIS content into measurable business assets.
 
-Current Phase 3D scope is intentionally non-transactional:
+Current Phase 3E scope is intentionally non-transactional:
 
 - Platform revenue estimation for YouTube, TikTok, and Facebook using a caller-supplied rate per 1,000 views
 - Live YouTube Analytics → estimated-revenue snapshots through the existing authenticated YouTube connection
 - KDP manuscript export preparation from stories/chapters
 - Merch design manifests for characters and product placeholders
-- Proposed Free / Creator / Studio commercial plan catalog
+- Commercial model planning that reuses the existing JARVIS `/api/plans` pricing/entitlement source of truth
 - No checkout, payment collection, automatic charging, KDP submission, Printify ordering, or automatic publishing
 
 The office fails closed around external transactions. Estimates are explicitly labeled as planning estimates and are never presented as guaranteed platform payouts.
