@@ -754,7 +754,7 @@ function App() {
         setInput('');
         if (voiceEnabled) void speak(answer);
       } catch (error: any) {
-        const detail = String(error?.response?.data?.error || error?.message || '').trim();
+        const detail = safeText(error?.response?.data?.error, error?.message || '').trim();
         setMessages(current => [...current, { role: 'assistant', content: detail ? `JARVIS image generation error: ${detail}` : 'JARVIS could not generate the image right now. Please try again.' }]);
       } finally {
         setBusy(false);
