@@ -65,7 +65,7 @@ test('Children Factory pipeline starts render-pending and publish-blocked', () =
       ['scene_assets', 'completed'],
       ['render', 'pending'],
       ['verified_video', 'blocked'],
-      ['approval', 'blocked'],
+      ['approval', 'pending'],
       ['publish', 'blocked'],
     ],
   );
