@@ -50,6 +50,10 @@ export function getVideoRenderGeometry(format = '16:9') {
     : { width: 1280, height: 720, label: '16:9' };
 }
 
+export function buildVideoFilter(index, geometry) {
+  return `[${index}:v]scale=${geometry.width}:${geometry.height}:force_original_aspect_ratio=increase,crop=${geometry.width}:${geometry.height},setsar=1,zoompan=z='min(zoom+0.0015,1.08)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=120:s=${geometry.width}x${geometry.height}:fps=30[v${index}]`;
+}
+
 export async function claimNextJob(workerId) {
   const rows = await rpc('worker_claim_next_job', { p_worker_id: workerId });
   return Array.isArray(rows) ? rows[0] || null : rows || null;
@@ -116,7 +120,7 @@ async function executeVideoPipeline(job) {
 
     const output = path.join(tempDir, 'render.mp4');
     const geometry = getVideoRenderGeometry(payload.format);
-    const filters = inputs.map((_, i) => `[${i}:v]scale=${geometry.width}:${geometry.height}:force_original_aspect_ratio=increase,crop=${geometry.width}:${geometry.height},setsar=1,zoompan=z='min(zoom+0.0015,1.08)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=120:s=${geometry.width}x${geometry.height}:fps=30[v${i}]`);
+    const filters = inputs.map((_, i) => buildVideoFilter(i, geometry));
     filters.push(inputs.map((_, i) => `[v${i}]`).join('') + `concat=n=${inputs.length}:v=1:a=0[v]`);
     const args = [];
     for (const file of inputs) args.push('-loop', '1', '-i', file);
