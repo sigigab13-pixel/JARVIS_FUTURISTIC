@@ -1,6 +1,44 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
-import { createWorkerId, executeJob, getVideoRenderGeometry, buildVideoFilter } from '../server/worker.mjs';
+import {
+  createWorkerId,
+  executeJob,
+  executeChildrenFactoryScene,
+  getVideoRenderGeometry,
+  buildVideoFilter,
+} from '../server/worker.mjs';
+
+test('Children Factory scene worker rejects missing durable scene identity before provider work', async () => {
+  await assert.rejects(
+    executeChildrenFactoryScene({
+      type: 'video_pipeline',
+      user_id: '11111111-1111-4111-8111-111111111111',
+      payload: {
+        operation: 'children_factory_scene',
+        project_id: '22222222-2222-4222-8222-222222222222',
+        mission_id: '33333333-3333-4333-8333-333333333333',
+        scene: 0,
+        total_scenes: 3,
+      },
+    }),
+    error => /missing a valid mission, project, user, or scene identity/i.test(error?.message || '')
+  );
+});
+
+test('Children Factory scene worker rejects foreign project mission identities', async () => {
+  await assert.rejects(
+    executeChildrenFactoryScene({
+      type: 'video_pipeline',
+      user_id: '11111111-1111-4111-8111-111111111111',
+      payload: {
+        operation: 'children_factory_scene',
+        project_id: '22222222-2222-4222-8222-222222222222',
+        mission_id: '33333333-3333-4333-8333-333333333333',
+        scene: 1,
+        total_scenes: 3,
+      },
+    }),
+    error => /Supabase Storage is not configured|mission was not found|does not belong/i.test(error?.message || '')
+  );
+});
 import { buildChildrenFactoryPipeline, canPublishChildrenFactoryMission } from '../server/server.mjs';
 
 test('worker creates unique stable ids', () => {
