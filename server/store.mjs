@@ -495,61 +495,37 @@ export async function getJarvisEntitlement(userId) {
 
 export async function consumeImageGeneration(userId, metadata = {}) {
   const entitlement = await ensureJarvisEntitlement(userId);
-  const plan = entitlement?.jarvis_plans || {};
-  const limit = Number(plan.monthly_image_generations || 0);
   const remaining = Number(entitlement?.credits_remaining ?? 0);
-  const idempotencyKey = String(metadata?.idempotency_key || '').trim().slice(0, 200);
-
-  if (configured && idempotencyKey) {
-    const existing = await request(
-      'jarvis_usage_ledger?select=id&user_id=eq.' + encodeURIComponent(userId) +
-      '&operation=eq.image_generation&metadata->>idempotency_key=eq.' +
-      encodeURIComponent(idempotencyKey) + '&limit=1'
-    );
-    if (existing?.[0]) {
-      return await getJarvisEntitlement(userId) || entitlement;
-    }
-  }
-
-  if (remaining <= 0) {
-    throw Object.assign(new Error('Your image-generation allowance is used up for this billing period.'), {
-      statusCode: 402,
-      code: 'IMAGE_ALLOWANCE_EXHAUSTED',
-    });
-  }
 
   if (!configured) {
+    if (remaining <= 0) {
+      throw Object.assign(new Error('Your image-generation allowance is used up for this billing period.'), {
+        statusCode: 402,
+        code: 'IMAGE_ALLOWANCE_EXHAUSTED',
+      });
+    }
     return { ...entitlement, credits_remaining: remaining - 1 };
   }
 
-  const nextRemaining = remaining - 1;
-  await request(
-    'jarvis_entitlements?user_id=eq.' + encodeURIComponent(userId),
-    {
-      method: 'PATCH',
-      headers: { Prefer: 'return=minimal' },
-      body: JSON.stringify({
-        credits_remaining: nextRemaining,
-        updated_at: new Date().toISOString(),
-      }),
-    }
-  );
-
-  await request('jarvis_usage_ledger', {
-    method: 'POST',
-    headers: { Prefer: 'return=minimal' },
-    body: JSON.stringify({
-      user_id: userId,
-      operation: 'image_generation',
-      units: 1,
-      credits_charged: 1,
-      metadata,
-    }),
+  const result = await rpc('jarvis_consume_image_generation', {
+    p_user_id: userId,
+    p_metadata: metadata && typeof metadata === 'object' && !Array.isArray(metadata) ? metadata : {},
   });
 
-  return { ...entitlement, credits_remaining: nextRemaining };
-}
+  if (!result?.ok) {
+    const error = Object.assign(
+      new Error(String(result?.message || 'Image generation credit consumption failed.')),
+      { statusCode: result?.code === 'IMAGE_ALLOWANCE_EXHAUSTED' ? 402 : 503, code: String(result?.code || 'IMAGE_CREDIT_CONSUMPTION_FAILED') }
+    );
+    throw error;
+  }
 
+  return {
+    ...(await getJarvisEntitlement(userId) || entitlement),
+    credits_remaining: Number(result?.credits_remaining ?? remaining),
+    already_charged: Boolean(result?.already_charged),
+  };
+}
 
 export async function getBusinessForUser(userId) {
   if (!validUuid(userId)) throw new Error('Invalid JARVIS user id.');
