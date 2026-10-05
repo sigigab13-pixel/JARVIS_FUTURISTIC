@@ -500,6 +500,46 @@ function App() {
     }
   };
 
+  const watchChildrenFactoryScenes = async (missionId: string, initialResponse: any) => {
+    const maxAttempts = 45;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const response = await api.missions.list();
+      const mission = (response.data?.missions || []).find((item: any) => String(item?.id || '') === missionId);
+      if (!mission) throw new Error('Children Factory mission could not be found while scene jobs are running.');
+
+      const metadata = mission.metadata || {};
+      const images = Array.isArray(metadata.images) ? metadata.images : [];
+      const pipeline = Array.isArray(metadata.pipeline) ? metadata.pipeline : initialResponse?.draft?.pipeline || [];
+      setFactoryDraft((current: any) => current
+        ? {
+            ...current,
+            mission,
+            draft: {
+              ...current.draft,
+              images,
+              pipeline,
+            },
+          }
+        : current);
+
+      if (String(mission.status || '') === 'failed') {
+        const failure = metadata.factoryFailure || {};
+        throw new Error(String(
+          failure.message ||
+          'Children Factory scene generation failed after bounded retries. Partial progress was preserved.'
+        ));
+      }
+
+      if (images.length >= 3 && String(pipeline.find((stage: any) => stage.id === 'scene_assets')?.status || '') === 'completed') {
+        return mission;
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+
+    throw new Error('Scene generation is still running. The durable jobs have been kept; refresh the factory to continue checking without creating duplicates.');
+  };
+
   const createImageMission = async () => {
     const prompt = missionPrompt.trim();
     if (!prompt || missionBusy) return;
@@ -535,11 +575,21 @@ function App() {
     setFactoryBusy(true);
     setFactoryError('');
     setFactoryDraft(null);
+    setFactoryRenderJob(null);
     try {
       const response = await api.post('/api/factory/children', { topic, age: factoryAge });
       setFactoryDraft(response.data);
       setFactoryTopic('');
       await loadMissions();
+
+      const missionId = String(response.data?.approvalGate?.missionId || '').trim();
+      if (missionId && response.data?.status === 'scenes_queued') {
+        try {
+          await watchChildrenFactoryScenes(missionId, response.data);
+        } catch (watchError: any) {
+          setFactoryError(String(watchError?.message || 'Children Factory scene generation is still in progress.'));
+        }
+      }
     } catch (error: any) {
       setFactoryError(String(error?.response?.data?.error || error?.message || 'Children Factory could not create the draft.'));
     } finally {
@@ -553,7 +603,9 @@ function App() {
     const imageKeys = Array.isArray(draft && draft.images) ? draft.images.map((item: any) => String(item && item.media && (item.media.path || item.media.key) || '').trim()).filter(Boolean) : [];
     const existingJobId = String(factoryRenderJob && factoryRenderJob.id || '').trim();
     const existingStatus = String(factoryRenderJob && factoryRenderJob.status || '');
-    if (!projectId || !imageKeys.length || factoryBusy) return;
+    const pipeline = Array.isArray(draft?.pipeline) ? draft.pipeline : [];
+    const sceneAssetsComplete = String(pipeline.find((stage: any) => stage.id === 'scene_assets')?.status || '') === 'completed';
+    if (!projectId || imageKeys.length < 3 || !sceneAssetsComplete || factoryBusy) return;
     setFactoryBusy(true);
     setFactoryError('');
     try {
