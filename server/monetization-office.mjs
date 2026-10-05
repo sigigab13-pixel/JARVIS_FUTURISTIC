@@ -4,11 +4,6 @@ import {
 } from './monetization/youtube-revenue-tracker.mjs';
 import { buildKdpExport } from './monetization/kdp-exporter.mjs';
 import { buildMerchExport } from './monetization/merch-generator.mjs';
-import {
-  getSubscriptionPlans,
-  getSubscriptionPlan,
-  getBillingStatus,
-} from './monetization/subscription-plans.mjs';
 
 export const MONETIZATION_OFFICE_VERSION = 'v1';
 export const MONETIZATION_PLATFORMS = Object.freeze(['youtube', 'tiktok', 'facebook']);
@@ -21,10 +16,10 @@ export function getMonetizationOfficeConfig() {
     layers: [
       'platform-revenue-tracking',
       'ip-export',
-      'subscription-catalog',
+      'commercial-model',
     ],
-    billing: getBillingStatus(),
-    autoCharge: false,
+    pricingSource: '/api/plans',
+    transactionsEnabled: false,
     autoPublish: false,
     externalMerchOrder: false,
     externalKdpSubmission: false,
@@ -36,7 +31,4 @@ export {
   buildYouTubeRevenueSnapshot,
   buildKdpExport,
   buildMerchExport,
-  getSubscriptionPlans,
-  getSubscriptionPlan,
-  getBillingStatus,
 };
