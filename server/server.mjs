@@ -1029,7 +1029,9 @@ export async function handleApi(req, res, pathname, url) {
 
     const childrenFactoryRoute = route.intent === 'children-story';
 
-    const imageRequest = /\b(generate|create|make|draw|illustrate|render)\b[\\s\\S]{0,120}\b(image|picture|photo|illustration)\b|\b(image|picture|photo|illustration)\b[\\s\\S]{0,120}\b(generate|create|make|draw|illustrate|render)\b/i.test(latestUserMessage);
+    const imageAction = /\b(generate|create|make|draw|illustrate|render)\b/i.test(latestUserMessage);
+    const imageNoun = /\b(image|picture|photo|illustration)\b/i.test(latestUserMessage);
+    const imageRequest = imageAction && imageNoun;
     if (imageRequest) {
       if (!authenticated?.jarvisUser?.id) {
         return json(res, 401, { error: 'Sign in to generate images with JARVIS.' });
