@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import {
   createWorkerId,
   executeJob,
@@ -36,7 +37,7 @@ test('Children Factory scene worker rejects foreign project mission identities',
         total_scenes: 3,
       },
     }),
-    error => /Supabase Storage is not configured|mission was not found|does not belong/i.test(error?.message || '')
+    error => /mission was not found or does not belong to this video project/i.test(error?.message || '')
   );
 });
 import { buildChildrenFactoryPipeline, canPublishChildrenFactoryMission } from '../server/server.mjs';
