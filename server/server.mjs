@@ -168,6 +168,14 @@ function safePath(urlPath) {
   return target.startsWith(DIST) ? target : null;
 }
 
+export function canPublishChildrenFactoryMission(mission) {
+  return mission?.metadata?.factory !== 'children-v1'
+    || (mission?.approval?.status === 'approved'
+      && mission?.metadata?.pipeline?.render === 'completed'
+      && mission?.metadata?.pipeline?.verified_video === 'completed'
+      && Boolean(mission?.metadata?.verifiedVideo?.mediaKey));
+}
+
 export function buildChildrenFactoryPipeline({ renderQueued = false, renderCompleted = false, verifiedVideo = false, approvalStatus = 'pending', published = false } = {}) {
   return [
     { id: 'story', label: 'Story', status: 'completed' },
@@ -1335,10 +1343,8 @@ export async function handleApi(req, res, pathname, url) {
     if (mission.approval?.status !== 'approved') {
       return json(res, 409, { error: 'YouTube publishing requires an approved JARVIS mission.', code: 'YOUTUBE_APPROVAL_REQUIRED', mission });
     }
-    if (mission.metadata?.factory === 'children-v1') {
-      if (mission.metadata?.pipeline?.render !== 'completed' || mission.metadata?.pipeline?.verified_video !== 'completed' || !mission.metadata?.verifiedVideo?.mediaKey) {
-        return json(res, 409, { error: 'Children Factory publishing requires a completed and verified video render.', code: 'CHILDREN_FACTORY_VERIFIED_VIDEO_REQUIRED', mission });
-      }
+    if (mission.metadata?.factory === 'children-v1' && !canPublishChildrenFactoryMission(mission)) {
+      return json(res, 409, { error: 'Children Factory publishing requires a completed, verified video render and approval.', code: 'CHILDREN_FACTORY_PIPELINE_INCOMPLETE', mission });
     }
     if (mission.metadata?.youtube?.videoId) {
       return json(res, 409, { error: 'This mission has already been published to YouTube.', code: 'YOUTUBE_ALREADY_PUBLISHED', mission });
