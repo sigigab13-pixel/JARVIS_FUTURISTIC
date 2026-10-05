@@ -170,7 +170,7 @@ function safePath(urlPath) {
   return target.startsWith(DIST) ? target : null;
 }
 
-async function generateChildrenFactoryDraft(topic, age) {
+async function generateChildrenFactoryDraft(topic, age, contentType = 'story') {
   const hfToken = process.env.HUGGINGFACE_API_TOKEN || process.env.HF_TOKEN || '';
   if (!hfToken) {
     throw Object.assign(new Error('Hugging Face is not configured for the Children Factory.'), { statusCode: 503 });
@@ -178,10 +178,12 @@ async function generateChildrenFactoryDraft(topic, age) {
 
   const prompt = [
     'You are JARVIS Children Factory v1.',
-    'Create one safe, age-appropriate children story.',
+    'Create one safe, age-appropriate children content draft.',
+    'Content type: ' + String(contentType).slice(0, 80),
     'Return ONLY valid JSON. No markdown and no extra text.',
     'Schema:',
     '{"title":"string","story":"about 200 words","character":{"name":"string","species":"string","color":"string","clothes":"string","description":"string"}}',
+    'For a rhyme, use rhythmic child-friendly language. For an educational piece, teach the requested concept clearly. For bedtime or moral content, keep the tone gentle and reassuring. For adventure, keep the stakes mild and age-appropriate.',
     'Keep the story gentle, imaginative, educational or emotionally positive.',
     'Do not include frightening, graphic, sexual, dangerous, or age-inappropriate material.',
     'Keep the main character visually consistent for image generation.',
@@ -696,8 +698,11 @@ export async function handleApi(req, res, pathname, url) {
     const body = await parseBody(req);
     const topic = String(body?.topic || '').trim().slice(0, 500);
     const age = Number(body?.age || 5);
-    if (!topic) return json(res, 400, { error: 'A story topic is required.' });
+    const allowedContentTypes = new Set(['story', 'rhyme', 'educational', 'bedtime', 'moral', 'adventure']);
+    const contentType = String(body?.contentType || 'story').trim().toLowerCase();
+    if (!topic) return json(res, 400, { error: 'A children-content topic is required.' });
     if (!Number.isInteger(age) || age < 3 || age > 12) return json(res, 400, { error: 'Age must be a whole number from 3 to 12.' });
+    if (!allowedContentTypes.has(contentType)) return json(res, 400, { error: 'Unsupported children content type.' });
     if (!isSupabaseStorageConfigured()) {
       return json(res, 503, { error: 'Supabase Storage is not configured for Children Factory assets.', code: 'CHILDREN_FACTORY_STORAGE_UNAVAILABLE' });
     }
@@ -708,14 +713,15 @@ export async function handleApi(req, res, pathname, url) {
     }
 
     try {
-      const draft = await generateChildrenFactoryDraft(topic, age);
+      const draft = await generateChildrenFactoryDraft(topic, age, contentType);
 
       const project = await createVideoProjectForUser(jarvisUser.id, {
         title: draft.title,
-        description: 'JARVIS Children Factory v1 draft.',
+        description: `JARVIS Children Factory v1 ${contentType} draft.`,
         format: '16:9',
         story_bible: {
           factory: 'children-v1',
+          contentType,
           topic,
           age,
           story: draft.story,
@@ -813,6 +819,7 @@ export async function handleApi(req, res, pathname, url) {
       };
       state.metadata = {
         factory: 'children-v1',
+        contentType,
         projectId: project.id,
         characterId: character?.id || null,
         topic,
@@ -841,6 +848,7 @@ export async function handleApi(req, res, pathname, url) {
         draft: {
           project,
           character,
+          contentType,
           story: draft.story,
           characterBible: draft.character,
           images: imageResults,
