@@ -20,6 +20,34 @@ function headers() {
   };
 }
 
+function assertProviderUrl(value) {
+  const url = String(value || '').trim();
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw Object.assign(new Error('Higgsfield media references must be valid HTTPS URLs.'), { statusCode: 400, provider: 'higgsfield' });
+  }
+  if (parsed.protocol !== 'https:') {
+    throw Object.assign(new Error('Higgsfield media references must use HTTPS.'), { statusCode: 400, provider: 'higgsfield' });
+  }
+  return parsed.toString();
+}
+
+function assertHiggsfieldUrl(value) {
+  const url = String(value || '').trim();
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw Object.assign(new Error('Higgsfield request URL is invalid.'), { statusCode: 400, provider: 'higgsfield' });
+  }
+  if (parsed.protocol !== 'https:' || parsed.hostname !== 'api.higgsfield.ai') {
+    throw Object.assign(new Error('Higgsfield request URL must stay on api.higgsfield.ai.'), { statusCode: 400, provider: 'higgsfield' });
+  }
+  return parsed.toString();
+}
+
 function apiError(response, body, fallback) {
   const detail = body?.error?.message || body?.error || body?.message || body?.detail || fallback;
   return Object.assign(new Error(String(detail).slice(0, 1000)), {
@@ -65,7 +93,7 @@ export function buildHiggsfieldRequest({
   generateAudio = true,
 } = {}) {
   const cleanImages = Array.isArray(imageUrls)
-    ? imageUrls.map(String).map(url => url.trim()).filter(Boolean).slice(0, 12)
+    ? imageUrls.map(assertProviderUrl).slice(0, 12)
     : [];
   if (!cleanImages.length) throw new Error('Higgsfield video generation requires at least one image URL.');
   const seconds = Math.min(30, Math.max(4, Math.round(Number(duration) || 5)));
@@ -115,7 +143,7 @@ export async function getHiggsfieldVideoStatus(requestIdOrUrl) {
   const target = String(requestIdOrUrl || '').trim();
   if (!target) throw Object.assign(new Error('Higgsfield request id is required.'), { statusCode: 400 });
   const url = /^https:\/\//i.test(target)
-    ? target
+    ? assertHiggsfieldUrl(target)
     : API_BASE + '/requests/' + encodeURIComponent(target) + '/status';
   const response = await fetch(url, {
     method: 'GET',
@@ -134,7 +162,7 @@ export async function cancelHiggsfieldVideo(requestIdOrUrl) {
   const target = String(requestIdOrUrl || '').trim();
   if (!target) throw Object.assign(new Error('Higgsfield request id is required.'), { statusCode: 400 });
   const url = /^https:\/\//i.test(target)
-    ? target
+    ? assertHiggsfieldUrl(target)
     : API_BASE + '/requests/' + encodeURIComponent(target) + '/cancel';
   const response = await fetch(url, {
     method: 'POST',
