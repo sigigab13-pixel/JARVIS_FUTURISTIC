@@ -12,9 +12,11 @@ A feature does not become “ready” merely because it works on the happy path.
 
 ## The 30 Parent Laws
 
-### Law 01 — Truth Over Hype
-Never report a capability as working without evidence.
+### Law 01 — Truth Before Status
+Never report a capability, gate, test, deployment, or release as **passed**, **working**, **verified**, **ready**, or **healthy** unless the required evidence actually shows that result.
 “Implemented” is not the same as “verified.”
+A partial pass is not a full pass. A passing sub-check is not a passing system.
+**No victory is declared from incomplete evidence.**
 
 ### Law 02 — Survivability Comes First
 Reliability, security, recovery, and observability outrank new features.
