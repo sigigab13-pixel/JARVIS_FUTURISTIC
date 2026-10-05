@@ -1380,7 +1380,7 @@ function App() {
               <div>
                 <span className="eyebrow">CHILDREN CONTENT FACTORY V1</span>
                 <h2>JARVIS Children Factory</h2>
-                <p>Topic → story → character bible → 3 consistent images → approval.</p>
+                <p>Topic → story → character bible → 3 consistent images → 9:16 short → approval.</p>
               </div>
               <button className="close-security" onClick={() => setFactoryOpen(false)} aria-label="Close Children Factory"><X size={18} /></button>
             </div>
@@ -1402,12 +1402,12 @@ function App() {
               </div>
               <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:12 }}>
                 <button className="security-secondary" onClick={() => void renderChildrenFactoryVideo()} disabled={factoryBusy || !(factoryDraft && factoryDraft.draft && factoryDraft.draft.project && factoryDraft.draft.project.id) || !((factoryDraft && factoryDraft.draft && factoryDraft.draft.images) || []).length}>
-                  {factoryRenderJob && (factoryRenderJob.status === 'running' || factoryRenderJob.status === 'queued') ? 'Rendering video…' : 'Render YouTube Video'}
+                  {factoryRenderJob && (factoryRenderJob.status === 'running' || factoryRenderJob.status === 'queued') ? 'Rendering 9:16 short…' : 'Render 9:16 Short'}
                 </button>
                 {factoryDraft && factoryDraft.renderedVideo && factoryDraft.renderedVideo.mediaKey && <button className="security-secondary" onClick={() => { setYoutubeMissionId(String(factoryDraft.approvalGate && factoryDraft.approvalGate.missionId || '')); setYoutubeMediaKey(String(factoryDraft.renderedVideo.mediaKey)); setYoutubeTitle(String(factoryDraft.draft && factoryDraft.draft.project && factoryDraft.draft.project.title || '').slice(0,100)); setYoutubeDescription(String(factoryDraft.draft && factoryDraft.draft.story || '').slice(0,5000)); setFactoryOpen(false); void openYouTubeCenter(); }}>Open YouTube Publisher</button>}
               </div>
               {factoryRenderJob && <div className="security-status"><span>Render job: {factoryRenderJob.status}</span></div>}
-              <div className="lock-note" style={{ marginTop:12 }}><LockKeyhole size={16} /><span>Rendering creates a stored MP4. Publishing is still separate and requires an approved mission.</span></div>
+              <div className="lock-note" style={{ marginTop:12 }}><LockKeyhole size={16} /><span>Rendering creates a stored 9:16 MP4. Publishing is still separate and requires an approved mission.</span></div>
             </article>}
             <div style={{ display:'grid', gap:10, marginTop:16 }}>
               {missions.filter((m:any) => m.metadata?.factory === 'children-v1').map((mission:any) => <article key={mission.id} className="security-card" style={{ alignItems:'flex-start' }}>
