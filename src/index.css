@@ -438,7 +438,7 @@ button {
   border-radius: 13px 4px 13px 13px;
   background: #0b1c28;
 }
-.bubble span {
+.bubble .message-role {
   color: #4e91ae;
   font-size: 8px;
   letter-spacing: 0.18em;
@@ -950,7 +950,7 @@ body {
 }
 
 .eyebrow,
-.bubble span {
+.bubble .message-role {
   color: var(--jarvis-accent);
   transition: color 2s ease;
 }
@@ -1162,7 +1162,7 @@ body {
   background: transparent;
 }
 
-.bubble span {
+.bubble .message-role {
   font-size: 8px;
   letter-spacing: .13em;
   opacity: .7;
