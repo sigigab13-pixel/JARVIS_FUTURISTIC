@@ -33,7 +33,7 @@ test('Higgsfield request builder rejects non-HTTPS media references', () => {
     () => buildHiggsfieldRequest({
       imageUrls: ['http://example.com/scene.png'],
     }),
-    error => /HTTPS URLs/i.test(error?.message || ''),
+    error => /use HTTPS/i.test(error?.message || ''),
   );
 });
 
