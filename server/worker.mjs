@@ -203,6 +203,7 @@ export async function executeChildrenFactoryScene(job) {
 
   const metadata = {
     ...(mission.metadata || {}),
+    factoryFailure: null,
     images,
     pipeline: updateChildrenFactoryPipeline(mission.metadata?.pipeline, {
       scene_assets: images.length >= totalScenes ? 'completed' : 'running',
