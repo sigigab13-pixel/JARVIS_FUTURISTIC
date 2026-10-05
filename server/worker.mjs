@@ -116,11 +116,11 @@ async function executeVideoPipeline(job) {
 
     const output = path.join(tempDir, 'render.mp4');
     const geometry = getVideoRenderGeometry(payload.format);
-    const filters = inputs.map((_, i) => `[${i}:v]scale=${geometry.width}:${geometry.height}:force_original_aspect_ratio=decrease,pad=${geometry.width}:${geometry.height}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30[v${i}]`);
+    const filters = inputs.map((_, i) => `[${i}:v]scale=${geometry.width}:${geometry.height}:force_original_aspect_ratio=increase,crop=${geometry.width}:${geometry.height},setsar=1,zoompan=z='min(zoom+0.0015,1.08)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=120:s=${geometry.width}x${geometry.height}:fps=30[v${i}]`);
     filters.push(inputs.map((_, i) => `[v${i}]`).join('') + `concat=n=${inputs.length}:v=1:a=0[v]`);
     const args = [];
     for (const file of inputs) args.push('-loop', '1', '-i', file);
-    args.push('-filter_complex', filters.join(';'), '-map', '[v]', '-t', String(Math.max(3, inputs.length * 3)), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-y', output);
+    args.push('-filter_complex', filters.join(';'), '-map', '[v]', '-t', String(Math.max(4, inputs.length * 4)), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-y', output);
     await runFfmpeg(args);
     const video = await fs.readFile(output);
     const sha256 = crypto.createHash('sha256').update(video).digest('hex');
@@ -132,7 +132,7 @@ async function executeVideoPipeline(job) {
       metadata: { user_id: userId, source: 'video_pipeline', sha256, project_id: payload.project_id || '' },
       upsert: true,
     });
-    const result = { rendered: true, media: stored, mediaKey, sha256, durationSeconds: Math.max(3, inputs.length * 3), format: geometry.label, width: geometry.width, height: geometry.height, sourceImageCount: inputs.length, missionId: String(payload.mission_id || '') || null };
+    const result = { rendered: true, media: stored, mediaKey, sha256, durationSeconds: Math.max(4, inputs.length * 4), format: geometry.label, width: geometry.width, height: geometry.height, sourceImageCount: inputs.length, missionId: String(payload.mission_id || '') || null };
     if (payload.mission_id) {
       const mission = await getMissionForUser(userId, String(payload.mission_id));
       if (!mission) throw new Error('Video render mission was not found for this JARVIS user.');
