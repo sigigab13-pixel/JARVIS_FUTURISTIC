@@ -176,11 +176,18 @@ export function canPublishChildrenFactoryMission(mission) {
       && Boolean(mission?.metadata?.verifiedVideo?.mediaKey));
 }
 
-export function buildChildrenFactoryPipeline({ renderQueued = false, renderCompleted = false, verifiedVideo = false, approvalStatus = 'pending', published = false } = {}) {
+export function buildChildrenFactoryPipeline({
+  sceneAssetsStatus = 'completed',
+  renderQueued = false,
+  renderCompleted = false,
+  verifiedVideo = false,
+  approvalStatus = 'pending',
+  published = false,
+} = {}) {
   return [
     { id: 'story', label: 'Story', status: 'completed' },
     { id: 'character_bible', label: 'Character Bible', status: 'completed' },
-    { id: 'scene_assets', label: 'Scene Assets', status: 'completed' },
+    { id: 'scene_assets', label: 'Scene Assets', status: sceneAssetsStatus },
     { id: 'render', label: '9:16 Render', status: renderCompleted ? 'completed' : renderQueued ? 'queued' : 'pending' },
     { id: 'verified_video', label: 'Verified Video', status: verifiedVideo ? 'completed' : 'blocked' },
     { id: 'approval', label: 'Approval', status: published ? 'completed' : approvalStatus },
@@ -763,64 +770,6 @@ export async function handleApi(req, res, pathname, url) {
         },
       });
 
-      const imageResults = [];
-      const characterPrompt = [
-        'Create a child-friendly storybook illustration.',
-        'Keep this exact character consistent in every image:',
-        'Name: ' + draft.character.name,
-        'Species: ' + draft.character.species,
-        'Color: ' + draft.character.color,
-        'Clothes: ' + draft.character.clothes,
-        'Description: ' + draft.character.description,
-        'Style: warm, colorful, friendly, simple storybook art.',
-        'No text, no watermark.',
-      ].join(' ');
-
-      for (let index = 1; index <= 3; index += 1) {
-        const blob = await generateHuggingFaceImage(
-          characterPrompt + ' Illustration ' + index + ' should depict a different moment from this story: ' + draft.story.slice(0, 1800)
-        );
-        const buffer = Buffer.from(await blob.arrayBuffer());
-        const mimeType = blob.type || 'image/png';
-        const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
-        let media = null;
-        if (isSupabaseStorageConfigured()) {
-          const extension = mimeType.includes('jpeg') ? 'jpg' : mimeType.includes('webp') ? 'webp' : 'png';
-          const key = createMediaKey({
-            userId: jarvisUser.id,
-            kind: 'children-factory',
-            extension,
-            id: sha256,
-          });
-          media = await putMedia({
-            key,
-            body: buffer,
-            contentType: mimeType,
-            metadata: {
-              user_id: jarvisUser.id,
-              source: 'children_factory_v1',
-              sha256,
-              character: draft.character.name,
-              scene: index,
-            },
-            upsert: true,
-          });
-        } else {
-          throw Object.assign(new Error('Supabase Storage is not configured for Children Factory assets.'), { statusCode: 503 });
-        }
-        await consumeImageGeneration(jarvisUser.id, {
-          prompt: `${draft.title} — Children Factory scene ${index}`.slice(0, 500),
-          mode: 'children-factory-v1',
-          sha256,
-          media_path: media?.path || null,
-        });
-        imageResults.push({
-          scene: index,
-          sha256,
-          media,
-        });
-      }
-
       const state = createMissionState({
         missionId: crypto.randomUUID(),
         userId: jarvisUser.id,
@@ -843,11 +792,116 @@ export async function handleApi(req, res, pathname, url) {
         age,
         story: draft.story,
         characterBible: draft.character,
-        images: imageResults,
-        pipeline: buildChildrenFactoryPipeline({ approvalStatus: 'blocked' }),
+        images: [],
+        pipeline: buildChildrenFactoryPipeline({ sceneAssetsStatus: 'running', approvalStatus: 'blocked' }),
       };
-      const createdMission = await createMissionForUser(jarvisUser.id, state);
-      const mission = createdMission;
+
+      let mission = await createMissionForUser(jarvisUser.id, state);
+      const imageResults = [];
+      const characterPrompt = [
+        'Create a child-friendly storybook illustration.',
+        'Keep this exact character consistent in every image:',
+        'Name: ' + draft.character.name,
+        'Species: ' + draft.character.species,
+        'Color: ' + draft.character.color,
+        'Clothes: ' + draft.character.clothes,
+        'Description: ' + draft.character.description,
+        'Style: warm, colorful, friendly, simple storybook art.',
+        'No text, no watermark.',
+      ].join(' ');
+
+      for (let index = 1; index <= 3; index += 1) {
+        try {
+          const blob = await generateHuggingFaceImage(
+            characterPrompt + ' Illustration ' + index + ' should depict a different moment from this story: ' + draft.story.slice(0, 1800)
+          );
+          const buffer = Buffer.from(await blob.arrayBuffer());
+          const mimeType = blob.type || 'image/png';
+          const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
+          let media = null;
+          if (isSupabaseStorageConfigured()) {
+            const extension = mimeType.includes('jpeg') ? 'jpg' : mimeType.includes('webp') ? 'webp' : 'png';
+            const key = createMediaKey({
+              userId: jarvisUser.id,
+              kind: 'children-factory',
+              extension,
+              id: sha256,
+            });
+            media = await putMedia({
+              key,
+              body: buffer,
+              contentType: mimeType,
+              metadata: {
+                user_id: jarvisUser.id,
+                source: 'children_factory_v1',
+                sha256,
+                character: draft.character.name,
+                scene: index,
+              },
+              upsert: true,
+            });
+          } else {
+            throw Object.assign(new Error('Supabase Storage is not configured for Children Factory assets.'), { statusCode: 503 });
+          }
+          await consumeImageGeneration(jarvisUser.id, {
+            prompt: `${draft.title} — Children Factory scene ${index}`.slice(0, 500),
+            mode: 'children-factory-v1',
+            sha256,
+            media_path: media?.path || null,
+          });
+          imageResults.push({
+            scene: index,
+            sha256,
+            media,
+          });
+
+          mission = await updateMissionForUser(jarvisUser.id, mission.id, {
+            ...mission,
+            metadata: {
+              ...(mission.metadata || {}),
+              images: imageResults,
+              pipeline: buildChildrenFactoryPipeline({
+                sceneAssetsStatus: imageResults.length === 3 ? 'completed' : 'running',
+                approvalStatus: 'blocked',
+              }),
+            },
+          }, {
+            eventType: 'children_factory.scene_completed',
+            message: `Children Factory scene ${index} completed and its asset was persisted.`,
+            metadata: { scene: index, sha256, asset: media?.path || null },
+          });
+        } catch (sceneError) {
+          try {
+            mission = await updateMissionForUser(jarvisUser.id, mission.id, {
+              ...mission,
+              status: transitionMission(mission, 'failed').status,
+              metadata: {
+                ...(mission.metadata || {}),
+                images: imageResults,
+                factoryFailure: {
+                  stage: 'scene_assets',
+                  scene: index,
+                  message: String(sceneError?.message || sceneError).slice(0, 1000),
+                  recordedAt: new Date().toISOString(),
+                  completedScenes: imageResults.length,
+                },
+                pipeline: buildChildrenFactoryPipeline({
+                  sceneAssetsStatus: 'failed',
+                  approvalStatus: 'blocked',
+                }),
+              },
+              completedAt: new Date().toISOString(),
+            }, {
+              eventType: 'children_factory.failed',
+              message: `Children Factory stopped at scene ${index}; partial progress was persisted for recovery.`,
+              metadata: { scene: index, completedScenes: imageResults.length },
+            });
+          } catch (persistError) {
+            console.error('JARVIS Children Factory failure checkpoint error:', persistError);
+          }
+          throw sceneError;
+        }
+      }
 
       return json(res, 201, {
         factory: 'children-v1',
