@@ -12,6 +12,7 @@ function tokens(value) {
 
 
 const intentRules = [
+  { intent: 'scam-check', patterns: [/\bscam\b/i, /\bfake account\b/i, /\bfake profile\b/i, /\bfraud\b/i, /\bimpersonat/i, /\breal or fake\b/i, /\bis this (?:the )?real\b/i] },
   { intent: 'web-search', patterns: [/\bsearch(?: the)? web\b/i, /\bsearch online\b/i, /\blive web\b/i, /\blook up\b/i, /\bresearch\b/i, /\bcheck online\b/i, /\bfind online\b/i, /\bwhat's new\b/i, /\bwhat is new\b/i, /\blatest\b/i, /\bcurrent\b/i, /\btoday's\b/i] },
   { intent: 'image', patterns: [/\bimage\b/i, /\bdraw\b/i, /\bpicture\b/i, /\bphoto\b/i, /\billustrat(?:e|ion)\b/i, /\bthumbnail\b/i, /\bposter\b/i] },
   { intent: 'children-story', patterns: [/\bchildren?\b/i, /\bkids?\b/i, /\bbedtime\b/i, /\bstory for (?:a )?kid\b/i, /\brhyme\b/i, /\bnursery\b/i, /\b5[- ]year[- ]old\b/i, /\b6[- ]year[- ]old\b/i, /\b7[- ]year[- ]old\b/i, /\b8[- ]year[- ]old\b/i] },
