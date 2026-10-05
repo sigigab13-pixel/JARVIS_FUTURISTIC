@@ -79,6 +79,26 @@ test('Children Factory pipeline marks queued render without unlocking publish', 
 });
 
 
+test('Children Factory exposes scene asset progress and failure without unlocking later stages', () => {
+  const running = buildChildrenFactoryPipeline({
+    sceneAssetsStatus: 'running',
+    approvalStatus: 'blocked',
+  });
+  assert.equal(running.find(stage => stage.id === 'scene_assets')?.status, 'running');
+  assert.equal(running.find(stage => stage.id === 'render')?.status, 'pending');
+  assert.equal(running.find(stage => stage.id === 'publish')?.status, 'blocked');
+
+  const failed = buildChildrenFactoryPipeline({
+    sceneAssetsStatus: 'failed',
+    approvalStatus: 'blocked',
+  });
+  assert.equal(failed.find(stage => stage.id === 'scene_assets')?.status, 'failed');
+  assert.equal(failed.find(stage => stage.id === 'render')?.status, 'pending');
+  assert.equal(failed.find(stage => stage.id === 'verified_video')?.status, 'blocked');
+  assert.equal(failed.find(stage => stage.id === 'publish')?.status, 'blocked');
+});
+
+
 test('Children Factory cannot publish before a verified video', () => {
   const base = {
     approval: { status: 'approved' },
