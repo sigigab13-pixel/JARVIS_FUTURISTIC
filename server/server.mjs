@@ -419,8 +419,8 @@ export async function handleApi(req, res, pathname, url) {
       return json(res, 202, {
         job,
         dispatch,
-        renderer: 'ffmpeg-image-sequence-v1',
-        note: 'The worker will render the supplied stored images into a 16:9 MP4 and save the verified video asset to JARVIS media storage.',
+        renderer: 'ffmpeg-image-sequence-v2',
+        note: 'The worker will render the supplied stored images into a 9:16 MP4 and save the verified video asset to JARVIS media storage.',
       });
     }
 
@@ -711,7 +711,7 @@ export async function handleApi(req, res, pathname, url) {
       const project = await createVideoProjectForUser(jarvisUser.id, {
         title: draft.title,
         description: 'JARVIS Children Factory v1 draft.',
-        format: '16:9',
+        format: '9:16',
         story_bible: {
           factory: 'children-v1',
           topic,
