@@ -106,7 +106,7 @@ async function runFfmpeg(args) {
   });
 }
 
-async function executeChildrenFactoryScene(job) {
+export async function executeChildrenFactoryScene(job) {
   const payload = job?.payload && typeof job.payload === 'object' ? job.payload : {};
   const userId = String(job?.user_id || payload.user_id || '').trim();
   const missionId = String(payload.mission_id || '').trim();
