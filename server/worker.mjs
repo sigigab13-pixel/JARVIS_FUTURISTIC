@@ -44,6 +44,12 @@ export function createWorkerId(prefix = 'jarvis-worker') {
   return `${prefix}-${crypto.randomUUID()}`;
 }
 
+export function getVideoRenderGeometry(format = '16:9') {
+  return String(format).trim() === '9:16'
+    ? { width: 1080, height: 1920, label: '9:16' }
+    : { width: 1280, height: 720, label: '16:9' };
+}
+
 export async function claimNextJob(workerId) {
   const rows = await rpc('worker_claim_next_job', { p_worker_id: workerId });
   return Array.isArray(rows) ? rows[0] || null : rows || null;
@@ -109,7 +115,8 @@ async function executeVideoPipeline(job) {
     }
 
     const output = path.join(tempDir, 'render.mp4');
-    const filters = inputs.map((_, i) => `[${i}:v]scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30[v${i}]`);
+    const geometry = getVideoRenderGeometry(payload.format);
+    const filters = inputs.map((_, i) => `[${i}:v]scale=${geometry.width}:${geometry.height}:force_original_aspect_ratio=decrease,pad=${geometry.width}:${geometry.height}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30[v${i}]`);
     filters.push(inputs.map((_, i) => `[v${i}]`).join('') + `concat=n=${inputs.length}:v=1:a=0[v]`);
     const args = [];
     for (const file of inputs) args.push('-loop', '1', '-i', file);
@@ -125,7 +132,7 @@ async function executeVideoPipeline(job) {
       metadata: { user_id: userId, source: 'video_pipeline', sha256, project_id: payload.project_id || '' },
       upsert: true,
     });
-    const result = { rendered: true, media: stored, mediaKey, sha256, durationSeconds: Math.max(3, inputs.length * 3), format: '16:9', sourceImageCount: inputs.length, missionId: String(payload.mission_id || '') || null };
+    const result = { rendered: true, media: stored, mediaKey, sha256, durationSeconds: Math.max(3, inputs.length * 3), format: geometry.label, width: geometry.width, height: geometry.height, sourceImageCount: inputs.length, missionId: String(payload.mission_id || '') || null };
     if (payload.mission_id) {
       const mission = await getMissionForUser(userId, String(payload.mission_id));
       if (!mission) throw new Error('Video render mission was not found for this JARVIS user.');
