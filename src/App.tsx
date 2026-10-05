@@ -34,7 +34,7 @@ import {
   Apple,
 } from 'lucide-react';
 
-type Message = { role: 'user' | 'assistant'; content: string; image?: { data: string; mimeType: string } };
+type Message = { role: 'user' | 'assistant'; content: string; image?: { data: string; mimeType: string }; webSearch?: { query: string; provider: string; sources: { rank: number; title: string; url: string; publishedDate?: string | null }[] } };
 
 function safeText(value: unknown, fallback = ''): string {
   if (typeof value === 'string') return value;
@@ -58,7 +58,10 @@ function normalizeMessages(value: unknown, fallback: Message[] = starter): Messa
       if (item?.role !== 'user' && item?.role !== 'assistant') return null;
       const content = safeText(item?.content).trim();
       const image = item?.image?.data && item?.image?.mimeType ? { data: String(item.image.data), mimeType: String(item.image.mimeType) } : undefined;
-      return content || image ? { role: item.role, content, ...(image ? { image } : {}) } : null;
+      const webSearch = item?.webSearch?.query && Array.isArray(item.webSearch.sources)
+        ? { query: String(item.webSearch.query), provider: String(item.webSearch.provider || 'Web search'), sources: item.webSearch.sources.map((source: any, index: number) => ({ rank: Number(source?.rank || index + 1), title: String(source?.title || 'Source'), url: String(source?.url || ''), publishedDate: source?.publishedDate ? String(source.publishedDate) : null })).filter((source: any) => /^https?:\/\//i.test(source.url)) }
+        : undefined;
+      return content || image || webSearch ? { role: item.role, content, ...(image ? { image } : {}), ...(webSearch ? { webSearch } : {}) } : null;
     })
     .filter(Boolean) as Message[];
 }
