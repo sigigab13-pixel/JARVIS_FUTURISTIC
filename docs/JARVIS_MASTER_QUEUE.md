@@ -234,6 +234,8 @@ Every capability should be reachable from the central JARVIS chat and governed b
 - [ ] Repair Office: health checks, safe retries, fallbacks, provider status, and recovery jobs.
 
 ### P0 — Children's Content Factory
+- [x] Durable Children Factory scene-worker fan-out with per-scene job identity, bounded retries, failure checkpoints, and render gating.
+- [x] Atomic image-credit accounting migration prepared and applied; activation remains feature-flagged until the new deployment is verified.
 - [ ] One-command content mission from idea to publish-ready package.
 - [ ] Trend Scout for age-appropriate children's topics and formats.
 - [ ] Story/lyrics/script generation with reusable character and world bibles.
