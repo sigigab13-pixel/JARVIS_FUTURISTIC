@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import EmpireDashboard from './EmpireDashboard';
 import CapabilityCenter from './CapabilityCenter';
@@ -34,7 +34,7 @@ import {
   Apple,
 } from 'lucide-react';
 
-type Message = { role: 'user' | 'assistant'; content: string };
+type Message = { role: 'user' | 'assistant'; content: string; image?: { data: string; mimeType: string }; webSearch?: { query: string; provider: string; sources: { rank: number; title: string; url: string; publishedDate?: string | null }[] } };
 
 function safeText(value: unknown, fallback = ''): string {
   if (typeof value === 'string') return value;
@@ -57,7 +57,11 @@ function normalizeMessages(value: unknown, fallback: Message[] = starter): Messa
     .map((item: any) => {
       if (item?.role !== 'user' && item?.role !== 'assistant') return null;
       const content = safeText(item?.content).trim();
-      return content ? { role: item.role, content } : null;
+      const image = item?.image?.data && item?.image?.mimeType ? { data: String(item.image.data), mimeType: String(item.image.mimeType) } : undefined;
+      const webSearch = item?.webSearch?.query && Array.isArray(item.webSearch.sources)
+        ? { query: String(item.webSearch.query), provider: String(item.webSearch.provider || 'Web search'), sources: item.webSearch.sources.map((source: any, index: number) => ({ rank: Number(source?.rank || index + 1), title: String(source?.title || 'Source'), url: String(source?.url || ''), publishedDate: source?.publishedDate ? String(source.publishedDate) : null })).filter((source: any) => /^https?:\/\//i.test(source.url)) }
+        : undefined;
+      return content || image || webSearch ? { role: item.role, content, ...(image ? { image } : {}), ...(webSearch ? { webSearch } : {}) } : null;
     })
     .filter(Boolean) as Message[];
 }
@@ -71,6 +75,69 @@ function makeStarter(displayName = 'there'): Message[] {
 }
 
 const starter: Message[] = makeStarter();
+
+
+function looksLikeImageGenerationRequest(value: string): boolean {
+  return /\\b(generate|create|make|draw|illustrate|render)\\b[\\s\\S]{0,140}\\b(image|picture|photo|illustration)\\b|\\b(image|picture|photo|illustration)\\b[\\s\\S]{0,140}\\b(generate|create|make|draw|illustrate|render)\\b/i.test(value);
+}
+
+function renderInlineMarkdown(value: string) {
+  const parts = value.split(/(\\*\\*[^*]+\\*\\*|\\*[^*]+\\*)/g);
+  return parts.map((part, index) => {
+    if (part.startsWith('**') && part.endsWith('**')) return <strong key={index}>{part.slice(2, -2)}</strong>;
+    if (part.startsWith('*') && part.endsWith('*')) return <em key={index}>{part.slice(1, -1)}</em>;
+    return <span key={index}>{part}</span>;
+  });
+}
+
+function renderRichMessage(content: string): ReactNode[] {
+  const lines = String(content || '').split(/\\r?\\n/);
+  const blocks: ReactNode[] = [];
+  let list: { ordered: boolean; text: string }[] = [];
+
+  const flushList = () => {
+    if (!list.length) return;
+    const ordered = list[0].ordered;
+    const items = list.map((item, index) => <li key={index}>{renderInlineMarkdown(item.text)}</li>);
+    blocks.push(
+      ordered
+        ? <ol className="rich-list" key={blocks.length}>{items}</ol>
+        : <ul className="rich-list" key={blocks.length}>{items}</ul>
+    );
+    list = [];
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const orderedMatch = trimmed.match(/^\\d+\\.\\s+(.+)$/);
+    const bulletMatch = trimmed.match(/^[-*]\\s+(.+)$/);
+
+    if (orderedMatch || bulletMatch) {
+      const ordered = Boolean(orderedMatch);
+      if (list.length && list[0].ordered !== ordered) flushList();
+      list.push({ ordered, text: (orderedMatch || bulletMatch)![1] });
+      continue;
+    }
+
+    flushList();
+
+    if (!trimmed) {
+      blocks.push(<div className="rich-spacer" key={blocks.length} />);
+      continue;
+    }
+
+    const headingMatch = trimmed.match(/^#{1,3}\\s+(.+)$/);
+    if (headingMatch) {
+      blocks.push(<h3 className="rich-heading" key={blocks.length}>{renderInlineMarkdown(headingMatch[1])}</h3>);
+      continue;
+    }
+
+    blocks.push(<p className="rich-paragraph" key={blocks.length}>{renderInlineMarkdown(trimmed)}</p>);
+  }
+
+  flushList();
+  return blocks;
+}
 
 function App() {
   const [session, setSession] = useState<any>(null);
@@ -96,6 +163,7 @@ function App() {
   const [missionError, setMissionError] = useState('');
   const [factoryOpen, setFactoryOpen] = useState(false);
   const [factoryTopic, setFactoryTopic] = useState('');
+  const [factoryContentType, setFactoryContentType] = useState('story');
   const [factoryAge, setFactoryAge] = useState(5);
   const [factoryBusy, setFactoryBusy] = useState(false);
   const [factoryError, setFactoryError] = useState('');
@@ -470,7 +538,7 @@ function App() {
     setFactoryError('');
     setFactoryDraft(null);
     try {
-      const response = await api.post('/api/factory/children', { topic, age: factoryAge });
+      const response = await api.post('/api/factory/children', { topic, contentType: factoryContentType, age: factoryAge });
       setFactoryDraft(response.data);
       setFactoryTopic('');
       await loadMissions();
@@ -573,53 +641,75 @@ function App() {
       setEmpireOpen(false);
     };
 
-    if (/^(open|show|launch) (children factory|children content factory)$/.test(value) || value === 'children factory') {
+    const openTool = (tool: string) => {
       closeAll();
-      setFactoryOpen(true);
-      void loadMissions();
-      response = 'Children Factory is open. Create a story draft and review it before approval.';
-    } else if (/^(open|show|launch) (mission center|missions)$/.test(value) || value === 'mission center') {
-      closeAll();
-      setMissionOpen(true);
-      void loadMissions();
-      response = 'Mission Center is open.';
-    } else if (/^(open|show|launch) (image lab|image studio)$/.test(value) || value === 'image lab') {
-      closeAll();
-      setImageLabOpen(true);
-      response = 'Image Lab is open. Describe the picture you want and I will generate it here.';
-    } else if (/^(open|show|launch) (youtube|youtube center|youtube studio)$/.test(value) || value === 'youtube') {
-      closeAll();
-      void openYouTubeCenter();
-      response = 'YouTube Center is open.';
-    } else if (/^(open|show|launch) (video lab|video studio)$/.test(value) || value === 'video lab') {
-      closeAll();
-      void openVideoStudio();
-      response = 'Video Lab is ready. Tell me what children’s video you want to produce.';
-    } else if (/^(open|show|launch) business( center)?$/.test(value)) {
-      closeAll();
-      void openBusinessCenter();
-      response = 'Business Center is ready.';
-    } else if (/^(open|show|launch) (system center|system check)$/.test(value)) {
-      closeAll();
-      setSystemOpen(true);
-      void runSystemCheck();
-      response = 'System Center is running a browser-safe health check.';
-    } else if (/^(open|show|launch) security( center)?$/.test(value)) {
-      closeAll();
-      void openSecurityCenter();
-      response = 'Security Center is open.';
-    } else if (/^(open|show|launch) (capabilities|capability center)$/.test(value) || value === 'what can you do') {
-      closeAll();
-      setCapabilityOpen(true);
-      response = 'Here are JARVIS’s available capabilities.';
-    } else if (/^(open|show|launch) (command center|commands)$/.test(value)) {
-      closeAll();
-      setCommandOpen(true);
-      response = 'Command Center is open.';
-    } else if (/^(open|show|launch) empire command$/.test(value)) {
-      closeAll();
-      setEmpireOpen(true);
-      response = 'Empire Command is open.';
+      if (tool === 'children') {
+        setFactoryOpen(true);
+        void loadMissions();
+        response = 'Children Factory is open. Give me an idea and I will prepare the story workflow for you.';
+      } else if (tool === 'video') {
+        void openVideoStudio();
+        response = 'Video Lab is open. I can help you build the production workflow from here.';
+      } else if (tool === 'youtube') {
+        void openYouTubeCenter();
+        response = 'YouTube Center is open. Publishing still requires the connected account and the existing approval gate.';
+      } else if (tool === 'business') {
+        void openBusinessCenter();
+        response = 'Business Center is open. You can manage your business profile and brand information there.';
+      } else if (tool === 'image') {
+        setImageLabOpen(true);
+        response = 'Image Lab is open. You can use it for dedicated image generation or editing; normal image requests can also stay in chat.';
+      } else if (tool === 'mission') {
+        setMissionOpen(true);
+        void loadMissions();
+        response = 'Mission Center is open.';
+      } else if (tool === 'security') {
+        setSecurityOpen(true);
+        runSecurityCheck();
+        response = 'Security Center is open.';
+      } else if (tool === 'system') {
+        setSystemOpen(true);
+        runSystemCheck();
+        response = 'System Center is running a browser-safe health check.';
+      } else if (tool === 'capabilities') {
+        setCapabilityOpen(true);
+        response = 'Capability Center is open. I can still route the supported actions for you from chat.';
+      } else if (tool === 'command') {
+        setCommandOpen(true);
+        response = 'Command Center is open.';
+      } else if (tool === 'empire') {
+        setEmpireOpen(true);
+        response = 'Empire Command is open.';
+      }
+    };
+
+    if (looksLikeImageGenerationRequest(clean)) return false;
+
+    const childrenRequest = /\\b(children|kids|kid|nursery|bedtime)\\b/i.test(value) && /\\b(factory|video|animation|animated|production|illustration workflow)\\b/i.test(value);
+    if (childrenRequest) {
+      openTool('children');
+    } else if (/\\b(open|show|launch|go to|take me to)\\b[\\s\\S]*\\b(children factory|children content factory)\\b|^children factory$|^children content factory$/.test(value)) {
+      openTool('children');
+    } else if (/\\b(open|show|launch|go to|take me to)\\b[\\s\\S]*\\b(image lab|image studio)\\b|^image lab$|^image studio$/.test(value)) {
+      openTool('image');
+    } else if (/\\b(open|show|launch|go to|take me to)\\b[\\s\\S]*\\b(video lab|video studio|video engine)\\b|^video lab$|^video studio$/.test(value)) {
+      openTool('video');
+    } else if (/\\b(open|show|launch|go to|take me to|connect)\\b[\\s\\S]*\\byoutube\\b|^youtube$/.test(value)) {
+      openTool('youtube');
+    } else if (/\\b(open|show|launch|go to|take me to)\\b[\\s\\S]*\\b(business center|business manager|brand kit)\\b|^business( center| manager)?$/.test(value)) {
+      openTool('business');
+    } else if (/\\b(open|show|launch|go to|take me to)\\b[\\s\\S]*\\b(mission center|missions)\\b|^mission center$|^missions$/.test(value)) {
+      openTool('mission');
+    } else if (/\\b(open|show|launch|go to|take me to|run)\\b[\\s\\S]*\\b(security center|security check)\\b|^security( center| check)?$/.test(value)) {
+      openTool('security');
+    } else if (/\\b(open|show|launch|go to|take me to|run)\\b[\\s\\S]*\\b(system center|system check|health check)\\b|^system( center| check)?$|^health check$/.test(value)) {
+      openTool('system');
+    } else if (/\\b(open|show|launch|go to|take me to)\\b[\\s\\S]*\\b(capabilit(?:y|ies)|what can you do|available tools)\\b|^capabilities$/.test(value)) {
+      openTool('capabilities');
+    } else if (/\\b(open|show|launch|go to|take me to)\\b[\\s\\S]*\\b(command center|commands)\\b|^command center$|^commands$/.test(value)) {
+      openTool('command');
+    } else if (/\\b(open|show|launch|go to|take me to)\\b[\\s\\S]*\\b(empire command)\\b|^empire command$/.test(value)) {
+      openTool('empire');
     } else if (/^(export|download) (my )?memory$/.test(value)) {
       exportMemory();
       response = 'Your local JARVIS memory export has been prepared.';
@@ -640,11 +730,7 @@ function App() {
 
     if (!response) return false;
     setInput('');
-    setMessages(current => [
-      ...current,
-      { role: 'user', content: clean },
-      { role: 'assistant', content: response },
-    ]);
+    setMessages(current => [...current, { role: 'user', content: clean }, { role: 'assistant', content: response }]);
     if (voiceEnabled) void speak(response);
     return true;
   };
@@ -657,6 +743,25 @@ function App() {
     setMessages(next);
     setInput('');
     setBusy(true);
+    if (looksLikeImageGenerationRequest(clean)) {
+      try {
+        const response = await api.post('/api/image/generate', { prompt: clean });
+        const generated = response.data?.image;
+        if (!generated?.data || !generated?.mimeType) throw new Error('Invalid image response');
+        const image = { data: String(generated.data), mimeType: String(generated.mimeType) };
+        const answer = 'Done — I generated the image here in the chat.';
+        setMessages(current => [...current, { role: 'assistant', content: answer, image }]);
+        setInput('');
+        if (voiceEnabled) void speak(answer);
+      } catch (error: any) {
+        const detail = safeText(error?.response?.data?.error, error?.message || '').trim();
+        setMessages(current => [...current, { role: 'assistant', content: detail ? `JARVIS image generation error: ${detail}` : 'JARVIS could not generate the image right now. Please try again.' }]);
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
     try {
       let response;
       let lastError: unknown;
@@ -685,9 +790,21 @@ function App() {
           ? `Done, ${String(session?.user?.user_metadata?.full_name || session?.user?.user_metadata?.name || session?.user?.email || 'there').trim() || 'there'}. Your image is ready in Image Lab.`
           : 'I could not complete that request. Please try again.',
       );
+      const webSearch = response.data?.webSearch?.query && Array.isArray(response.data.webSearch.sources)
+        ? {
+            query: String(response.data.webSearch.query),
+            provider: String(response.data.webSearch.provider || 'Web search'),
+            sources: response.data.webSearch.sources.map((source: any, index: number) => ({
+              rank: Number(source?.rank || index + 1),
+              title: String(source?.title || 'Source'),
+              url: String(source?.url || ''),
+              publishedDate: source?.publishedDate ? String(source.publishedDate) : null,
+            })).filter((source: any) => /^https?:\/\//i.test(source.url)),
+          }
+        : undefined;
       setMessages(current => [
         ...current,
-        { role: 'assistant', content: answer },
+        { role: 'assistant', content: answer, ...(webSearch ? { webSearch } : {}) },
       ]);
       if (voiceEnabled) void speak(answer);
     } catch (error: any) {
@@ -1178,8 +1295,32 @@ function App() {
               <div className={'message-row ' + message.role} key={index + '-' + message.content.slice(0, 8)}>
                 <div className="message-badge">{message.role === 'user' ? 'S' : 'J'}</div>
                 <div className="bubble">
-                  <span>{message.role === 'user' ? 'YOU' : 'JARVIS'}</span>
-                  <p>{message.content}</p>
+                  <span className="message-role">{message.role === 'user' ? 'YOU' : 'JARVIS'}</span>
+                  {message.content && <div className="message-content">{renderRichMessage(message.content)}</div>}
+                  {message.image?.data && message.image?.mimeType && (
+                    <div className="chat-generated-image">
+                      <img src={`data:${message.image.mimeType};base64,${message.image.data}`} alt="JARVIS generated result" />
+                    </div>
+                  )}
+                  {message.webSearch?.sources?.length ? (
+                    <div className="chat-web-sources">
+                      <div className="chat-web-sources-title">Sources · {message.webSearch.provider}</div>
+                      <div className="chat-web-source-list">
+                        {message.webSearch.sources.map((source) => (
+                          <a
+                            key={source.rank + '-' + source.url}
+                            className="chat-web-source"
+                            href={source.url}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                          >
+                            <span>{source.rank}. {source.title}</span>
+                            {source.publishedDate ? <small>{source.publishedDate}</small> : null}
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ))}
@@ -1272,13 +1413,16 @@ function App() {
               <div>
                 <span className="eyebrow">CHILDREN CONTENT FACTORY V1</span>
                 <h2>JARVIS Children Factory</h2>
-                <p>Topic → story → character bible → 3 consistent images → approval.</p>
+                <p>Topic → children content → character bible → 3 consistent images → approval.</p>
               </div>
               <button className="close-security" onClick={() => setFactoryOpen(false)} aria-label="Close Children Factory"><X size={18} /></button>
             </div>
             <div style={{ display:'grid', gap:10, marginBottom:18 }}>
               <textarea value={factoryTopic} onChange={e => setFactoryTopic(e.target.value.slice(0,500))} placeholder="Example: A little lion learns not to be afraid of water" rows={3} />
               <div style={{ display:'flex', gap:10, alignItems:'center', flexWrap:'wrap' }}>
+                <label>Content <select value={factoryContentType} onChange={e => setFactoryContentType(e.target.value)}>
+                  <option value="story">Story</option><option value="rhyme">Rhyme</option><option value="educational">Educational</option><option value="bedtime">Bedtime</option><option value="moral">Moral</option><option value="adventure">Adventure</option>
+                </select></label>
                 <label>Age <select value={factoryAge} onChange={e => setFactoryAge(Number(e.target.value))}>{[3,4,5,6,7,8,9,10,11,12].map(age => <option key={age} value={age}>{age}</option>)}</select></label>
                 <button className="security-primary" onClick={() => void createChildrenFactory()} disabled={factoryBusy || !factoryTopic.trim()}><Sparkles size={16} /> {factoryBusy ? 'Creating…' : 'Create Children Draft'}</button>
               </div>
@@ -1286,8 +1430,8 @@ function App() {
             {factoryError && <div className="lock-note"><AlertTriangle size={16} /><span>{factoryError}</span></div>}
             {factoryDraft?.draft && <article className="security-card" style={{ display:'block', marginTop:12 }}>
               <span className="eyebrow">DRAFT READY</span>
-              <h3>{factoryDraft.draft.project?.title || 'Children Story'}</h3>
-              <p style={{ whiteSpace:'pre-wrap' }}>{factoryDraft.draft.story}</p>
+              <h3>{factoryDraft.draft.project?.title || 'Children Content'}</h3>
+              <p style={{ whiteSpace:'pre-wrap' }}><b>{String(factoryDraft.draft.contentType || factoryContentType).toUpperCase()}</b> · {factoryDraft.draft.story}</p>
               <div style={{ display:'grid', gap:6 }}><b>Character Bible</b><span>{factoryDraft.draft.characterBible?.name} · {factoryDraft.draft.characterBible?.species} · {factoryDraft.draft.characterBible?.color} · {factoryDraft.draft.characterBible?.clothes}</span></div>
               <div style={{ display:'grid', gridTemplateColumns:'repeat(3,minmax(0,1fr))', gap:8, marginTop:12 }}>
                 {(factoryDraft.draft.images || []).map((item:any) => item.media?.url ? <img key={item.scene} src={item.media.url} alt={'Children Factory scene '+item.scene} style={{ width:'100%', borderRadius:10 }} /> : <div key={item.scene} className="lock-note">Scene {item.scene} asset stored</div>)}
