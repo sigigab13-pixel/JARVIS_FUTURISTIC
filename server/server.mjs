@@ -999,6 +999,7 @@ export async function handleApi(req, res, pathname, url) {
       service: 'JARVIS chat',
       openaiConfigured: Boolean(process.env.OPENAI_API_KEY),
       openaiModel: process.env.OPENAI_MODEL || 'gpt-6-luna',
+      supabaseServerConfigured: Boolean(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL),
       huggingFaceConfigured: Boolean(process.env.HUGGINGFACE_API_TOKEN || process.env.HF_TOKEN),
       fallbackAvailable: Boolean(process.env.HUGGINGFACE_API_TOKEN || process.env.HF_TOKEN),
     });
