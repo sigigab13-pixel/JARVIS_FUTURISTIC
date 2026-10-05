@@ -77,6 +77,7 @@ function App() {
   const [authReady, setAuthReady] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState('');
+  const [shareStatus, setShareStatus] = useState('');
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
@@ -155,6 +156,16 @@ function App() {
     const hue = palette[Math.floor(Math.random() * palette.length)];
     document.documentElement.style.setProperty('--jarvis-hue', String(hue));
     return () => {};
+  }, []);
+
+
+  useEffect(() => {
+    try {
+      const referral = new URLSearchParams(window.location.search).get('ref');
+      if (referral) localStorage.setItem('jarvis-referral-source', referral.slice(0, 80));
+    } catch {
+      // Referral capture is optional and must never block JARVIS.
+    }
   }, []);
 
   useEffect(() => {
@@ -272,7 +283,14 @@ function App() {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { emailRedirectTo: window.location.origin },
+      options: {
+        emailRedirectTo: window.location.origin,
+        data: {
+          referral_source: (() => {
+            try { return localStorage.getItem('jarvis-referral-source') || 'direct'; } catch { return 'direct'; }
+          })(),
+        },
+      },
     });
     if (error) {
       setAuthError(error.message);
@@ -303,6 +321,30 @@ function App() {
     });
     setAuthError(error ? error.message : 'Magic link sent. Check your email.');
     setAuthBusy(false);
+  };
+
+
+  const shareJarvis = async () => {
+    const url = new URL(window.location.origin);
+    url.searchParams.set('ref', 'share');
+    const shareData = {
+      title: 'JARVIS Futuristic',
+      text: 'Try JARVIS Futuristic — an AI platform for stories, characters, images, video workflows, and more.',
+      url: url.toString(),
+    };
+    try {
+      if (typeof navigator.share === 'function') {
+        await navigator.share(shareData);
+        setShareStatus('Share sheet opened.');
+      } else if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url.toString());
+        setShareStatus('JARVIS link copied.');
+      } else {
+        setShareStatus('Copy this link: ' + url.toString());
+      }
+    } catch (error: any) {
+      if (error?.name !== 'AbortError') setShareStatus('Sharing was not completed.');
+    }
   };
 
   const signOut = async () => {
@@ -1089,14 +1131,24 @@ function App() {
     return (
       <main className="jarvis-shell">
         <section className="auth-screen">
-          <div className="auth-card">
+          <div className="auth-card" style={{ maxWidth: 620 }}>
             <div className="orb"><Sparkles size={20} /></div>
-            <span className="eyebrow">JARVIS AUTHENTICATION</span>
-            <h1>Sign in to JARVIS</h1>
-            <p>Choose a secure sign-in method to sync your conversations, preferences, and long-term JARVIS memory.</p>
+            <span className="eyebrow">JARVIS FUTURISTIC • EARLY V1</span>
+            <h1>Turn an idea into something you can share.</h1>
+            <p>
+              JARVIS combines AI conversation, memory, creative tools, and a children's-content workflow
+              so you can move from an idea to stories, characters, images, and production-ready assets.
+            </p>
+
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,minmax(0,1fr))', gap:8, marginTop:16 }}>
+              <div className="system-card"><b>Stories</b><span>Rhymes, scripts, and age-aware ideas.</span></div>
+              <div className="system-card"><b>Visuals</b><span>Characters, images, and consistent assets.</span></div>
+              <div className="system-card"><b>Workflows</b><span>Approval, production, and publishing foundations.</span></div>
+            </div>
+
             {authError && <div className="auth-error">{authError}</div>}
 
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(2,minmax(0,1fr))', gap:8, marginTop:12 }}>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(2,minmax(0,1fr))', gap:8, marginTop:16 }}>
               <button className="security-primary" onClick={() => void signInWithGoogle()} disabled={authBusy || !supabaseConfigured}>
                 {authBusy ? 'Connecting...' : 'Continue with Google'}
               </button>
@@ -1126,6 +1178,11 @@ function App() {
               </button>
             </div>
 
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, marginTop:16, flexWrap:'wrap' }}>
+              <small>JARVIS V1 is being shaped with early testers.</small>
+              <button className="security-secondary" onClick={() => void shareJarvis()}>Share JARVIS</button>
+            </div>
+            {shareStatus && <small style={{ display:'block', marginTop:8, opacity:.85 }}>{shareStatus}</small>}
             {!supabaseConfigured && <small>Supabase Auth is not configured in this deployment yet.</small>}
             <small style={{ display:'block', marginTop:8, opacity:.75 }}>Additional social buttons require their provider to be enabled in Supabase Auth.</small>
           </div>
@@ -1134,7 +1191,6 @@ function App() {
     );
   }
 
-  return (
     <main className="jarvis-shell">
       <div className="scanline" />
       <header className="topbar">
