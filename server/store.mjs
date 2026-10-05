@@ -498,6 +498,19 @@ export async function consumeImageGeneration(userId, metadata = {}) {
   const plan = entitlement?.jarvis_plans || {};
   const limit = Number(plan.monthly_image_generations || 0);
   const remaining = Number(entitlement?.credits_remaining ?? 0);
+  const idempotencyKey = String(metadata?.idempotency_key || '').trim().slice(0, 200);
+
+  if (configured && idempotencyKey) {
+    const existing = await request(
+      'jarvis_usage_ledger?select=id&user_id=eq.' + encodeURIComponent(userId) +
+      '&operation=eq.image_generation&metadata->>idempotency_key=eq.' +
+      encodeURIComponent(idempotencyKey) + '&limit=1'
+    );
+    if (existing?.[0]) {
+      return await getJarvisEntitlement(userId) || entitlement;
+    }
+  }
+
   if (remaining <= 0) {
     throw Object.assign(new Error('Your image-generation allowance is used up for this billing period.'), {
       statusCode: 402,
