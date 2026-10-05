@@ -15,6 +15,7 @@ import {
   consumeImageGeneration,
 } from './store.mjs';
 import { executeMissionStep } from './mission-executor.mjs';
+import { transitionMission } from './mission-runtime.mjs';
 import { createMediaKey, getMedia, isSupabaseStorageConfigured, putMedia } from './media.mjs';
 import { generateHuggingFaceImage } from './image-generator.mjs';
 
@@ -376,6 +377,53 @@ async function dispatchDueRoutines(workerId, logger) {
   return dispatched;
 }
 
+async function recordChildrenFactorySceneFailure(job, persistedJob) {
+  const payload = job?.payload && typeof job.payload === 'object' ? job.payload : {};
+  if (job?.type !== 'video_pipeline' || payload.operation !== 'children_factory_scene') return;
+  const userId = String(job?.user_id || payload.user_id || '').trim();
+  const missionId = String(payload.mission_id || '').trim();
+  const scene = Number(payload.scene || 0);
+  if (!userId || !missionId || !Number.isInteger(scene) || scene < 1) return;
+
+  const status = String(
+    persistedJob?.status ||
+    persistedJob?.[0]?.status ||
+    'failed'
+  );
+  const mission = await getMissionForUser(userId, missionId);
+  if (!mission || ['failed', 'canceled', 'succeeded'].includes(String(mission.status || ''))) return;
+
+  const terminal = status === 'failed';
+  const next = terminal ? transitionMission(mission, 'failed') : mission;
+  await updateMissionForUser(userId, missionId, {
+    ...next,
+    metadata: {
+      ...(mission.metadata || {}),
+      factoryFailure: {
+        stage: 'scene_assets',
+        scene,
+        status,
+        message: String(job?.error?.message || persistedJob?.error?.message || 'Children Factory scene worker failed.').slice(0, 1000),
+        recordedAt: new Date().toISOString(),
+        attempt: Number(persistedJob?.attempts || job?.attempts || 0),
+      },
+      pipeline: updateChildrenFactoryPipeline(mission.metadata?.pipeline, {
+        scene_assets: terminal ? 'failed' : 'running',
+        render: 'pending',
+        verified_video: 'blocked',
+        approval: 'blocked',
+        publish: 'blocked',
+      }),
+    },
+  }, {
+    eventType: terminal ? 'children_factory.failed' : 'children_factory.retrying',
+    message: terminal
+      ? 'Children Factory scene retries are exhausted; the mission was marked failed.'
+      : 'Children Factory scene failed and remains queued for bounded retry.',
+    metadata: { scene, status },
+  });
+}
+
 async function processJob(job, workerId, logger) {
   await heartbeatJob(job.id, workerId);
   const heartbeatMs = Math.max(15_000, Number(process.env.JARVIS_WORKER_HEARTBEAT_MS || 60_000));
@@ -412,10 +460,16 @@ async function processJob(job, workerId, logger) {
     return { ok: true, jobId: job.id };
   } catch (error) {
     logger.error?.(`[JARVIS worker] failed ${job.id}:`, error);
+    let persistedFailure = null;
     try {
-      await failJob(job.id, workerId, error);
+      persistedFailure = await failJob(job.id, workerId, error);
     } catch (failureError) {
       logger.error?.('[JARVIS worker] failed to persist failure:', failureError);
+    }
+    try {
+      await recordChildrenFactorySceneFailure(job, persistedFailure);
+    } catch (checkpointError) {
+      logger.error?.('[JARVIS worker] failed to persist Children Factory failure checkpoint:', checkpointError);
     }
     await updateRoutineRunFromChildren(job).catch(failureCheckError =>
       logger.warn?.(`[JARVIS worker] routine failure check failed ${job.id}:`, failureCheckError)
