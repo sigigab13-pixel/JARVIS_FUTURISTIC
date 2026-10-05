@@ -233,6 +233,7 @@ async function generateChildrenFactoryDraft(topic, age, contentType = 'story') {
 
   return {
     title: String(draft.title || 'JARVIS Children Story').trim().slice(0, 200),
+    contentType: String(contentType || 'story').trim().toLowerCase(),
     story: story.slice(0, 5000),
     character: {
       name: String(character.name).trim().slice(0, 120),
