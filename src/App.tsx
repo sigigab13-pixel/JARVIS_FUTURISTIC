@@ -1294,7 +1294,7 @@ function App() {
               <div className={'message-row ' + message.role} key={index + '-' + message.content.slice(0, 8)}>
                 <div className="message-badge">{message.role === 'user' ? 'S' : 'J'}</div>
                 <div className="bubble">
-                  <span>{message.role === 'user' ? 'YOU' : 'JARVIS'}</span>
+                  <span className="message-role">{message.role === 'user' ? 'YOU' : 'JARVIS'}</span>
                   {message.content && <div className="message-content">{renderRichMessage(message.content)}</div>}
                   {message.image?.data && message.image?.mimeType && (
                     <div className="chat-generated-image">
