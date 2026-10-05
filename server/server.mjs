@@ -56,6 +56,7 @@ import { routeContextForPrompt, routeIntent } from './intent-router.mjs';
 import { createMissionState, transitionMission, advanceMissionStep } from './mission-runtime.mjs';
 import { preflightMission, getMissionAdapters } from './mission-executor.mjs';
 import { generateHuggingFaceImage, HF_IMAGE_MODELS, HF_IMAGE_EDIT_MODELS, HF_IMAGE_PROVIDERS } from './image-generator.mjs';
+import { getMediaProviderStatus, getMediaProviderPlan } from './media-provider-office.mjs';
 import { getYouTubeAccessToken, getYouTubeAnalytics, getYouTubeChannel, uploadYouTubeVideo } from './youtube.mjs';
 
 const PORT = Number(process.env.PORT || 10000);
@@ -263,6 +264,21 @@ async function generateChildrenFactoryDraft(topic, age) {
 export async function handleApi(req, res, pathname, url) {
   if (req.method === 'GET' && pathname === '/api/_healthcheck') {
     return json(res, 200, { message: 'Success', service: 'JARVIS', deployment: 'vercel' });
+  }
+
+  if (req.method === 'GET' && pathname === '/api/media/providers') {
+    await requireAuthenticatedJarvisUser(req);
+    const capability = String(url.searchParams.get('capability') || '').trim();
+    const preferred = String(url.searchParams.get('preferred') || '')
+      .split(',')
+      .map(value => value.trim())
+      .filter(Boolean);
+    return json(res, 200, {
+      office: 'media-provider',
+      providers: getMediaProviderStatus(),
+      plan: capability ? getMediaProviderPlan({ capability, preferred }) : null,
+      note: 'Provider status reflects JARVIS configuration. It does not claim that an external provider API is reachable until an adapter health check is implemented.',
+    });
   }
 
   if (req.method === 'GET' && pathname === '/api/capabilities') {
