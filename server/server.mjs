@@ -799,7 +799,8 @@ export async function handleApi(req, res, pathname, url) {
       const runningState = transitionMission(transitionMission(state, 'queued'), 'running');
       let mission = await createMissionForUser(jarvisUser.id, runningState);
 
-      const asyncFactory = body?.async !== false;
+      const asyncFactory = body?.async !== false
+        && String(process.env.JARVIS_ATOMIC_IMAGE_CREDITS || '').toLowerCase() === 'true';
       if (asyncFactory) {
         const sceneJobs = [];
         try {
