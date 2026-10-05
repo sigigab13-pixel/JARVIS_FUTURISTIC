@@ -10,7 +10,8 @@
     "start": "node server/server.mjs",
     "worker": "node server/worker.mjs",
     "test:worker": "node --test tests/worker.test.mjs",
-    "test": "node --test tests/*.test.mjs"
+    "test": "node --test tests/*.test.mjs",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "lucide-react": "^0.469.0",
