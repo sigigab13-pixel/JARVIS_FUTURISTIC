@@ -26,6 +26,17 @@ test('Higgsfield request builder locks Children Factory output to 9:16 and bound
   assert.equal(request.input.output_format, 'mp4');
 });
 
+
+
+test('Higgsfield request builder rejects non-HTTPS media references', () => {
+  assert.throws(
+    () => buildHiggsfieldRequest({
+      imageUrls: ['http://example.com/scene.png'],
+    }),
+    error => /HTTPS URLs/i.test(error?.message || ''),
+  );
+});
+
 test('Higgsfield submission keeps credentials server-side and returns request identity', async () => {
   const originalFetch = global.fetch;
   const calls = [];
@@ -76,4 +87,12 @@ test('Higgsfield status normalizes terminal completion and video URL', async () 
   } finally {
     global.fetch = originalFetch;
   }
+});
+
+
+test('Higgsfield status rejects non-Higgsfield lifecycle URLs', async () => {
+  await assert.rejects(
+    getHiggsfieldVideoStatus('https://evil.example/request/status'),
+    error => /api\.higgsfield\.ai/i.test(error?.message || ''),
+  );
 });
