@@ -57,7 +57,7 @@ import { createMissionState, transitionMission, advanceMissionStep } from './mis
 import { preflightMission, getMissionAdapters } from './mission-executor.mjs';
 import { generateHuggingFaceImage, HF_IMAGE_MODELS, HF_IMAGE_EDIT_MODELS, HF_IMAGE_PROVIDERS } from './image-generator.mjs';
 import { getYouTubeAccessToken, getYouTubeAnalytics, getYouTubeChannel, uploadYouTubeVideo } from './youtube.mjs';
-import { getMonetizationOfficeConfig, estimatePlatformRevenue, buildYouTubeRevenueSnapshot, buildKdpExport, buildMerchExport, getSubscriptionPlans } from './monetization-office.mjs';
+import { getMonetizationOfficeConfig, estimatePlatformRevenue, buildYouTubeRevenueSnapshot, buildKdpExport, buildMerchExport } from './monetization-office.mjs';
 
 const PORT = Number(process.env.PORT || 10000);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -305,17 +305,6 @@ export async function handleApi(req, res, pathname, url) {
 
     if (req.method === 'GET' && pathname === '/api/monetization/config') {
       return json(res, 200, getMonetizationOfficeConfig(), { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
-    }
-
-    if (req.method === 'GET' && pathname === '/api/monetization/plans') {
-      return json(res, 200, {
-        plans: getSubscriptionPlans(),
-        billing: {
-          enabled: false,
-          provider: null,
-          mode: 'catalog-only',
-        },
-      }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
     }
 
     if (req.method === 'POST' && pathname === '/api/monetization/revenue/estimate') {
