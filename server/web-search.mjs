@@ -69,7 +69,7 @@ export async function searchWeb(query, { maxResults = MAX_RESULTS, timeoutMs = D
           snippet: cleanText(item?.content, 1000),
           publishedDate: cleanText(item?.published_date || item?.publishedDate, 80) || null,
           score: typeof item?.score === 'number' ? item.score : null,
-        })).filter(item => item.title && /^https?:\\/\\//i.test(item.url))
+        })).filter(item => item.title && /^https?:\/\//i.test(item.url))
       : [];
 
     return {
@@ -100,9 +100,9 @@ export function webSearchContext(search) {
       `URL: ${item.url}`,
       item.publishedDate ? `Published: ${item.publishedDate}` : '',
       `Snippet: ${item.snippet}`,
-    ].filter(Boolean).join('\\n')),
+    ].filter(Boolean).join('\n')),
     'Use these sources as the factual basis for the current answer.',
     'Cite factual claims with [1], [2], etc. matching the source numbers above.',
     'Do not invent sources, URLs, dates, or facts not supported by the retrieved results.',
-  ].join('\\n\\n');
+  ].join('\n\n');
 }
