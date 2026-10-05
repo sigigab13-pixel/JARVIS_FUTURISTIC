@@ -19,6 +19,38 @@ export function persistenceMode() {
   return configured ? 'supabase' : 'memory';
 }
 
+export async function checkSupabaseHealth() {
+  if (!configured) {
+    return {
+      configured: false,
+      healthy: false,
+      status: 'not_configured',
+      persistence: persistenceMode(),
+    };
+  }
+
+  const startedAt = Date.now();
+  try {
+    const rows = await request('jarvis_plans?select=code&active=eq.true&limit=1');
+    return {
+      configured: true,
+      healthy: Array.isArray(rows),
+      status: Array.isArray(rows) ? 'ok' : 'invalid_response',
+      latencyMs: Date.now() - startedAt,
+      persistence: persistenceMode(),
+    };
+  } catch (error) {
+    return {
+      configured: true,
+      healthy: false,
+      status: 'error',
+      errorCode: String(error?.statusCode || error?.code || '').slice(0, 80) || null,
+      latencyMs: Date.now() - startedAt,
+      persistence: persistenceMode(),
+    };
+  }
+}
+
 async function request(pathname, options = {}) {
   if (!configured) return null;
   const response = await fetch(`${SUPABASE_URL}/rest/v1/${pathname}`, {
