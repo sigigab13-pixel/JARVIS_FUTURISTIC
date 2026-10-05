@@ -691,7 +691,7 @@ function App() {
       ]);
       if (voiceEnabled) void speak(answer);
     } catch (error: any) {
-      const detail = String(error?.response?.data?.error || error?.message || '').trim();
+      const detail = safeText(error?.response?.data?.error, error?.message || '').trim();
       setMessages(current => [
         ...current,
         {
