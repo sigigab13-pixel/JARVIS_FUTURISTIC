@@ -124,6 +124,14 @@ async function executeChildrenFactoryScene(job) {
   if (!mission || mission.metadata?.factory !== 'children-v1' || String(mission.metadata?.projectId || '') !== projectId) {
     throw new Error('Children Factory mission was not found or does not belong to this video project.');
   }
+  if (['failed', 'canceled', 'succeeded'].includes(String(mission.status || ''))) {
+    return {
+      scene,
+      skipped: true,
+      reason: 'mission-terminal',
+      missionId,
+    };
+  }
 
   const existingImages = Array.isArray(mission.metadata?.images) ? mission.metadata.images : [];
   const existing = existingImages.find(item => Number(item?.scene) === scene);
