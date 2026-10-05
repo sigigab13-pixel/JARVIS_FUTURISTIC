@@ -95,7 +95,11 @@ export async function createSignedMediaUrls({ userId, keys = [], expiresIn = 300
   if (error) {
     throw Object.assign(new Error(error.message || 'Supabase Storage signing failed.'), { statusCode: 502 });
   }
-  const signed = Array.isArray(data?.signedUrls) ? data.signedUrls : [];
+  const signed = Array.isArray(data)
+    ? data
+    : Array.isArray(data?.signedUrls)
+      ? data.signedUrls
+      : [];
   if (signed.length !== cleanKeys.length || signed.some(item => !item?.signedUrl)) {
     throw Object.assign(new Error('Supabase Storage returned an incomplete signed-URL set.'), { statusCode: 502 });
   }

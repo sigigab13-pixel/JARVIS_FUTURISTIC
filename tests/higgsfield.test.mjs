@@ -2,10 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 process.env.HIGGSFIELD_API_KEY = 'test-key-id:test-key-secret';
+process.env.SUPABASE_URL = 'https://wyblfoxpaycguuxdehpn.supabase.co';
+process.env.SUPABASE_SECRET_KEY = 'test-secret';
+process.env.SUPABASE_MEDIA_BUCKET = 'jarvis-media';
 
 const {
   buildHiggsfieldRequest,
   submitHiggsfieldVideo,
+  submitHiggsfieldVideoFromMediaKeys,
   getHiggsfieldVideoStatus,
 } = await import('../server/higgsfield.mjs');
 
@@ -35,6 +39,53 @@ test('Higgsfield request builder rejects non-HTTPS media references', () => {
     }),
     error => /use HTTPS/i.test(error?.message || ''),
   );
+});
+
+
+
+test('Higgsfield media-key bridge signs JARVIS assets before submission', async () => {
+  const originalFetch = global.fetch;
+  const calls = [];
+  global.fetch = async (url, options = {}) => {
+    const target = String(url);
+    calls.push({ url: target, options });
+
+    if (target.includes('/storage/v1/object/sign/')) {
+      return new Response(JSON.stringify([{
+        path: 'jarvis/11111111-1111-4111-8111-111111111111/children-factory/scene-1.png',
+        signedURL: '/object/sign/jarvis-media/signed-scene-1',
+      }]), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    return new Response(JSON.stringify({
+      request_id: 'req_bridge_1',
+      status: 'queued',
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  };
+
+  try {
+    const result = await submitHiggsfieldVideoFromMediaKeys({
+      userId: '11111111-1111-4111-8111-111111111111',
+      mediaKeys: [
+        'jarvis/11111111-1111-4111-8111-111111111111/children-factory/scene-1.png',
+      ],
+      prompt: 'Animate Kobi walking through a magical forest.',
+    });
+
+    assert.equal(result.requestId, 'req_bridge_1');
+    assert.equal(calls.length, 2);
+    assert.match(calls[0].url, /\/storage\/v1\/object\/sign\//);
+    assert.equal(calls[1].options.method, 'POST');
+    assert.match(String(calls[1].options.body), /signed-scene-1/);
+  } finally {
+    global.fetch = originalFetch;
+  }
 });
 
 test('Higgsfield submission keeps credentials server-side and returns request identity', async () => {
