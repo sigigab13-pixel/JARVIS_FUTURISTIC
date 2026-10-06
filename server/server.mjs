@@ -69,6 +69,7 @@ import { normalizeMemoryList, parseMemoryDeletionRequest } from './memory-contro
 import { buildTimeAwarenessInstruction, getTimeContextForRequest } from './time-freshness-core.mjs';
 import { buildContradictionInstruction, detectMemoryContradictions } from './contradiction-core.mjs';
 import { formatCorrectionMemory, parseUserCorrection } from './correction-memory.mjs';
+import { buildProvenance, extractWebCitations } from './provenance-core.mjs';
 import { planGoal } from './goal-outcome-core.mjs';
 
 const PORT = Number(process.env.PORT || 10000);
@@ -1444,6 +1445,7 @@ export async function handleApi(req, res, pathname, url) {
     let intelligenceTier = '';
     let responseId = null;
     let webSearchUsed = false;
+    let webCitations = [];
 
     if (openaiKey) {
       try {
@@ -1461,6 +1463,7 @@ export async function handleApi(req, res, pathname, url) {
         intelligenceTier = result.tier;
         responseId = result.responseId || null;
         webSearchUsed = Boolean(result.webSearchUsed);
+        webCitations = Array.isArray(result.webCitations) ? result.webCitations : [];
       } catch (error) {
         console.error('JARVIS OpenAI intelligence core failed:', error?.statusCode || '', error?.message || error);
       }
@@ -1500,6 +1503,7 @@ export async function handleApi(req, res, pathname, url) {
         model = HF_MODEL;
         intelligenceTier = 'fallback';
         webSearchUsed = false;
+        webCitations = [];
       }
     }
 
@@ -1586,6 +1590,14 @@ export async function handleApi(req, res, pathname, url) {
       }
     }
 
+    const provenance = buildProvenance({
+      messageCount: messages.length,
+      memoryCount: semanticMemories.length,
+      webSearchUsed,
+      webCitations,
+      provider,
+    });
+
     if (!selfCheck.ok) {
       return json(res, 502, {
         error: 'JARVIS self-check could not produce a verified user-facing response.',
@@ -1658,6 +1670,7 @@ export async function handleApi(req, res, pathname, url) {
         persistent: Boolean(userId),
         guest: !userId,
         planning: goalPlan,
+        provenance,
         verification: {
           selfCheck: selfRepairSucceeded ? 'repaired-and-verified' : 'passed',
           repairAttempted: selfRepairAttempted,
