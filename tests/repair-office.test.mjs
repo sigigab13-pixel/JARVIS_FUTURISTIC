@@ -5,6 +5,7 @@ import {
   buildRepairDecision,
   classifyRepairFailure,
   getRepairOfficePolicy,
+  getRepairOfficeDiagnostics,
 } from '../server/repair-office.mjs';
 
 test('Repair Office classifies only known failure categories', () => {
@@ -50,4 +51,16 @@ test('Repair Office policy forbids autonomous production mutation', () => {
   assert.ok(policy.parentLaws.includes(1));
   assert.ok(policy.parentLaws.includes(5));
   assert.ok(policy.parentLaws.includes(23));
+});
+
+test('Repair Office diagnostics are read-only and report a structured result', async () => {
+  const result = await getRepairOfficeDiagnostics();
+  assert.ok(['READY', 'ATTENTION', 'BLOCKED'].includes(result.overallStatus));
+  assert.equal(result.policy.autonomousMutation, false);
+  assert.ok(Array.isArray(result.checks));
+  assert.ok(result.checks.some(item => item.name === 'JARVIS API'));
+  for (const item of result.checks) {
+    assert.ok(['READY', 'ATTENTION', 'BLOCKED'].includes(item.status));
+    assert.equal(typeof item.evidence, 'string');
+  }
 });
