@@ -69,10 +69,11 @@ export const api = {
     if (!response.ok) throw Object.assign(new Error(describeApiError(data?.error, `Request failed with status ${response.status}`)), { response: { data } });
     return { data };
   },
-  delete: async (path: string) => {
+  delete: async (path: string, body?: unknown) => {
     const response = await fetch(path, {
       method: 'DELETE',
-      headers: await authHeaders(),
+      headers: await authHeaders(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw Object.assign(new Error(describeApiError(data?.error, `Request failed with status ${response.status}`)), { response: { data } });
@@ -175,4 +176,10 @@ export const youtube = {
     privacyStatus?: 'private' | 'unlisted' | 'public';
     madeForKids?: boolean;
   }) => api.post('/api/youtube/publish', payload),
+};
+
+export const memory = {
+  list: async (limit = 50) => api.get('/api/memory?limit=' + encodeURIComponent(String(limit))),
+  forget: async (id: string) => api.delete('/api/memory/' + encodeURIComponent(id)),
+  forgetAll: async () => api.delete('/api/memory', { all: true, confirm: 'DELETE_ALL_MEMORY' }),
 };
