@@ -74,11 +74,6 @@ function makeStarter(displayName = 'there'): Message[] {
 const starter: Message[] = makeStarter();
 
 
-function looksLikeImageGenerationRequest(value: string): boolean {
-  const hasImageAction = /\b(generate|create|make|draw|illustrate|render)\b/i.test(value);
-  const hasImageNoun = /\b(image|picture|photo|illustration)\b/i.test(value);
-  return hasImageAction && hasImageNoun;
-}
 
 function renderInlineMarkdown(value: string) {
   const parts = value.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g);
@@ -688,95 +683,11 @@ function App() {
     }
   };
 
-  const handleChatCommand = (clean: string) => {
+  const handleLocalCommand = (clean: string) => {
     const value = clean.toLowerCase().replace(/[!?.,]+$/g, '').trim();
     let response = '';
 
-    const closeAll = () => {
-      setCommandOpen(false);
-      setMissionOpen(false);
-      setFactoryOpen(false);
-      setCapabilityOpen(false);
-      setBusinessOpen(false);
-      setVideoOpen(false);
-      setYoutubeOpen(false);
-      setImageLabOpen(false);
-      setSystemOpen(false);
-      setSecurityOpen(false);
-      setEmpireOpen(false);
-    };
-
-    const openTool = (tool: string) => {
-      closeAll();
-      if (tool === 'children') {
-        setFactoryOpen(true);
-        void loadMissions();
-        response = 'Children Factory is open. Give me an idea and I will prepare the story workflow for you.';
-      } else if (tool === 'video') {
-        void openVideoStudio();
-        response = 'Video Lab is open. I can help you build the production workflow from here.';
-      } else if (tool === 'youtube') {
-        void openYouTubeCenter();
-        response = 'YouTube Center is open. Publishing still requires the connected account and the existing approval gate.';
-      } else if (tool === 'business') {
-        void openBusinessCenter();
-        response = 'Business Center is open. You can manage your business profile and brand information there.';
-      } else if (tool === 'image') {
-        setImageLabOpen(true);
-        response = 'Image Lab is open. You can use it for dedicated image generation or editing; normal image requests can also stay in chat.';
-      } else if (tool === 'mission') {
-        setMissionOpen(true);
-        void loadMissions();
-        response = 'Mission Center is open.';
-      } else if (tool === 'security') {
-        setSecurityOpen(true);
-        runSecurityCheck();
-        void loadMissions();
-        response = 'Security Center is open.';
-      } else if (tool === 'system') {
-        setSystemOpen(true);
-        runSystemCheck();
-        response = 'System Center is running a browser-safe health check.';
-      } else if (tool === 'capabilities') {
-        setCapabilityOpen(true);
-        response = 'Capability Center is open. I can still route the supported actions for you from chat.';
-      } else if (tool === 'command') {
-        setCommandOpen(true);
-        response = 'Command Center is open.';
-      } else if (tool === 'empire') {
-        setEmpireOpen(true);
-        response = 'Empire Command is open.';
-      }
-    };
-
-    if (looksLikeImageGenerationRequest(clean)) return false;
-
-    const childrenRequest = /\\b(children|kids|kid|nursery|bedtime)\\b/i.test(value) && /\\b(factory|video|animation|animated|production|illustration workflow)\\b/i.test(value);
-    if (childrenRequest) {
-      openTool('children');
-    } else if (/\\b(open|show|launch|go to|take me to)\\b[\\s\\S]*\\b(children factory|children content factory)\\b|^children factory$|^children content factory$/.test(value)) {
-      openTool('children');
-    } else if (/\\b(open|show|launch|go to|take me to)\\b[\\s\\S]*\\b(image lab|image studio)\\b|^image lab$|^image studio$/.test(value)) {
-      openTool('image');
-    } else if (/\\b(open|show|launch|go to|take me to)\\b[\\s\\S]*\\b(video lab|video studio|video engine)\\b|^video lab$|^video studio$/.test(value)) {
-      openTool('video');
-    } else if (/\\b(open|show|launch|go to|take me to|connect)\\b[\\s\\S]*\\byoutube\\b|^youtube$/.test(value)) {
-      openTool('youtube');
-    } else if (/\\b(open|show|launch|go to|take me to)\\b[\\s\\S]*\\b(business center|business manager|brand kit)\\b|^business( center| manager)?$/.test(value)) {
-      openTool('business');
-    } else if (/\\b(open|show|launch|go to|take me to)\\b[\\s\\S]*\\b(mission center|missions)\\b|^mission center$|^missions$/.test(value)) {
-      openTool('mission');
-    } else if (/\\b(open|show|launch|go to|take me to|run)\\b[\\s\\S]*\\b(security center|security check)\\b|^security( center| check)?$/.test(value)) {
-      openTool('security');
-    } else if (/\\b(open|show|launch|go to|take me to|run)\\b[\\s\\S]*\\b(system center|system check|health check)\\b|^system( center| check)?$|^health check$/.test(value)) {
-      openTool('system');
-    } else if (/\\b(open|show|launch|go to|take me to)\\b[\\s\\S]*\\b(capabilit(?:y|ies)|what can you do|available tools)\\b|^capabilities$/.test(value)) {
-      openTool('capabilities');
-    } else if (/\\b(open|show|launch|go to|take me to)\\b[\\s\\S]*\\b(command center|commands)\\b|^command center$|^commands$/.test(value)) {
-      openTool('command');
-    } else if (/\\b(open|show|launch|go to|take me to)\\b[\\s\\S]*\\b(empire command)\\b|^empire command$/.test(value)) {
-      openTool('empire');
-    } else if (/^(export|download) (my )?memory$/.test(value)) {
+    if (/^(export|download) (my )?memory$/.test(value)) {
       exportMemory();
       response = 'Your local JARVIS memory export has been prepared.';
     } else if (/^(clear|delete) (my )?(local )?memory$/.test(value)) {
@@ -801,39 +712,68 @@ function App() {
     return true;
   };
 
-  const routeChatRequest = (route: any, clean: string) => {
-    const intent = String(route?.intent || '').trim();
-    const topCapability = String(route?.candidateCapabilities?.[0]?.id || '').trim();
-    if (intent === 'children-story') {
-      setFactoryTopic(clean.slice(0, 500));
+  const openRoutedSurface = (surface: string, routeReason = '', sourceText = '') => {
+    setCommandOpen(false);
+    setMissionOpen(false);
+    setFactoryOpen(false);
+    setCapabilityOpen(false);
+    setBusinessOpen(false);
+    setVideoOpen(false);
+    setYoutubeOpen(false);
+    setImageLabOpen(false);
+    setSystemOpen(false);
+    setSecurityOpen(false);
+    setEmpireOpen(false);
+
+    if (surface === 'children') {
+      if (routeReason === 'children-content-request') setFactoryTopic(sourceText.trim().slice(0, 500));
       setFactoryOpen(true);
       void loadMissions();
-      return 'I routed this to Children Factory. Your idea is ready in the story workflow; you can review it before starting production.';
-    }
-    if (intent === 'repair') {
-      setSystemOpen(true);
-      runSystemCheck();
-      return 'I routed this to Repair Office. JARVIS is running the read-only health check so we can see what actually needs attention.';
-    }
-    if (topCapability === 'video' && !['search', 'execute'].includes(String(route?.mode || ''))) {
+    } else if (surface === 'video') {
       setVideoOpen(true);
       setVideoError('');
-      setVideoTopic(clean.slice(0, 500));
+      if (routeReason === 'video-creation-request') setVideoTopic(sourceText.trim().slice(0, 500));
       void openVideoStudio();
-      return 'I routed this to Video Lab. The request is loaded into the production workflow for review.';
-    }
-    if (topCapability === 'business' && ['manage', 'decide'].includes(String(route?.mode || ''))) {
-      void openBusinessCenter();
-      return 'I routed this to Business Center. Your request can be handled from the business workspace.';
-    }
-    if (topCapability === 'youtube' && String(route?.mode || '') === 'execute') {
+    } else if (surface === 'youtube') {
       void openYouTubeCenter();
-      return 'I routed this to YouTube Center. Publishing remains behind the existing approval and account checks.';
-    }
-    if (topCapability === 'durable_missions' && ['execute', 'manage'].includes(String(route?.mode || ''))) {
+    } else if (surface === 'business') {
+      void openBusinessCenter();
+    } else if (surface === 'image') {
+      setImageLabOpen(true);
+    } else if (surface === 'mission') {
       setMissionOpen(true);
       void loadMissions();
-      return 'I routed this to Mission Center. The mission controls will show the current approval state before anything starts.';
+    } else if (surface === 'security') {
+      setSecurityOpen(true);
+      runSecurityCheck();
+      void loadMissions();
+    } else if (surface === 'system') {
+      setSystemOpen(true);
+      runSystemCheck();
+    } else if (surface === 'capabilities') {
+      setCapabilityOpen(true);
+    } else if (surface === 'command') {
+      setCommandOpen(true);
+    } else if (surface === 'empire') {
+      setEmpireOpen(true);
+    }
+  };
+
+  const routeChatRequest = (route: any, clean: string) => {
+    const surface = String(route?.surface || '').trim();
+    const action = String(route?.surfaceAction || 'chat').trim();
+    if (!surface || action === 'chat') return '';
+
+    if (action === 'open') {
+      openRoutedSurface(surface, String(route?.surfaceReason || ''), clean);
+      return surface === 'children' && route?.surfaceReason === 'children-content-request'
+        ? 'I routed this to Children Factory. Your idea is loaded into the story workflow for review.'
+        : `Opening ${surface.replace(/_/g, ' ')}.`;
+    }
+
+    if (action === 'generate' && surface === 'image') {
+      setImageLabOpen(true);
+      return '';
     }
     return '';
   };
@@ -841,43 +781,12 @@ function App() {
   const sendMessage = async (text = input) => {
     const clean = text.trim();
     if (!clean || busy) return;
-    if (handleChatCommand(clean)) return;
+    if (handleLocalCommand(clean)) return;
+
     const next = [...messages, { role: 'user' as const, content: clean }];
     setMessages(next);
     setInput('');
     setBusy(true);
-
-    try {
-      const routeResponse = await api.route.intent(next.slice(-16));
-      const route = routeResponse.data?.route || null;
-      const routedResponse = routeChatRequest(route, clean);
-      if (routedResponse) {
-        setMessages(current => [...current, { role: 'assistant', content: routedResponse }]);
-        if (voiceEnabled) void speak(routedResponse);
-        setBusy(false);
-        return;
-      }
-    } catch {
-      // Routing is a decision aid; if unavailable, the normal chat path remains available.
-    }
-    if (looksLikeImageGenerationRequest(clean)) {
-      try {
-        const response = await api.post('/api/image/generate', { prompt: clean });
-        const generated = response.data?.image;
-        if (!generated?.data || !generated?.mimeType) throw new Error('Invalid image response');
-        const image = { data: String(generated.data), mimeType: String(generated.mimeType) };
-        const answer = 'Done — I generated the image here in the chat.';
-        setMessages(current => [...current, { role: 'assistant', content: answer, image }]);
-        setInput('');
-        if (voiceEnabled) void speak(answer);
-      } catch (error: any) {
-        const detail = String(error?.response?.data?.error || error?.message || '').trim();
-        setMessages(current => [...current, { role: 'assistant', content: detail ? `JARVIS image generation error: ${detail}` : 'JARVIS could not generate the image right now. Please try again.' }]);
-      } finally {
-        setBusy(false);
-      }
-      return;
-    }
 
     try {
       let response;
@@ -894,13 +803,17 @@ function App() {
         }
       }
       if (!response) throw lastError ?? new Error('AI core request failed');
+
       const generatedImage = response.data?.image;
       if (generatedImage?.data && generatedImage?.mimeType) {
         setImagePrompt(clean);
         setImageResult(`data:${generatedImage.mimeType};base64,${generatedImage.data}`);
         setImageError('');
-        setImageLabOpen(true);
       }
+
+      const routing = response.data?.routing;
+      const routedResponse = routeChatRequest(routing, clean);
+
       const answer = safeText(
         response.data?.text,
         generatedImage
@@ -909,9 +822,14 @@ function App() {
       );
       setMessages(current => [
         ...current,
-        { role: 'assistant', content: answer },
+        { role: 'assistant', content: answer, ...(generatedImage?.data && generatedImage?.mimeType ? {
+          image: { data: String(generatedImage.data), mimeType: String(generatedImage.mimeType) },
+        } : {}) },
       ]);
       if (voiceEnabled) void speak(answer);
+
+      // The server made the routing decision; the browser only follows it.
+      void routedResponse;
     } catch (error: any) {
       const detail = safeText(error?.response?.data?.error, error?.message || '').trim();
       setMessages(current => [

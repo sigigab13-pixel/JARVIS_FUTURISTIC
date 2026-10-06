@@ -1446,6 +1446,9 @@ export async function handleApi(req, res, pathname, url) {
         candidateCapabilities: route.candidateCapabilities.map(item => item.id),
         referencesDetected: route.references.length,
         needsClarification: route.needsClarification,
+        surface: route.surface,
+        surfaceAction: route.surfaceAction,
+        surfaceReason: route.surfaceReason,
       } },
       userId ? { 'Set-Cookie': jarvisCookie(userId) } : {},
     );
