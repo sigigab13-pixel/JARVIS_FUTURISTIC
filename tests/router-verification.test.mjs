@@ -8,6 +8,7 @@ const caps = [
   { id: 'video', description: 'Plan and manage video production projects and pipeline jobs.', keywords: ['video', 'animation', 'reel', 'short', 'storyboard', 'film', 'movie'] },
   { id: 'web_intelligence', description: 'Search current information on the public web.', keywords: ['search', 'current', 'web', 'latest', 'research'] },
   { id: 'business', description: 'Manage business clients and workflows.', keywords: ['business', 'client', 'customer', 'manage'] },
+  { id: 'durable_missions', description: 'Long-running queued jobs with persistent state and worker processing.', keywords: ['mission', 'automate', 'schedule', 'monitor', 'background', 'workflow'] },
 ];
 
 function route(prompt) {
