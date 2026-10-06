@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getMissionAdapters, preflightMission } from '../server/mission-executor.mjs';
+import { getMissionAdapters, preflightMission, verifyMissionStepResult } from '../server/mission-executor.mjs';
 
 const userId = '44444444-4444-4444-8444-444444444444';
 const missionId = '55555555-5555-4555-8555-555555555555';
@@ -73,4 +73,35 @@ test('mission preflight requires approval for side effects', () => {
   }));
   assert.equal(result.ok, false);
   assert.match(result.unsafeWithoutApproval[0].reason, /approval required/);
+});
+
+test('mission preflight blocks execute-within-policy side effects without explicit policy authorization', () => {
+  const result = preflightMission(mission([
+    { id: 'step-1', executorType: 'routine_fanout', sideEffect: true },
+  ], {
+    autonomy: 'execute_within_policy',
+  }));
+  assert.equal(result.ok, false);
+  assert.equal(result.parentGate.violations[0].code, 'POLICY_AUTHORIZATION_REQUIRED');
+});
+
+test('mission step verification rejects adapter success without durable proof', () => {
+  const result = verifyMissionStepResult('image_generation', {
+    completed: true,
+    provider: 'test',
+  });
+  assert.equal(result.verified, false);
+  assert.equal(result.status, 'not_verified');
+});
+
+test('mission step verification confirms durable image evidence', () => {
+  const result = verifyMissionStepResult('image_generation', {
+    completed: true,
+    provider: 'test',
+    operation: 'image_generation',
+    mediaKey: 'jarvis/user/mission-image.png',
+    sha256: 'abc123',
+  });
+  assert.equal(result.verified, true);
+  assert.equal(result.status, 'confirmed');
 });
