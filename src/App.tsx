@@ -801,6 +801,43 @@ function App() {
     return true;
   };
 
+  const routeChatRequest = (route: any, clean: string) => {
+    const intent = String(route?.intent || '').trim();
+    const topCapability = String(route?.candidateCapabilities?.[0]?.id || '').trim();
+    if (intent === 'children-story') {
+      setFactoryTopic(clean.slice(0, 500));
+      setFactoryOpen(true);
+      void loadMissions();
+      return 'I routed this to Children Factory. Your idea is ready in the story workflow; you can review it before starting production.';
+    }
+    if (intent === 'repair') {
+      setSystemOpen(true);
+      runSystemCheck();
+      return 'I routed this to Repair Office. JARVIS is running the read-only health check so we can see what actually needs attention.';
+    }
+    if (topCapability === 'video' && !['search', 'execute'].includes(String(route?.mode || ''))) {
+      setVideoOpen(true);
+      setVideoError('');
+      setVideoTopic(clean.slice(0, 500));
+      void openVideoStudio();
+      return 'I routed this to Video Lab. The request is loaded into the production workflow for review.';
+    }
+    if (topCapability === 'business' && ['manage', 'decide'].includes(String(route?.mode || ''))) {
+      void openBusinessCenter();
+      return 'I routed this to Business Center. Your request can be handled from the business workspace.';
+    }
+    if (topCapability === 'youtube' && String(route?.mode || '') === 'execute') {
+      void openYouTubeCenter();
+      return 'I routed this to YouTube Center. Publishing remains behind the existing approval and account checks.';
+    }
+    if (topCapability === 'durable_missions' && ['execute', 'manage'].includes(String(route?.mode || ''))) {
+      setMissionOpen(true);
+      void loadMissions();
+      return 'I routed this to Mission Center. The mission controls will show the current approval state before anything starts.';
+    }
+    return '';
+  };
+
   const sendMessage = async (text = input) => {
     const clean = text.trim();
     if (!clean || busy) return;
@@ -809,6 +846,20 @@ function App() {
     setMessages(next);
     setInput('');
     setBusy(true);
+
+    try {
+      const routeResponse = await api.route.intent(next.slice(-16));
+      const route = routeResponse.data?.route || null;
+      const routedResponse = routeChatRequest(route, clean);
+      if (routedResponse) {
+        setMessages(current => [...current, { role: 'assistant', content: routedResponse }]);
+        if (voiceEnabled) void speak(routedResponse);
+        setBusy(false);
+        return;
+      }
+    } catch {
+      // Routing is a decision aid; if unavailable, the normal chat path remains available.
+    }
     if (looksLikeImageGenerationRequest(clean)) {
       try {
         const response = await api.post('/api/image/generate', { prompt: clean });
