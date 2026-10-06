@@ -196,6 +196,79 @@ export function buildChildrenFactoryPipeline({
   ];
 }
 
+export function buildChildrenFactoryDemoDraft(topic, age = 5) {
+  const cleanTopic = String(topic || 'sharing with friends').trim().slice(0, 500) || 'sharing with friends';
+  const safeAge = Number.isInteger(age) && age >= 3 && age <= 12 ? age : 5;
+  return {
+    title: 'Kobi and the ' + cleanTopic.slice(0, 48).replace(/[.!?]+$/g, ''),
+    story: [
+      'Kobi was exploring a bright garden when he noticed something interesting about ' + cleanTopic + '.',
+      'At first, Kobi wanted to keep the idea to himself, but he remembered that good things become even better when friends learn together.',
+      'He invited a friendly bird to help him, and together they tried three simple steps: notice the problem, help one another, and celebrate the result.',
+      'By the end of the afternoon, Kobi discovered that kindness and curiosity could turn an ordinary moment into a happy little adventure.',
+    ].join(' '),
+    character: {
+      name: 'Kobi',
+      species: 'African boy',
+      color: 'warm brown skin',
+      clothes: 'yellow shirt and blue shorts',
+      description: 'A cheerful young boy with a bright smile, simple child-friendly clothes, and a curious, kind personality.',
+    },
+    age: safeAge,
+  };
+}
+
+export function buildChildrenFactoryDemoFrame(scene, width = 270, height = 480) {
+  const sceneNumber = Math.min(3, Math.max(1, Number(scene) || 1));
+  const w = Math.max(90, Math.min(540, Math.floor(width)));
+  const h = Math.max(160, Math.min(960, Math.floor(height)));
+  const pixels = Buffer.alloc(w * h * 3);
+  const palettes = [
+    [[20, 66, 92], [90, 166, 139]],
+    [[66, 44, 102], [112, 186, 214]],
+    [[25, 92, 66], [232, 178, 89]],
+  ];
+  const [top, bottom] = palettes[sceneNumber - 1];
+  let offset = 0;
+  const clamp = value => Math.max(0, Math.min(255, Math.round(value)));
+  for (let y = 0; y < h; y += 1) {
+    const t = y / Math.max(1, h - 1);
+    const r = clamp(top[0] * (1 - t) + bottom[0] * t);
+    const g = clamp(top[1] * (1 - t) + bottom[1] * t);
+    const b = clamp(top[2] * (1 - t) + bottom[2] * t);
+    for (let x = 0; x < w; x += 1) {
+      let rr = r, gg = g, bb = b;
+      const dx = x - Math.round(w * 0.50);
+      const dy = y - Math.round(h * 0.44);
+      const headRadius = Math.round(Math.min(w, h) * 0.095);
+      if (dx * dx + dy * dy <= headRadius * headRadius) {
+        rr = 146; gg = 88; bb = 55;
+      }
+      const bodyTop = Math.round(h * 0.53);
+      const bodyBottom = Math.round(h * 0.72);
+      if (x > w * 0.41 && x < w * 0.59 && y >= bodyTop && y <= bodyBottom) {
+        rr = 240; gg = 204; bb = 52;
+      }
+      if (sceneNumber === 1 && (x - w * 0.72) ** 2 + (y - h * 0.22) ** 2 < (w * 0.085) ** 2) {
+        rr = 250; gg = 236; bb = 116;
+      }
+      if (sceneNumber === 2 && (x - w * 0.74) ** 2 + (y - h * 0.42) ** 2 < (w * 0.07) ** 2) {
+        rr = 224; gg = 243; bb = 255;
+      }
+      if (sceneNumber === 3 && y > h * 0.75 && x > w * 0.18 && x < w * 0.82) {
+        rr = 244; gg = 230; bb = 188;
+      }
+      pixels[offset++] = rr;
+      pixels[offset++] = gg;
+      pixels[offset++] = bb;
+    }
+  }
+  return Buffer.concat([
+    Buffer.from('P6\n' + w + ' ' + h + '\n255\n'),
+    pixels,
+  ]);
+}
+
 async function generateChildrenFactoryDraft(topic, age) {
   const hfToken = process.env.HUGGINGFACE_API_TOKEN || process.env.HF_TOKEN || '';
   if (!hfToken) {
@@ -737,6 +810,176 @@ export async function handleApi(req, res, pathname, url) {
     }
 
     return json(res, 404, { error: 'Mission action not found.' });
+  }
+
+  if (req.method === 'POST' && pathname === '/api/factory/children/demo') {
+    const { jarvisUser } = await requireAuthenticatedJarvisUser(req);
+    const body = await parseBody(req);
+    const topic = String(body?.topic || '').trim().slice(0, 500);
+    const age = Number(body?.age || 5);
+    if (!topic) return json(res, 400, { error: 'A story topic is required.' });
+    if (!Number.isInteger(age) || age < 3 || age > 12) return json(res, 400, { error: 'Age must be a whole number from 3 to 12.' });
+    if (!isSupabaseStorageConfigured()) {
+      return json(res, 503, { error: 'Supabase Storage is not configured for the zero-credit Children Factory demo.', code: 'CHILDREN_FACTORY_STORAGE_UNAVAILABLE' });
+    }
+
+    try {
+      const draft = buildChildrenFactoryDemoDraft(topic, age);
+      const project = await createVideoProjectForUser(jarvisUser.id, {
+        title: draft.title,
+        description: 'JARVIS Children Factory zero-credit demonstration package.',
+        format: '9:16',
+        story_bible: {
+          factory: 'children-v1',
+          mode: 'demo',
+          topic,
+          age,
+          story: draft.story,
+          character_bible: draft.character,
+        },
+      });
+      const character = await addVideoCharacterForUser(jarvisUser.id, project.id, {
+        name: draft.character.name,
+        role: 'main character',
+        profile: { species: draft.character.species, description: draft.character.description, age_target: age },
+        appearance: { color: draft.character.color },
+        wardrobe: { clothes: draft.character.clothes },
+        continuity_rules: { locked: true, identity_fields: ['name', 'species', 'color', 'clothes'] },
+      });
+
+      const initialMission = createMissionState({
+        missionId: crypto.randomUUID(),
+        userId: jarvisUser.id,
+        goal: 'Children Factory Demo: ' + draft.title,
+        autonomy: 'execute_with_approval',
+        steps: [],
+      });
+      initialMission.approval = { required: true, status: 'not_requested', requestedAt: null, approvedAt: null, action: 'publish' };
+      initialMission.metadata = {
+        factory: 'children-v1',
+        demo: true,
+        projectId: project.id,
+        characterId: character?.id || null,
+        topic,
+        age,
+        story: draft.story,
+        characterBible: draft.character,
+        images: [],
+        pipeline: buildChildrenFactoryPipeline({
+          sceneAssetsStatus: 'running',
+          approvalStatus: 'blocked',
+        }),
+      };
+      let mission = await createMissionForUser(
+        jarvisUser.id,
+        transitionMission(transitionMission(initialMission, 'queued'), 'running'),
+      );
+
+      const images = [];
+      for (let scene = 1; scene <= 3; scene += 1) {
+        const frame = buildChildrenFactoryDemoFrame(scene);
+        const sha256 = crypto.createHash('sha256').update(frame).digest('hex');
+        const mediaKey = createMediaKey({
+          userId: jarvisUser.id,
+          kind: 'children-factory-demo',
+          extension: 'ppm',
+          id: mission.id + '-scene-' + String(scene),
+        });
+        const media = await putMedia({
+          key: mediaKey,
+          body: frame,
+          contentType: 'image/x-portable-pixmap',
+          metadata: {
+            user_id: jarvisUser.id,
+            source: 'children_factory_demo',
+            mission_id: mission.id,
+            project_id: project.id,
+            scene,
+            sha256,
+          },
+          upsert: true,
+        });
+        images.push({ scene, sha256, media });
+      }
+
+      mission = await updateMissionForUser(jarvisUser.id, mission.id, {
+        ...mission,
+        metadata: {
+          ...(mission.metadata || {}),
+          images,
+          pipeline: buildChildrenFactoryPipeline({
+            sceneAssetsStatus: 'completed',
+            renderQueued: true,
+            approvalStatus: 'blocked',
+          }),
+        },
+      }, {
+        eventType: 'children_factory.demo_assets_ready',
+        message: 'Zero-credit demo assets were generated and stored without an image-provider call.',
+        metadata: { sceneCount: images.length, providerCalls: false, creditConsumption: 0 },
+      });
+
+      const job = await queueVideoJobForUser(jarvisUser.id, project.id, {
+        operation: 'render',
+        mission_id: mission.id,
+        image_keys: images.map(item => String(item.media?.path || item.media?.key || '')),
+        format: '9:16',
+        title: project.title,
+        demo: true,
+      }, 'children-factory-demo:' + mission.id + ':render');
+
+      let dispatch = { queued: false, provider: 'supabase' };
+      if (isRedisConfigured()) {
+        try {
+          dispatch = { queued: true, provider: 'upstash_redis', message: await enqueueJob(job.id, job.type) };
+        } catch (queueError) {
+          console.error('JARVIS Children Factory demo Redis dispatch warning:', queueError);
+          dispatch = { queued: false, provider: 'supabase', fallback: 'redis_unavailable' };
+        }
+      }
+
+      return json(res, 202, {
+        factory: 'children-v1',
+        mode: 'demo',
+        status: 'render_queued',
+        draft: {
+          project,
+          character,
+          story: draft.story,
+          characterBible: draft.character,
+          images,
+          pipeline: buildChildrenFactoryPipeline({
+            sceneAssetsStatus: 'completed',
+            renderQueued: true,
+            approvalStatus: 'blocked',
+          }),
+        },
+        renderJob: job,
+        approvalGate: {
+          required: true,
+          status: 'render_waiting',
+          missionId: mission.id,
+          label: 'Zero-credit demo render queued — approval remains required before publishing.',
+          autoPublish: false,
+          publishingProvider: 'youtube',
+          note: 'This demo does not call an image provider or consume image-generation credits.',
+        },
+        package: {
+          status: 'awaiting_verified_video',
+          publishReady: false,
+          approvalRequired: true,
+          providerCalls: 0,
+          imageCreditsConsumed: 0,
+        },
+        dispatch,
+      }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+    } catch (error) {
+      console.error('JARVIS Children Factory demo error:', error);
+      return json(res, Number(error?.statusCode) || 502, {
+        error: error instanceof Error ? error.message : 'Children Factory demo failed.',
+        code: 'CHILDREN_FACTORY_DEMO_FAILED',
+      });
+    }
   }
 
   if (req.method === 'POST' && pathname === '/api/factory/children') {
