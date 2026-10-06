@@ -5,8 +5,10 @@ import { routeIntent } from '../server/intent-router.mjs';
 const caps = [
   { id: 'image', description: 'Generate and edit images.', keywords: ['image', 'picture', 'photo', 'illustration', 'illustrate', 'draw', 'thumbnail', 'poster'] },
   { id: 'youtube', description: 'Upload and publish videos to YouTube.', keywords: ['youtube', 'upload', 'publish'] },
+  { id: 'video', description: 'Plan and manage video production projects and pipeline jobs.', keywords: ['video', 'animation', 'reel', 'short', 'storyboard', 'film', 'movie'] },
   { id: 'web_intelligence', description: 'Search current information on the public web.', keywords: ['search', 'current', 'web', 'latest', 'research'] },
   { id: 'business', description: 'Manage business clients and workflows.', keywords: ['business', 'client', 'customer', 'manage'] },
+  { id: 'durable_missions', description: 'Long-running queued jobs with persistent state and worker processing.', keywords: ['mission', 'automate', 'schedule', 'monitor', 'background', 'workflow'] },
 ];
 
 function route(prompt) {
@@ -84,4 +86,22 @@ test('contextual and management prompts preserve grounding requirements', () => 
   const management = route('manage my business customers');
   assert.equal(management.mode, 'manage');
   assert.ok(management.candidateCapabilities.some(item => item.id === 'business'));
+});
+
+
+test('routes supported product surfaces from natural-language intent', () => {
+  const cases = [
+    ['make a bedtime story about sharing for kids', 'children-story', ''],
+    ['the login is broken, check what is wrong', 'repair', ''],
+    ['help me create a video about a friendly robot', 'chat', 'video'],
+    ['manage my business customers', 'chat', 'business'],
+    ['publish my approved video to YouTube', 'chat', 'youtube'],
+    ['run this mission in the background', 'chat', 'durable_missions'],
+  ];
+
+  for (const [prompt, intent, capability] of cases) {
+    const result = route(prompt);
+    assert.equal(result.intent, intent, 'Expected "' + prompt + '" -> ' + intent + ', got ' + result.intent);
+    if (capability) assert.ok(result.candidateCapabilities.some(item => item.id === capability), 'Missing ' + capability + ' for "' + prompt + '"');
+  }
 });

@@ -1179,6 +1179,33 @@ export async function handleApi(req, res, pathname, url) {
     });
   }
 
+  if (req.method === 'POST' && pathname === '/api/route') {
+    const input = await parseBody(req);
+    const messages = Array.isArray(input.messages)
+      ? input.messages
+        .filter(m => ['user', 'assistant'].includes(String(m?.role)) && String(m?.content || '').trim())
+        .slice(-16)
+        .map(m => ({ role: String(m.role), content: String(m.content).slice(0, 12000) }))
+      : [];
+    if (!messages.length) return json(res, 400, { error: 'A message is required.' });
+
+    const authenticated = await getOptionalAuthenticatedJarvisUser(req);
+    const route = routeIntent({
+      messages,
+      availableCapabilities: getAvailableCapabilities(),
+      user: authenticated?.jarvisUser || null,
+    });
+
+    return json(res, 200, {
+      route: { ...route, authenticatedUserId: null },
+      evidence: {
+        generatedAt: new Date().toISOString(),
+        sideEffects: false,
+        providerCalls: false,
+      },
+    }, authenticated?.jarvisUser ? { 'Set-Cookie': jarvisCookie(authenticated.jarvisUser.id) } : {});
+  }
+
   if (req.method === 'POST' && pathname === '/api/chat') {
     const input = await parseBody(req);
     const messages = Array.isArray(input.messages)

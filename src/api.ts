@@ -117,6 +117,11 @@ async function blobToBase64(blob: Blob): Promise<string> {
 }
 
 
+export const route = {
+  intent: async (messages: Array<{ role: 'user' | 'assistant'; content: string }>) =>
+    api.post('/api/route', { messages }),
+};
+
 export const repairOffice = {
   diagnostics: async () => api.get('/api/repair/diagnostics'),
 };
