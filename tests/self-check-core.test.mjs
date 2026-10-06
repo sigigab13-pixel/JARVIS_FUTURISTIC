@@ -44,11 +44,12 @@ test('does not auto-repair an empty response', () => {
   assert.equal(result.repairable, false);
 });
 
-test('deterministic normalization removes known formatting leaks', () => {
-  const result = selfCheckAndNormalize('Hello [object Object] undefined');
+test('deterministic normalization only normalizes safe formatting', () => {
+  const result = selfCheckAndNormalize('  Hello [object Object]  ');
   assert.equal(result.repaired, true);
-  assert.equal(result.text, 'Hello');
-  assert.equal(result.after.ok, true);
+  assert.equal(result.text, 'Hello [object Object]');
+  assert.equal(result.after.ok, false);
+  assert.equal(result.after.issues[0].code, 'OBJECT_SERIALIZATION_LEAK');
 });
 
 test('repair instruction is bounded and user-facing', () => {
