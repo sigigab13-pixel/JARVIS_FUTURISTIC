@@ -41,9 +41,13 @@ export function parseMemoryDeletionRequest(body = {}) {
       : { mode: 'invalid', reason: 'A valid memory id is required.' };
   }
 
-  if (body?.all === true) {
+  if (body?.all === true && body?.confirm === 'DELETE_ALL_MEMORY') {
     return { mode: 'all' };
   }
 
-  return { mode: 'invalid', reason: 'Provide a memory id or set all=true.' };
+  if (body?.all === true) {
+    return { mode: 'invalid', reason: 'Deleting all memory requires explicit confirmation.' };
+  }
+
+  return { mode: 'invalid', reason: 'Provide a memory id or set all=true with confirmation.' };
 }
