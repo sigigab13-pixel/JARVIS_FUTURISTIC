@@ -3,11 +3,21 @@ import assert from 'node:assert/strict';
 import { routeIntent, routeContextForPrompt } from '../server/intent-router.mjs';
 
 const caps = [
-  { id: 'image', description: 'Generate and edit images.', keywords: ['image', 'picture', 'photo'] },
+  { id: 'image', description: 'Generate and edit images.', keywords: ['image', 'picture', 'photo', 'illustration', 'draw', 'thumbnail', 'poster'] },
   { id: 'youtube', description: 'Upload and publish videos to YouTube.', keywords: ['youtube', 'upload', 'publish'] },
-  { id: 'web_intelligence', description: 'Search current information on the public web.', keywords: ['search', 'current', 'web'] },
-  { id: 'business', description: 'Manage business clients and workflows.', keywords: ['business', 'client', 'customer'] },
+  { id: 'video', description: 'Plan and manage video production projects and pipeline jobs.', keywords: ['video', 'animation', 'reel', 'short', 'storyboard', 'film', 'movie'] },
+  { id: 'web_intelligence', description: 'Search current information on the public web.', keywords: ['search', 'current', 'web', 'latest', 'research'] },
+  { id: 'business', description: 'Manage business clients and workflows.', keywords: ['business', 'client', 'customer', 'manage'] },
+  { id: 'durable_missions', description: 'Long-running queued jobs with persistent state and worker processing.', keywords: ['mission', 'automate', 'schedule', 'monitor', 'background', 'workflow'] },
 ];
+
+function route(prompt) {
+  return routeIntent({
+    messages: [{ role: 'user', content: prompt }],
+    availableCapabilities: caps,
+  });
+}
+
 
 test('routes create intent with candidate capabilities', () => {
   const route = routeIntent({
