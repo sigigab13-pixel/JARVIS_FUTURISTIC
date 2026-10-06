@@ -66,6 +66,7 @@ import { formatDecisionMemory, parseExplicitDecision } from './decision-memory.m
 import { buildRepairInstruction, inspectAssistantResponse, selfCheckAndNormalize } from './self-check-core.mjs';
 import { assessUncertainty, buildEpistemicInstruction } from './uncertainty-core.mjs';
 import { normalizeMemoryList, parseMemoryDeletionRequest } from './memory-control.mjs';
+import { buildTimeAwarenessInstruction, getTimeContextForRequest } from './time-freshness-core.mjs';
 
 const PORT = Number(process.env.PORT || 10000);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -1389,6 +1390,17 @@ export async function handleApi(req, res, pathname, url) {
       ? `Relevant long-term memories for this user, ranked by relevance and importance:\n${semanticMemories.map((m, i) => `${i + 1}. [${String(m.memory_type || 'memory')}] ${String(m.content || '').trim()}`).join('\n')}\nUse only memories that genuinely help answer the current request. Prefer identity, preferences, goals, project decisions, decision memories, and explicit instructions when relevant. Treat active JARVIS decision memories as user constraints: do not re-propose a rejected alternative unless the user explicitly reopens it or relevant circumstances have materially changed, and explain the change when appropriate. Do not mention the memory system unless asked.`
       : '';
 
+    const timeContext = getTimeContextForRequest({
+      latestUserMessage,
+      route,
+      memories: semanticMemories,
+    });
+    const timeAwareness = buildTimeAwarenessInstruction({
+      timeContext,
+      timeSensitive: timeContext.timeSensitive,
+      potentiallyStaleMemoryCount: timeContext.potentiallyStaleMemoryCount,
+    });
+
     const systemMessage = [
 `You are JARVIS FUTURISTIC, the AI assistant for ${userIdentity}.`,
       `JARVIS was created by ${JARVIS_CREATOR_NAME}. If asked who created you, answer with that creator identity and do not confuse it with the current user's identity.`,
@@ -1397,6 +1409,7 @@ export async function handleApi(req, res, pathname, url) {
         ? `Likely capabilities for the current request (hints, not execution): ${intentCandidates.map(item => item.id).join(', ')}`
         : 'No capability was confidently identified from simple routing hints; use reasoning and available tools rather than inventing a capability.',
       routeContextForPrompt(route),
+      timeAwareness,
       "The JARVIS application provides you with the current conversation messages and, when available, relevant long-term memories retrieved from its persistent memory system.",
       "Use the supplied conversation and memory context to maintain continuity. Do not claim that you cannot remember previous conversations when relevant history or memory is supplied.",
       "Do not describe yourself as ChatGPT, Claude, Hugging Face, or another underlying model unless the user explicitly asks which model/provider is being used.",
@@ -1622,6 +1635,7 @@ export async function handleApi(req, res, pathname, url) {
           repairAttempted: selfRepairAttempted,
           detectedIssues: initialSelfCheck.before.issues.map(item => item.code),
           epistemic: assessUncertainty({ latestUserMessage, route, responseText: text, webSearchUsed }),
+          time: timeContext,
         },
         routing: {
         mode: route.mode,
