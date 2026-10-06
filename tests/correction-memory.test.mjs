@@ -16,6 +16,14 @@ test('parses an explicit name correction', () => {
   assert.match(correction.statement, /Saviour/);
 });
 
+test('parses direct name correction wording', () => {
+  const correction = parseUserCorrection('My name is Atlas, not Nova.');
+  assert.equal(correction.scope, 'identity');
+  assert.equal(correction.field, 'name');
+  assert.equal(correction.previous, 'Nova');
+  assert.equal(correction.current, 'Atlas');
+});
+
 test('parses a do-not-call-me correction', () => {
   const correction = parseUserCorrection("Don't call me Victory, call me Saviour.");
   assert.equal(correction.previous, 'Victory');
