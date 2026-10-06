@@ -59,7 +59,7 @@ test('server-owned surface routing resolves navigation and task requests', () =>
     ['create an image of a friendly robot', 'image', 'generate'],
     ['help me create a video about a friendly robot', 'video', 'open'],
     ['manage my business customers', 'business', 'open'],
-    ['run this mission in the background', 'durable_missions', 'open'],
+    ['run this mission in the background', 'mission', 'open'],
   ];
 
   for (const [prompt, surface, action] of cases) {
