@@ -1,4 +1,5 @@
 const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
+import { extractWebCitations } from './provenance-core.mjs';
 
 export const DEFAULT_FAST_MODEL = 'gpt-6-luna';
 export const DEFAULT_REASONING_MODEL = 'gpt-6.1-sol';
@@ -139,6 +140,7 @@ export async function callOpenAIResponses({
     responseId: cleanText(data?.id, 200),
     usage: data?.usage || null,
     webSearchUsed: Array.isArray(data?.output) && data.output.some(item => String(item?.type || '').includes('search')),
+    webCitations: extractWebCitations(data),
   };
 }
 
