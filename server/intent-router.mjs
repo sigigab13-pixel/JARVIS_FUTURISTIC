@@ -174,7 +174,9 @@ export function routeContextForPrompt(route) {
     `- intent: ${route.intent || 'chat'}`,
     `- mode: ${route.mode}`,
     `- candidate capabilities: ${route.candidateCapabilities?.map(item => item.id).join(', ') || 'none confidently identified'}`,
-    `- surface: ${route.surface || 'none'}`,\n    `- surface action: ${route.surfaceAction || 'chat'}`,\n    `- contextual references detected: ${route.references?.length || 0}`,
+    `- surface: ${route.surface || 'none'}`,
+    `- surface action: ${route.surfaceAction || 'chat'}`,
+    `- contextual references detected: ${route.references?.length || 0}`,
     '- Treat references as unresolved until they can be grounded in the supplied conversation, files, memory, or tool context.',
   ];
   if (route.needsClarification) lines.push('- A reference appears unresolved because there is not enough prior context. Ask one focused question if it materially affects the task.');
