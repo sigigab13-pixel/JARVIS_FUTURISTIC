@@ -150,6 +150,26 @@ export const video = {
     api.get(`/api/video/jobs/${encodeURIComponent(jobId)}`),
 };
 
+export const contentStrategy = {
+  config: async () => api.get('/api/content/strategy/config'),
+  build: async (payload: {
+    series?: string;
+    topic: string;
+    age?: number;
+    format?: string;
+    platforms?: string[];
+    hook?: string;
+  }) => api.post('/api/content/strategy', payload),
+  score: async (payload: {
+    topic: string;
+    clarity?: number;
+    curiosity?: number;
+    educationalValue?: number;
+    seriesFit?: number;
+    productionEase?: number;
+  }) => api.post('/api/content/strategy/score', payload),
+};
+
 export const youtube = {
   status: async () => api.get('/api/youtube/status'),
   connect: async () => api.get('/api/youtube/connect'),

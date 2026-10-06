@@ -319,3 +319,10 @@ See the active queues: [#17 Future-Ready Cryptography](https://github.com/sigiga
 **GPT-5.6 Luna** — AI development partner helping build, debug, document, and evolve the platform.
 
 > **JARVIS Futuristic is being built in public — one verified capability at a time.**
+
+
+## 🧠 Content Strategy Office
+
+Phase 3C adds an isolated planning layer for JARVIS content production. It creates platform packaging, two title/thumbnail variants, age targeting, series metadata, and a deterministic idea score without calling external media providers or publishing anything. Children content remains review- and approval-gated.
+
+Endpoints: `GET /api/content/strategy/config`, `POST /api/content/strategy`, and `POST /api/content/strategy/score`.
