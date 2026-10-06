@@ -71,6 +71,7 @@ import { buildContradictionInstruction, detectMemoryContradictions } from './con
 import { formatCorrectionMemory, parseUserCorrection } from './correction-memory.mjs';
 import { assessActionUncertainty, buildUncertaintyManagerInstruction } from './uncertainty-manager-core.mjs';
 import { simulateWorkflow } from './workflow-simulator-core.mjs';
+import { evaluateMissionOutcome, buildRegressionSignal, detectEvaluationDegradation, compareEvaluationRuns } from './agent-evaluation-core.mjs';
 import { buildProvenance, extractWebCitations } from './provenance-core.mjs';
 import { planGoal } from './goal-outcome-core.mjs';
 
@@ -329,6 +330,57 @@ export async function handleApi(req, res, pathname, url) {
       approvalStatus: body?.approvalStatus || body?.mission?.approval?.status || null,
     });
     return json(res, 200, simulation);
+  }
+
+  if (req.method === 'POST' && pathname === '/api/evaluation/mission') {
+    const { jarvisUser } = await requireAuthenticatedJarvisUser(req);
+    const body = await parseBody(req);
+    const missionId = String(body?.missionId || '').trim();
+    if (!missionId) return json(res, 400, { error: 'missionId is required.' });
+
+    const mission = await getMissionForUser(jarvisUser.id, missionId);
+    if (!mission) return json(res, 404, { error: 'Mission not found.' });
+
+    const evaluation = evaluateMissionOutcome({
+      mission,
+      criteria: body?.criteria && typeof body.criteria === 'object' ? body.criteria : {},
+      observation: body?.observation && typeof body.observation === 'object' ? body.observation : {},
+    });
+    const regression = buildRegressionSignal({
+      evaluation,
+      userCorrection: body?.userCorrection,
+      context: {
+        capability: body?.capability,
+        version: body?.version,
+        missionId,
+      },
+    });
+
+    return json(res, 200, {
+      missionId,
+      evaluation,
+      regression,
+      productionWorkflowMutation: 'forbidden',
+    }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+  }
+
+  if (req.method === 'POST' && pathname === '/api/evaluation/degradation') {
+    await requireAuthenticatedJarvisUser(req);
+    const body = await parseBody(req);
+    return json(res, 200, detectEvaluationDegradation({
+      baseline: body?.baseline && typeof body.baseline === 'object' ? body.baseline : {},
+      current: body?.current && typeof body.current === 'object' ? body.current : {},
+      thresholds: body?.thresholds && typeof body.thresholds === 'object' ? body.thresholds : {},
+    }));
+  }
+
+  if (req.method === 'POST' && pathname === '/api/evaluation/compare') {
+    await requireAuthenticatedJarvisUser(req);
+    const body = await parseBody(req);
+    return json(res, 200, compareEvaluationRuns({
+      baseline: body?.baseline && typeof body.baseline === 'object' ? body.baseline : {},
+      candidate: body?.candidate && typeof body.candidate === 'object' ? body.candidate : {},
+    }));
   }
 
   if (req.method === 'GET' && pathname === '/api/business') {
