@@ -57,6 +57,7 @@ import { createMissionState, transitionMission, advanceMissionStep } from './mis
 import { preflightMission, getMissionAdapters } from './mission-executor.mjs';
 import { generateHuggingFaceImage, HF_IMAGE_MODELS, HF_IMAGE_EDIT_MODELS, HF_IMAGE_PROVIDERS } from './image-generator.mjs';
 import { getYouTubeAccessToken, getYouTubeAnalytics, getYouTubeChannel, uploadYouTubeVideo } from './youtube.mjs';
+import { getRepairOfficePolicy } from './repair-office.mjs';
 
 const PORT = Number(process.env.PORT || 10000);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -270,6 +271,16 @@ async function generateChildrenFactoryDraft(topic, age) {
 export async function handleApi(req, res, pathname, url) {
   if (req.method === 'GET' && pathname === '/api/_healthcheck') {
     return json(res, 200, { message: 'Success', service: 'JARVIS', deployment: 'vercel' });
+  }
+
+  if (req.method === 'GET' && pathname === '/api/repair/health') {
+    await requireAuthenticatedJarvisUser(req);
+    return json(res, 200, {
+      service: 'JARVIS Repair Office',
+      mode: 'diagnose-and-escalate',
+      policy: getRepairOfficePolicy(),
+      message: 'Repair Office is bounded: it may classify failures and recommend safe recovery, but it cannot mutate production autonomously.',
+    });
   }
 
   if (req.method === 'GET' && pathname === '/api/capabilities') {
