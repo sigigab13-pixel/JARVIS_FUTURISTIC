@@ -85,3 +85,21 @@ test('contextual and management prompts preserve grounding requirements', () => 
   assert.equal(management.mode, 'manage');
   assert.ok(management.candidateCapabilities.some(item => item.id === 'business'));
 });
+
+
+test('routes supported product surfaces from natural-language intent', () => {
+  const cases = [
+    ['make a bedtime story about sharing for kids', 'children-story', ''],
+    ['the login is broken, check what is wrong', 'repair', ''],
+    ['help me create a video about a friendly robot', 'chat', 'video'],
+    ['manage my business customers', 'chat', 'business'],
+    ['publish my approved video to YouTube', 'chat', 'youtube'],
+    ['run this mission in the background', 'chat', 'durable_missions'],
+  ];
+
+  for (const [prompt, intent, capability] of cases) {
+    const result = route(prompt);
+    assert.equal(result.intent, intent, 'Expected "' + prompt + '" -> ' + intent + ', got ' + result.intent);
+    if (capability) assert.ok(result.candidateCapabilities.some(item => item.id === capability), 'Missing ' + capability + ' for "' + prompt + '"');
+  }
+});
