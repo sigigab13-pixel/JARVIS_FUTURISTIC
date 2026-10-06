@@ -86,3 +86,18 @@ test('maps supported natural-language task requests without frontend regex rules
     assert.ok(['open', 'generate'].includes(result.surfaceAction));
   }
 });
+test('does not open a surface merely because the message mentions one', () => {
+  for (const prompt of [
+    'Tell me about YouTube',
+    'I use the image lab sometimes',
+    'What is the mission of this project?',
+    'My business is growing fast',
+  ]) {
+    const result = routeIntent({
+      messages: [{ role: 'user', content: prompt }],
+      availableCapabilities: caps,
+    });
+    assert.equal(result.surface, null, 'Unexpected surface for "' + prompt + '"');
+    assert.equal(result.surfaceAction, 'chat');
+  }
+});
