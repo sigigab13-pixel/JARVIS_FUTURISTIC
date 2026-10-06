@@ -1230,6 +1230,46 @@ export async function handleApi(req, res, pathname, url) {
 
     const childrenFactoryRoute = route.intent === 'children-story';
 
+    const surfaceLabels = {
+      children: 'Children Factory',
+      image: 'Image Lab',
+      video: 'Video Lab',
+      youtube: 'YouTube Center',
+      business: 'Business Center',
+      mission: 'Mission Center',
+      security: 'Security Center',
+      system: 'System Center',
+      capabilities: 'Capability Center',
+      command: 'Command Center',
+      empire: 'Empire Command',
+    };
+    if (route.surfaceAction === 'open' && route.surface) {
+      const responseText = 'Opening ' + String(surfaceLabels[route.surface] || 'the requested JARVIS surface') + '.';
+      if (userId) {
+        await appendConversationMessages(userId, [
+          { role: 'user', content: latestUserMessage },
+          { role: 'assistant', content: responseText },
+        ]);
+      }
+      return json(res, 200, {
+        text: responseText,
+        routing: {
+          mode: route.mode,
+          intent: route.intent || 'chat',
+          surface: route.surface,
+          surfaceAction: route.surfaceAction,
+          surfaceReason: route.surfaceReason,
+          factory: childrenFactoryRoute ? 'children-v1' : null,
+          factoryEndpoint: childrenFactoryRoute ? '/api/factory/children' : null,
+          candidateCapabilities: route.candidateCapabilities.map(item => item.id),
+          referencesDetected: route.references.length,
+          needsClarification: route.needsClarification,
+        },
+        persistent: Boolean(userId),
+        guest: !userId,
+      }, userId ? { 'Set-Cookie': jarvisCookie(userId) } : {});
+    }
+
     const imageAction = /\b(generate|create|make|draw|illustrate|render)\b/i.test(latestUserMessage);
     const imageNoun = /\b(image|picture|photo|illustration)\b/i.test(latestUserMessage);
     const imageRequest = imageAction && imageNoun;
@@ -1446,6 +1486,9 @@ export async function handleApi(req, res, pathname, url) {
         candidateCapabilities: route.candidateCapabilities.map(item => item.id),
         referencesDetected: route.references.length,
         needsClarification: route.needsClarification,
+        surface: route.surface,
+        surfaceAction: route.surfaceAction,
+        surfaceReason: route.surfaceReason,
       } },
       userId ? { 'Set-Cookie': jarvisCookie(userId) } : {},
     );
