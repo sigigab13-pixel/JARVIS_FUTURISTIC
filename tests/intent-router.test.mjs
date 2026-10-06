@@ -40,3 +40,49 @@ test('provides prompt-safe routing context', () => {
   });
   assert.match(context, /web_intelligence/);
 });
+
+test('maps explicit product navigation to one canonical surface', () => {
+  const cases = [
+    ['open the children factory', 'children'],
+    ['show me the image lab', 'image'],
+    ['launch video studio', 'video'],
+    ['take me to YouTube', 'youtube'],
+    ['open business manager', 'business'],
+    ['show missions', 'mission'],
+    ['run a security check', 'security'],
+    ['open system center', 'system'],
+    ['what can you do', 'capabilities'],
+    ['open command center', 'command'],
+    ['open empire command', 'empire'],
+  ];
+
+  for (const [prompt, surface] of cases) {
+    const result = routeIntent({
+      messages: [{ role: 'user', content: prompt }],
+      availableCapabilities: caps,
+    });
+    assert.equal(result.surface, surface, 'Expected "' + prompt + '" -> ' + surface);
+    assert.equal(result.surfaceAction, 'open');
+  }
+});
+
+test('maps supported natural-language task requests without frontend regex rules', () => {
+  const cases = [
+    ['make a bedtime story for a child', 'children'],
+    ['make a short animated video for my channel', 'video'],
+    ['publish this approved video on youtube', 'youtube'],
+    ['manage my business customers', 'business'],
+    ['schedule a background mission', 'mission'],
+    ['fix the broken login flow', 'system'],
+    ['create an image of a friendly robot', 'image'],
+  ];
+
+  for (const [prompt, surface] of cases) {
+    const result = routeIntent({
+      messages: [{ role: 'user', content: prompt }],
+      availableCapabilities: caps,
+    });
+    assert.equal(result.surface, surface, 'Expected "' + prompt + '" -> ' + surface);
+    assert.ok(['open', 'generate'].includes(result.surfaceAction));
+  }
+});
