@@ -9,6 +9,8 @@ import {
 } from './store.mjs';
 import { createMediaKey, isSupabaseStorageConfigured, putMedia } from './media.mjs';
 import { generateHuggingFaceImage } from './image-generator.mjs';
+import { inspectMissionAgainstParentLaws } from './parent-laws-core.mjs';
+import { verifyToolResult } from './verification-core.mjs';
 
 async function executeImageGeneration(job) {
   const payload = job?.payload && typeof job.payload === 'object' ? job.payload : {};
@@ -113,6 +115,15 @@ export function preflightMission(mission) {
     return { ok: false, reason: 'Mission has no executable steps.' };
   }
 
+  const parentGate = inspectMissionAgainstParentLaws(mission);
+  if (!parentGate.ok) {
+    return {
+      ok: false,
+      reason: 'Mission is blocked by one or more JARVIS Parent Laws.',
+      parentGate,
+    };
+  }
+
   const unsupported = [];
   const unsafeWithoutApproval = [];
   steps.forEach((step, index) => {
@@ -128,17 +139,31 @@ export function preflightMission(mission) {
 
   if (unsupported.length) return { ok: false, reason: 'Mission contains unsupported execution adapters.', unsupported };
   if (unsafeWithoutApproval.length) return { ok: false, reason: 'Mission contains side-effect steps that are not authorized.', unsafeWithoutApproval };
-  return { ok: true, adapters: steps.map(stepAdapterType) };
+  return { ok: true, adapters: steps.map(stepAdapterType), parentGate };
 }
 
-function verifiedEvidence(adapter, result) {
-  return {
-    verified: true,
+export function verifyMissionStepResult(adapter, result) {
+  const evidence = {
     adapter,
-    completed: true,
-    completedAt: new Date().toISOString(),
-    result: result && typeof result === 'object' ? result : { value: result },
+    provider: result?.provider || null,
+    operation: result?.operation || null,
+    asset: result?.media?.path || result?.mediaKey || null,
+    checksum: result?.sha256 || null,
+    routineRunId: result?.routineRunId || null,
+    childJobCount: Array.isArray(result?.childJobIds) ? result.childJobIds.length : null,
   };
+
+  const hasDurableProof =
+    Boolean(evidence.asset && evidence.checksum) ||
+    Boolean(evidence.routineRunId) ||
+    Boolean(evidence.childJobCount && evidence.childJobCount > 0);
+
+  return verifyToolResult(
+    {
+      success: result?.completed === true || result?.accepted === true || result?.status === 'fanout_complete',
+      metadata: { evidence: hasDurableProof ? evidence : null },
+    },
+  );
 }
 
 export async function executeMissionStep(job) {
@@ -168,15 +193,25 @@ export async function executeMissionStep(job) {
   if (current.currentStep !== stepIndex) {
     const existingStep = current.steps?.[stepIndex];
     if (existingStep?.status === 'succeeded') {
-      return {
-        accepted: true,
-        completed: true,
-        idempotent: true,
-        missionId,
-        stepIndex,
-        status: 'already_completed',
-        evidence: verifiedEvidence(stepAdapterType(existingStep), { idempotent: true }),
-      };
+      const idempotentEvidence = verifyMissionStepResult(stepAdapterType(existingStep), {
+      accepted: true,
+      status: 'already_completed',
+      routineRunId: String(current?.metadata?.routineRunId || ''),
+      mediaKey: existingStep?.mediaKey || current?.lastEvidence?.result?.mediaKey || null,
+      sha256: existingStep?.sha256 || current?.lastEvidence?.result?.sha256 || null,
+    });
+    if (!idempotentEvidence.verified) {
+      throw Object.assign(new Error('Previously completed mission step has no verifiable completion evidence.'), { code: 'MISSION_COMPLETION_NOT_VERIFIED' });
+    }
+    return {
+      accepted: true,
+      completed: true,
+      idempotent: true,
+      missionId,
+      stepIndex,
+      status: 'already_completed',
+      evidence: idempotentEvidence,
+    };
     }
     throw Object.assign(new Error('Mission step is not the current executable step.'), { code: 'MISSION_STEP_OUT_OF_ORDER' });
   }
@@ -194,7 +229,13 @@ export async function executeMissionStep(job) {
   if (!adapterFn) throw Object.assign(new Error('Mission adapter is not available.'), { code: 'MISSION_ADAPTER_UNAVAILABLE' });
 
   const result = await adapterFn(job);
-  const evidence = verifiedEvidence(adapter, result);
+  const evidence = verifyMissionStepResult(adapter, result);
+  if (!evidence.verified) {
+    throw Object.assign(new Error(evidence.message), {
+      code: 'MISSION_COMPLETION_NOT_VERIFIED',
+      details: evidence,
+    });
+  }
   const next = advanceMissionStep({
     ...current,
     lastEvidence: evidence,
