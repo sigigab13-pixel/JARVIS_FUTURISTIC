@@ -48,7 +48,7 @@ select
   split_part(o.name, '/', 2)::uuid,
   o.bucket_id,
   o.name,
-  nullif(split_part(o.name, '/', 3), '') or 'media',
+  coalesce(nullif(split_part(o.name, '/', 3), ''), 'media'),
   coalesce(o.metadata->>'mimetype', o.metadata->>'contentType'),
   coalesce(nullif(o.metadata->>'size', '')::bigint, 0),
   'protected',
