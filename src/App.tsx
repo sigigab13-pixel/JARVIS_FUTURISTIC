@@ -497,6 +497,45 @@ function App() {
     }
   };
 
+  const watchChildrenFactoryRender = async (missionId: string, jobId: string) => {
+    for (let attempt = 0; attempt < 45; attempt += 1) {
+      const response = await api.video.job(jobId);
+      const job = response.data?.job;
+      if (!job) throw new Error('Children Factory demo render job could not be found.');
+      setFactoryRenderJob(job);
+      if (job.status === 'succeeded') {
+        const result = job.result || {};
+        const mediaKey = String(result.mediaKey || result.media?.path || result.media?.key || '').trim();
+        if (!mediaKey) throw new Error('Demo render completed without a stored video media key.');
+        const missionResponse = await api.missions.list();
+        const mission = (missionResponse.data?.missions || []).find((item: any) => String(item?.id || '') === missionId);
+        setFactoryDraft((current: any) => current
+          ? {
+              ...current,
+              mission: mission || current.mission,
+              renderedVideo: result,
+              package: {
+                status: mission?.approval?.status === 'approved' ? 'publish_ready' : 'awaiting_approval',
+                publishReady: Boolean(mission?.approval?.status === 'approved'),
+                approvalRequired: true,
+                verifiedVideo: true,
+              },
+              draft: {
+                ...current.draft,
+                pipeline: mission?.metadata?.pipeline || current.draft?.pipeline || [],
+              },
+            }
+          : current);
+        return;
+      }
+      if (job.status === 'failed' || job.status === 'canceled') {
+        throw new Error(String(job.error?.message || 'Children Factory demo render failed.'));
+      }
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+    throw new Error('The demo render is still running. The existing job has been kept so it can be checked without creating a duplicate.');
+  };
+
   const watchChildrenFactoryScenes = async (missionId: string, initialResponse: any) => {
     const maxAttempts = 45;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
@@ -563,6 +602,34 @@ function App() {
       setMissionError(String(error?.response?.data?.error || error?.message || 'Could not request approval.'));
     } finally {
       setMissionBusy(false);
+    }
+  };
+
+  const runChildrenFactoryDemo = async () => {
+    const topic = factoryTopic.trim();
+    if (!topic || factoryBusy) return;
+    setFactoryBusy(true);
+    setFactoryError('');
+    setFactoryDraft(null);
+    setFactoryRenderJob(null);
+    try {
+      const response = await api.childrenFactory.demo(topic, factoryAge);
+      setFactoryDraft(response.data);
+      setFactoryTopic('');
+      await loadMissions();
+      const missionId = String(response.data?.approvalGate?.missionId || '').trim();
+      const jobId = String(response.data?.renderJob?.id || '').trim();
+      if (missionId && jobId) {
+        try {
+          await watchChildrenFactoryRender(missionId, jobId);
+        } catch (watchError: any) {
+          setFactoryError(String(watchError?.message || 'Demo render is still in progress.'));
+        }
+      }
+    } catch (error: any) {
+      setFactoryError(String(error?.response?.data?.error || error?.message || 'Children Factory demo could not start.'));
+    } finally {
+      setFactoryBusy(false);
     }
   };
 
@@ -1444,9 +1511,13 @@ function App() {
             </div>
             <div style={{ display:'grid', gap:10, marginBottom:18 }}>
               <textarea value={factoryTopic} onChange={e => setFactoryTopic(e.target.value.slice(0,500))} placeholder="Example: A little lion learns not to be afraid of water" rows={3} />
+              <div className="lock-note"><Activity size={16} /><span>Zero-Credit Demo uses deterministic local storybook frames and the existing FFmpeg render path. It does not spend image-generation credits or auto-publish.</span></div>
               <div style={{ display:'flex', gap:10, alignItems:'center', flexWrap:'wrap' }}>
                 <label>Age <select value={factoryAge} onChange={e => setFactoryAge(Number(e.target.value))}>{[3,4,5,6,7,8,9,10,11,12].map(age => <option key={age} value={age}>{age}</option>)}</select></label>
                 <button className="security-primary" onClick={() => void createChildrenFactory()} disabled={factoryBusy || !factoryTopic.trim()}><Sparkles size={16} /> {factoryBusy ? 'Creating…' : 'Create Children Draft'}</button>
+                <button className="security-secondary" onClick={() => void runChildrenFactoryDemo()} disabled={factoryBusy || !factoryTopic.trim()}>
+                  <Activity size={16} /> {factoryBusy ? 'Running demo…' : 'Zero-Credit Demo'}
+                </button>
               </div>
             </div>
             {factoryError && <div className="lock-note"><AlertTriangle size={16} /><span>{factoryError}</span></div>}
@@ -1470,6 +1541,7 @@ function App() {
                 {factoryDraft && factoryDraft.renderedVideo && factoryDraft.renderedVideo.mediaKey && <button className="security-secondary" onClick={() => { setYoutubeMissionId(String(factoryDraft.approvalGate && factoryDraft.approvalGate.missionId || '')); setYoutubeMediaKey(String(factoryDraft.renderedVideo.mediaKey)); setYoutubeTitle(String(factoryDraft.draft && factoryDraft.draft.project && factoryDraft.draft.project.title || '').slice(0,100)); setYoutubeDescription(String(factoryDraft.draft && factoryDraft.draft.story || '').slice(0,5000)); setFactoryOpen(false); void openYouTubeCenter(); }}>Open YouTube Publisher</button>}
               </div>
               {factoryRenderJob && <div className="security-status"><span>Render job: {factoryRenderJob.status}</span></div>}
+              {factoryDraft?.package && <div className="lock-note"><CheckCircle2 size={16} /><span>Package: {String(factoryDraft.package.status || 'unknown')} · Verified video: {factoryDraft.package.verifiedVideo ? 'yes' : 'not yet'} · Human approval required: yes</span></div>}
               {factoryDraft?.mission?.status === 'failed' && <div className="lock-note" style={{ marginTop:12 }}><AlertTriangle size={16} /><span>{String(factoryDraft.mission?.metadata?.factoryFailure?.message || 'Children Factory stopped after bounded retries. Partial progress was preserved.')}</span></div>}
               <div className="lock-note" style={{ marginTop:12 }}><LockKeyhole size={16} /><span>Rendering creates a stored 9:16 MP4. Publishing is still separate and requires an approved mission.</span></div>
             </article>}
