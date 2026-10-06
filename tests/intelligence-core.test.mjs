@@ -32,3 +32,40 @@ test('search/current language increases complexity', () => {
   const current = estimateComplexity({ latestUserMessage: 'Research the latest current information online and verify the sources.', route: { mode: 'search', intent: 'chat' } });
   assert.ok(current > simple);
 });
+
+
+test('OpenAI responses retain returned web citation provenance', async () => {
+  const { callOpenAIResponses } = await import('../server/intelligence-core.mjs');
+  const result = await callOpenAIResponses({
+    apiKey: 'test-key',
+    model: 'test-model',
+    instructions: 'test',
+    messages: [{ role: 'user', content: 'latest' }],
+    enableWebSearch: true,
+    fetchImpl: async () => ({
+      ok: true,
+      async json() {
+        return {
+          id: 'resp_test',
+          output_text: 'Current answer.',
+          output: [{
+            type: 'message',
+            content: [{
+              type: 'output_text',
+              text: 'Current answer.',
+              annotations: [{
+                type: 'url_citation',
+                title: 'Example Source',
+                url: 'https://example.com/source',
+              }],
+            }],
+          }],
+          usage: { total_tokens: 1 },
+        };
+      },
+    }),
+  });
+  assert.equal(result.webSearchUsed, false);
+  assert.equal(result.webCitations.length, 1);
+  assert.equal(result.webCitations[0].url, 'https://example.com/source');
+});
