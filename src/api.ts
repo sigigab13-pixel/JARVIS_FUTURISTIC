@@ -140,6 +140,7 @@ export const missions = {
   requestApproval: async (id: string) => api.post('/api/missions/' + encodeURIComponent(id) + '/request-approval', {}),
   approve: async (id: string) => api.post('/api/missions/' + encodeURIComponent(id) + '/approve', {}),
   start: async (id: string) => api.post('/api/missions/' + encodeURIComponent(id) + '/start', {}),
+  cancel: async (id: string) => api.post('/api/missions/' + encodeURIComponent(id) + '/cancel', {}),
 };
 
 
