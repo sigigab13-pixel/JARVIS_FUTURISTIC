@@ -126,6 +126,9 @@ A deployment quota is a safety budget, not a target to consume.
 
 ---
 
+### Law 32 — Production Releases Are Deliberate
+Production deployment must be an explicit release action, not a side effect of routine source-control activity. Git pushes, merges, and documentation changes must not automatically consume production deployment capacity. The release candidate must be tested first, then deployed intentionally, then verified on the production domain.
+
 ## The Eight Definition-of-Done Questions
 
 Every major capability should eventually answer all eight:
