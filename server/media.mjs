@@ -19,6 +19,162 @@ export function createMediaKey({ userId, kind = 'media', extension = 'bin', id }
   return `jarvis/${safeSegment(userId)}/${safeSegment(kind)}/${date}/${safeSegment(id || crypto.randomUUID())}.${safeSegment(extension, 'bin')}`;
 }
 
+function inferRetentionClass(key, metadata = {}) {
+  const explicit = String(metadata?.retentionClass || metadata?.retention_class || '').trim().toLowerCase();
+  if (['ephemeral', 'working', 'published', 'protected'].includes(explicit)) return explicit;
+  const kind = String(key || '').split('/')[2] || 'media';
+  if (kind === 'mission-image') return 'ephemeral';
+  if (kind === 'children-factory') return 'working';
+  return 'protected';
+}
+
+function retentionExpiry(retentionClass, metadata = {}) {
+  if (metadata?.expiresAt) {
+    const explicit = new Date(metadata.expiresAt);
+    if (!Number.isNaN(explicit.getTime())) return explicit.toISOString();
+  }
+  const days = retentionClass === 'ephemeral' ? 14 : retentionClass === 'working' ? 60 : retentionClass === 'published' ? 180 : 0;
+  return days > 0 ? new Date(Date.now() + days * 86400000).toISOString() : null;
+}
+
+function mediaRegistryConfigured() {
+  return Boolean(supabaseUrl && supabaseKey);
+}
+
+async function mediaRegistryRequest(pathname, options = {}) {
+  if (!mediaRegistryConfigured()) throw new Error('Supabase media registry is not configured.');
+  const response = await fetch(`${supabaseUrl}/rest/v1/${pathname}`, {
+    ...options,
+    headers: {
+      apikey: supabaseKey,
+      Authorization: `Bearer ${supabaseKey}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      ...(options.headers || {}),
+    },
+  });
+  const raw = await response.text();
+  if (!response.ok) throw new Error(`Supabase media registry request failed (${response.status}): ${raw.slice(0, 500)}`);
+  return raw ? JSON.parse(raw) : null;
+}
+
+export async function registerMediaAsset({ userId, key, contentType, sizeBytes = 0, sha256 = null, metadata = {} }) {
+  if (!isSupabaseStorageConfigured()) return { tracked: false, reason: 'storage_not_configured' };
+  const retentionClass = inferRetentionClass(key, metadata);
+  const expiresAt = retentionExpiry(retentionClass, metadata);
+  try {
+    const rows = await mediaRegistryRequest('jarvis_media_assets', {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+      body: JSON.stringify({
+        user_id: userId,
+        bucket_id: bucket,
+        object_key: key,
+        media_kind: String(key || '').split('/')[2] || 'media',
+        content_type: contentType,
+        size_bytes: Math.max(0, Number(sizeBytes) || 0),
+        sha256: sha256 || metadata?.sha256 || null,
+        retention_class: retentionClass,
+        status: 'active',
+        expires_at: expiresAt,
+        last_referenced_at: new Date().toISOString(),
+        metadata,
+        updated_at: new Date().toISOString(),
+      }),
+    });
+    return { tracked: true, retentionClass, expiresAt, record: Array.isArray(rows) ? rows[0] || null : rows || null };
+  } catch (error) {
+    return { tracked: false, retentionClass, expiresAt, reason: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+export async function markMediaRetention({ userId, key, retentionClass = 'protected', expiresAt = null, metadata = {} }) {
+  if (!isSupabaseStorageConfigured()) return { updated: false, reason: 'storage_not_configured' };
+  const safeClass = ['ephemeral', 'working', 'published', 'protected'].includes(String(retentionClass)) ? String(retentionClass) : 'protected';
+  const safeExpiry = safeClass === 'protected' ? null : (expiresAt ? new Date(expiresAt).toISOString() : retentionExpiry(safeClass, metadata));
+  try {
+    const rows = await mediaRegistryRequest(
+      'jarvis_media_assets?bucket_id=eq.' + encodeURIComponent(bucket) + '&object_key=eq.' + encodeURIComponent(key) + '&user_id=eq.' + encodeURIComponent(userId),
+      {
+        method: 'PATCH',
+        headers: { Prefer: 'return=representation' },
+        body: JSON.stringify({ retention_class: safeClass, expires_at: safeExpiry, last_referenced_at: new Date().toISOString(), updated_at: new Date().toISOString(), metadata: metadata && typeof metadata === 'object' ? metadata : {} }),
+      }
+    );
+    return { updated: Array.isArray(rows) ? rows.length > 0 : Boolean(rows), retentionClass: safeClass, expiresAt: safeExpiry };
+  } catch (error) {
+    return { updated: false, retentionClass: safeClass, expiresAt: safeExpiry, reason: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+export async function listExpiredMediaAssets({ limit = 10 } = {}) {
+  const safeLimit = Math.min(25, Math.max(1, Number(limit) || 10));
+  const rows = await mediaRegistryRequest(
+    'jarvis_media_assets?select=id,user_id,bucket_id,object_key,retention_class,expires_at&status=eq.active&expires_at=not.is.null&expires_at=lte.' + encodeURIComponent(new Date().toISOString()) + '&retention_class=in.(ephemeral,working,published)&order=expires_at.asc&limit=' + safeLimit
+  );
+  return Array.isArray(rows) ? rows : [];
+}
+
+export async function deleteMediaObject({ bucketId = bucket, key }) {
+  const cleanBucket = String(bucketId || '').trim();
+  const cleanKey = String(key || '').trim();
+  if (!cleanKey || cleanBucket !== bucket) throw new Error('Media deletion target is outside the configured JARVIS bucket.');
+  const response = await fetch(`${supabaseUrl}/storage/v1/object/${encodeURIComponent(cleanBucket)}/${cleanKey.split('/').map(encodeURIComponent).join('/')}`, {
+    method: 'DELETE',
+    headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` },
+  });
+  if (response.status === 404) return { deleted: true, alreadyMissing: true };
+  const raw = await response.text().catch(() => '');
+  if (!response.ok) throw new Error(`Supabase Storage delete failed (${response.status}): ${raw.slice(0, 400)}`);
+  return { deleted: true, alreadyMissing: false };
+}
+
+export async function cleanupExpiredMedia({ limit = 10 } = {}) {
+  if (!isSupabaseStorageConfigured()) return { ok: false, deleted: 0, failed: 0, skipped: 0, reason: 'storage_not_configured', assets: [] };
+  let assets;
+  try {
+    assets = await listExpiredMediaAssets({ limit });
+  } catch (error) {
+    return { ok: false, deleted: 0, failed: 0, skipped: 0, reason: error instanceof Error ? error.message : String(error), assets: [] };
+  }
+
+  let deleted = 0;
+  let failed = 0;
+  const results = [];
+  for (const asset of assets) {
+    if (!String(asset?.object_key || '').startsWith(`jarvis/${asset?.user_id}/`)) {
+      results.push({ id: asset?.id || null, status: 'skipped', reason: 'ownership_path_mismatch' });
+      continue;
+    }
+    try {
+      await mediaRegistryRequest('jarvis_media_assets?id=eq.' + encodeURIComponent(asset.id) + '&status=eq.active', {
+        method: 'PATCH',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({ status: 'delete_pending', updated_at: new Date().toISOString() }),
+      });
+      const deletion = await deleteMediaObject({ bucketId: asset.bucket_id, key: asset.object_key });
+      await mediaRegistryRequest('jarvis_media_assets?id=eq.' + encodeURIComponent(asset.id), {
+        method: 'PATCH',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({ status: 'deleted', deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
+      });
+      deleted += 1;
+      results.push({ id: asset.id, status: 'deleted', alreadyMissing: deletion.alreadyMissing });
+    } catch (error) {
+      failed += 1;
+      try {
+        await mediaRegistryRequest('jarvis_media_assets?id=eq.' + encodeURIComponent(asset.id), {
+          method: 'PATCH',
+          headers: { Prefer: 'return=minimal' },
+          body: JSON.stringify({ status: 'active', metadata: { cleanupError: String(error?.message || error).slice(0, 400) }, updated_at: new Date().toISOString() }),
+        });
+      } catch {}
+      results.push({ id: asset.id, status: 'failed', reason: error instanceof Error ? error.message : String(error) });
+    }
+  }
+  return { ok: failed === 0, deleted, failed, skipped: results.filter(item => item.status === 'skipped').length, assets: results };
+}
+
 export async function putMedia({ key, body, contentType = 'application/octet-stream', metadata = {}, upsert = false }) {
   if (!isSupabaseStorageConfigured()) throw new Error('Supabase Storage is not configured.');
   if (!key) throw new Error('Media object key is required.');
@@ -36,7 +192,9 @@ export async function putMedia({ key, body, contentType = 'application/octet-str
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(`Supabase Storage upload failed (${response.status}): ${String(data?.message || data?.error || 'unknown error').slice(0, 500)}`);
-  return { key, bucket, contentType, path: key, stored: true };
+  const sizeBytes = Buffer.isBuffer(body) ? body.length : Number(metadata?.sizeBytes || 0);
+  const registry = await registerMediaAsset({ userId: String(key).split('/')[1] || '', key, contentType, sizeBytes, sha256: metadata?.sha256 || null, metadata });
+  return { key, bucket, contentType, path: key, stored: true, registry };
 }
 
 
