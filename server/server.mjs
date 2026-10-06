@@ -70,6 +70,7 @@ import { buildTimeAwarenessInstruction, getTimeContextForRequest } from './time-
 import { buildContradictionInstruction, detectMemoryContradictions } from './contradiction-core.mjs';
 import { formatCorrectionMemory, parseUserCorrection } from './correction-memory.mjs';
 import { assessActionUncertainty, buildUncertaintyManagerInstruction } from './uncertainty-manager-core.mjs';
+import { simulateWorkflow } from './workflow-simulator-core.mjs';
 import { buildProvenance, extractWebCitations } from './provenance-core.mjs';
 import { planGoal } from './goal-outcome-core.mjs';
 
@@ -312,6 +313,22 @@ export async function handleApi(req, res, pathname, url) {
       capabilities: getCapabilityRegistry(),
       note: 'Availability reflects the current server configuration; authorization is still checked when an action is executed.',
     });
+  }
+
+  if (req.method === 'POST' && pathname === '/api/workflow/simulate') {
+    await requireAuthenticatedJarvisUser(req);
+    const body = await parseBody(req);
+    const plan = body?.plan && typeof body.plan === 'object'
+      ? body.plan
+      : planGoal({ request: String(body?.request || '').trim() });
+    const simulation = simulateWorkflow({
+      plan,
+      mission: body?.mission && typeof body.mission === 'object' ? body.mission : null,
+      capabilities: getCapabilityRegistry(),
+      supportedAdapters: getMissionAdapters(),
+      approvalStatus: body?.approvalStatus || body?.mission?.approval?.status || null,
+    });
+    return json(res, 200, simulation);
   }
 
   if (req.method === 'GET' && pathname === '/api/business') {
@@ -1315,6 +1332,11 @@ export async function handleApi(req, res, pathname, url) {
 
     const goalPlan = planGoal({ request: latestUserMessage });
     const uncertaintyManager = assessActionUncertainty({ plan: goalPlan, route });
+    const workflowSimulation = simulateWorkflow({
+      plan: goalPlan,
+      capabilities: getCapabilityRegistry(),
+      supportedAdapters: getMissionAdapters(),
+    });
 
     const imageAction = /\b(generate|create|make|draw|illustrate|render)\b/i.test(latestUserMessage);
     const imageNoun = /\b(image|picture|photo|illustration)\b/i.test(latestUserMessage);
@@ -1424,6 +1446,7 @@ export async function handleApi(req, res, pathname, url) {
       routeContextForPrompt(route),
       `Goal-to-Outcome planning metadata (planning only; never an authorization): ${JSON.stringify(goalPlan)}`,
       buildUncertaintyManagerInstruction(uncertaintyManager),
+      `Workflow Simulator dry-run metadata (no external side effects executed): ${JSON.stringify(workflowSimulation)}`,
       timeAwareness,
       contradictionAwareness,
       "The JARVIS application provides you with the current conversation messages and, when available, relevant long-term memories retrieved from its persistent memory system.",
@@ -1674,6 +1697,7 @@ export async function handleApi(req, res, pathname, url) {
         guest: !userId,
         planning: goalPlan,
         uncertaintyManager,
+        workflowSimulation,
         provenance,
         verification: {
           selfCheck: selfRepairSucceeded ? 'repaired-and-verified' : 'passed',
