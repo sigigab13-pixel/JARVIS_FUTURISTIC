@@ -768,6 +768,16 @@ button {
 .repair-ready .repair-check-status { color: #9bd9bc; border: 1px solid #315d4e; background: #081914; }
 .repair-attention .repair-check-status { color: #dfc88c; border: 1px solid #5b4d32; background: #1a160d; }
 .repair-blocked .repair-check-status { color: #e4a5a5; border: 1px solid #633940; background: #1a1012; }
+.repair-recovery {
+  display: block;
+  margin-top: 4px;
+  color: #7895a1;
+  font-size: 8px;
+}
+.repair-recovery strong {
+  color: #b5dce9;
+  font-weight: 600;
+}
 .repair-check div { display: grid; gap: 3px; }
 .repair-check b { color: #c7dfe8; font-size: 9px; }
 .repair-check small { color: #66818d; font-size: 8px; line-height: 1.4; }
