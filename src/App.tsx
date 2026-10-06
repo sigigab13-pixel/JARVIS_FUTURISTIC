@@ -675,6 +675,19 @@ function App() {
     }
   };
 
+  const cancelMission = async (id: string) => {
+    setMissionBusy(true);
+    setMissionError('');
+    try {
+      await api.missions.cancel(id);
+      await loadMissions();
+    } catch (error: any) {
+      setMissionError(String(error?.response?.data?.error || error?.message || 'Could not cancel mission.'));
+    } finally {
+      setMissionBusy(false);
+    }
+  };
+
   const handleChatCommand = (clean: string) => {
     const value = clean.toLowerCase().replace(/[!?.,]+$/g, '').trim();
     let response = '';
@@ -718,6 +731,7 @@ function App() {
       } else if (tool === 'security') {
         setSecurityOpen(true);
         runSecurityCheck();
+        void loadMissions();
         response = 'Security Center is open.';
       } else if (tool === 'system') {
         setSystemOpen(true);
@@ -1822,6 +1836,47 @@ function App() {
                 <Camera size={16} /> {cameraActive ? 'Stop Camera Test' : 'Test Camera'}
               </button>
             </div>
+
+            <section className="security-status" aria-label="JARVIS Permissions and Approvals">
+              <div style={{ display:'flex', justifyContent:'space-between', gap:12, alignItems:'center', flexWrap:'wrap' }}>
+                <div>
+                  <b>Mission Permissions & Approvals</b>
+                  <p style={{ margin:'4px 0 0' }}>Review work that requires your approval before JARVIS can perform a governed side effect.</p>
+                </div>
+                <button className="security-secondary" onClick={() => { void loadMissions(); }} disabled={missionBusy}>
+                  {missionBusy ? 'Updating…' : 'Refresh permissions'}
+                </button>
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(3,minmax(0,1fr))', gap:8, marginTop:12 }}>
+                <article className="system-card"><LockKeyhole size={16} /><b>Approval Required</b><span>{missions.filter((m:any) => m.approval?.required).length}</span></article>
+                <article className="system-card"><AlertTriangle size={16} /><b>Pending</b><span>{missions.filter((m:any) => m.approval?.status === 'pending').length}</span></article>
+                <article className="system-card"><Shield size={16} /><b>Controlled</b><span>{missions.filter((m:any) => ['execute_with_approval','execute_within_policy'].includes(m.autonomy)).length}</span></article>
+              </div>
+              <div style={{ display:'grid', gap:8, marginTop:12 }}>
+                {missions.filter((m:any) => m.approval?.required && !['succeeded','canceled'].includes(String(m.status || ''))).slice(0,8).map((mission:any) => {
+                  const isChildrenFactory = mission.metadata?.factory === 'children-v1';
+                  const waitingForApproval = mission.approval?.status === 'pending' && mission.status === 'waiting_approval';
+                  const approvalRequested = mission.approval?.status === 'requested' && mission.status === 'draft';
+                  const approvalMissing = mission.approval?.status === 'not_requested' && mission.status === 'draft';
+                  return <article key={mission.id} className="security-card" style={{ alignItems:'flex-start' }}>
+                    <LockKeyhole size={18} />
+                    <div style={{ flex:1 }}>
+                      <b>{String(mission.goal || 'Governed mission')}</b>
+                      <span>Status: {String(mission.status || 'unknown')} · Autonomy: {String(mission.autonomy || 'unknown')}</span>
+                      <span>Approval: {String(mission.approval?.status || 'unknown')}</span>
+                      <div style={{ display:'flex', gap:8, marginTop:8, flexWrap:'wrap' }}>
+                        {approvalMissing && <button className="security-secondary" onClick={() => { void requestMissionApproval(mission.id); }} disabled={missionBusy}>Request approval</button>}
+                        {approvalRequested && !isChildrenFactory && <button className="security-primary" onClick={() => { void approveAndStartMission(mission.id); }} disabled={missionBusy}>Approve & Start</button>}
+                        {waitingForApproval && isChildrenFactory && <button className="security-primary" onClick={() => { void approveChildrenFactory(mission.id); }} disabled={factoryBusy || missionBusy}>Approve</button>}
+                        {!['succeeded','canceled','failed'].includes(String(mission.status || '')) && <button className="security-secondary" onClick={() => { void cancelMission(mission.id); }} disabled={missionBusy}>Cancel</button>}
+                      </div>
+                    </div>
+                  </article>;
+                })}
+                {missions.filter((m:any) => m.approval?.required && !['succeeded','canceled'].includes(String(m.status || ''))).length === 0 && <div className="lock-note"><CheckCircle2 size={16} /><span>No active approval requests. JARVIS will not perform approval-gated work without an explicit approval state.</span></div>}
+              </div>
+              <div className="lock-note" style={{ marginTop:12 }}><LockKeyhole size={16} /><span>Approval is checked again at the mission/tool boundary. The Security Center only exposes the user's control surface; it does not grant itself permissions.</span></div>
+            </section>
 
             {cameraActive && (
               <div className="camera-test">
