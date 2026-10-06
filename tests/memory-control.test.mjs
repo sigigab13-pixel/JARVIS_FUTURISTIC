@@ -59,7 +59,11 @@ test('requires an owned memory id or explicit all=true intent', () => {
     mode: 'single',
     memoryId: MEMORY_ID,
   });
-  assert.deepEqual(parseMemoryDeletionRequest({ all: true }), { mode: 'all' });
+  assert.deepEqual(parseMemoryDeletionRequest({ all: true, confirm: 'DELETE_ALL_MEMORY' }), { mode: 'all' });
+  assert.deepEqual(parseMemoryDeletionRequest({ all: true }), {
+    mode: 'invalid',
+    reason: 'Deleting all memory requires explicit confirmation.',
+  });
   assert.deepEqual(parseMemoryDeletionRequest({ id: 'not-a-uuid' }), {
     mode: 'invalid',
     reason: 'A valid memory id is required.',
