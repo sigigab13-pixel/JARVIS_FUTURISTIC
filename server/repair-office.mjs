@@ -73,11 +73,13 @@ async function probe(name, category, run, evidence) {
       evidence: typeof evidence == 'function' ? evidence(result) : String(evidence || 'Verified by read-only health probe.'),
     };
   } catch (error) {
+    const recoveryCategory = classifyRepairFailure({ category, retryable: false });
     return {
       name,
-      category: classifyRepairFailure({ category, retryable: false }),
+      category: recoveryCategory,
       status: statusForFailure(category),
       evidence: String(error?.message || error || 'Health probe failed.').slice(0, 240),
+      recovery: buildRepairDecision({ category: recoveryCategory, retryable: false, attempts: 3 }),
     };
   }
 }
@@ -90,6 +92,7 @@ export async function getRepairOfficeDiagnostics() {
     category: 'configuration',
     status: 'READY',
     evidence: 'Production API is executing this authenticated diagnostic request.',
+    recovery: { status: 'no_action', action: 'none', attempt: 0, maxAttempts: 3, terminal: false },
   });
 
   const supabaseUrl = String(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
@@ -100,6 +103,7 @@ export async function getRepairOfficeDiagnostics() {
       category: 'configuration',
       status: 'BLOCKED',
       evidence: 'Server-side Supabase configuration is incomplete.',
+      recovery: buildRepairDecision({ category: 'configuration', retryable: false, attempts: 3 }),
     });
   } else {
     checks.push(await probe(
@@ -122,6 +126,7 @@ export async function getRepairOfficeDiagnostics() {
       category: 'configuration',
       status: 'BLOCKED',
       evidence: 'Redis REST URL/token is not configured.',
+      recovery: buildRepairDecision({ category: 'configuration', retryable: false, attempts: 3 }),
     });
   } else {
     checks.push(await probe(
@@ -140,6 +145,9 @@ export async function getRepairOfficeDiagnostics() {
     evidence: storageConfigured
       ? 'Storage configuration is present; no media was written during this check.'
       : 'Storage configuration is incomplete.',
+    recovery: storageConfigured
+      ? { status: 'no_action', action: 'none', attempt: 0, maxAttempts: 3, terminal: false }
+      : buildRepairDecision({ category: 'configuration', retryable: false, attempts: 3 }),
   });
 
   const aiConfigured = Boolean(
@@ -154,6 +162,9 @@ export async function getRepairOfficeDiagnostics() {
     evidence: aiConfigured
       ? 'At least one supported AI credential is configured; no paid provider generation was triggered.'
       : 'No supported AI credential is configured.',
+    recovery: aiConfigured
+      ? { status: 'no_action', action: 'none', attempt: 0, maxAttempts: 3, terminal: false }
+      : buildRepairDecision({ category: 'configuration', retryable: false, attempts: 3 }),
   });
 
   const blocking = checks.filter(item => item.status === 'BLOCKED').length;
