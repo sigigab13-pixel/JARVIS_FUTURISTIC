@@ -58,6 +58,7 @@ import { preflightMission, getMissionAdapters } from './mission-executor.mjs';
 import { generateHuggingFaceImage, HF_IMAGE_MODELS, HF_IMAGE_EDIT_MODELS, HF_IMAGE_PROVIDERS } from './image-generator.mjs';
 import { getYouTubeAccessToken, getYouTubeAnalytics, getYouTubeChannel, uploadYouTubeVideo } from './youtube.mjs';
 import { getRepairOfficeDiagnostics, getRepairOfficePolicy } from './repair-office.mjs';
+import { generateIntelligentResponse, getOpenAIModels } from './intelligence-core.mjs';
 
 const PORT = Number(process.env.PORT || 10000);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -1172,7 +1173,8 @@ export async function handleApi(req, res, pathname, url) {
     return json(res, 200, {
       service: 'JARVIS chat',
       openaiConfigured: Boolean(process.env.OPENAI_API_KEY),
-      openaiModel: process.env.OPENAI_MODEL || 'gpt-6-luna',
+      openaiModels: getOpenAIModels(),
+      reasoningThreshold: Number(process.env.OPENAI_REASONING_THRESHOLD || 3),
       supabaseServerConfigured: Boolean(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL),
       huggingFaceConfigured: Boolean(process.env.HUGGINGFACE_API_TOKEN || process.env.HF_TOKEN),
       fallbackAvailable: Boolean(process.env.HUGGINGFACE_API_TOKEN || process.env.HF_TOKEN),
@@ -1334,42 +1336,33 @@ export async function handleApi(req, res, pathname, url) {
     ].filter(Boolean).join('\n\n');
 
     const openaiKey = process.env.OPENAI_API_KEY || '';
-    const openaiModel = process.env.OPENAI_MODEL || 'gpt-6-luna';
     const hfToken = process.env.HUGGINGFACE_API_TOKEN || process.env.HF_TOKEN || '';
+    const enableWebSearch = route.mode === 'search'
+      && String(process.env.OPENAI_ENABLE_WEB_SEARCH || '').toLowerCase() === 'true';
 
     let text = '';
     let provider = '';
     let model = '';
+    let intelligenceTier = '';
+    let responseId = null;
 
     if (openaiKey) {
       try {
-        const response = await fetch('https://api.openai.com/v1/responses', {
-          method: 'POST',
-          headers: {
-            Authorization: 'Bearer ' + openaiKey,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: openaiModel,
-            instructions: systemMessage,
-            input: messages,
-            max_output_tokens: 1200,
-          }),
+        const result = await generateIntelligentResponse({
+          apiKey: openaiKey,
+          instructions: systemMessage,
+          messages,
+          latestUserMessage,
+          route,
+          enableWebSearch,
         });
-        const data = await response.json().catch(() => ({}));
-        if (response.ok) {
-          text = String(data?.output_text || data?.output?.flatMap(item =>
-            Array.isArray(item?.content) ? item.content.map(part => part?.text || '') : []
-          ).join('') || '').trim();
-          if (text) {
-            provider = 'OpenAI Responses API';
-            model = openaiModel;
-          }
-        } else {
-          console.error('JARVIS OpenAI request failed:', response.status, data?.error?.message || data?.error || 'unknown error');
-        }
+        text = result.text;
+        provider = result.provider;
+        model = result.model;
+        intelligenceTier = result.tier;
+        responseId = result.responseId || null;
       } catch (error) {
-        console.error('JARVIS OpenAI connection error:', error);
+        console.error('JARVIS OpenAI intelligence core failed:', error?.statusCode || '', error?.message || error);
       }
     }
 
@@ -1405,6 +1398,7 @@ export async function handleApi(req, res, pathname, url) {
       if (text) {
         provider = 'Hugging Face Inference Providers';
         model = HF_MODEL;
+        intelligenceTier = 'fallback';
       }
     }
 
@@ -1438,7 +1432,7 @@ export async function handleApi(req, res, pathname, url) {
     return json(
       res,
       200,
-      { text, provider, model, persistent: Boolean(userId), guest: !userId, routing: {
+      { text, provider, model, intelligenceTier, responseId, persistent: Boolean(userId), guest: !userId, routing: {
         mode: route.mode,
         intent: route.intent || 'chat',
         factory: childrenFactoryRoute ? 'children-v1' : null,
