@@ -67,6 +67,7 @@ import { buildRepairInstruction, inspectAssistantResponse, selfCheckAndNormalize
 import { assessUncertainty, buildEpistemicInstruction } from './uncertainty-core.mjs';
 import { normalizeMemoryList, parseMemoryDeletionRequest } from './memory-control.mjs';
 import { buildTimeAwarenessInstruction, getTimeContextForRequest } from './time-freshness-core.mjs';
+import { formatCorrectionMemory, parseUserCorrection } from './correction-memory.mjs';
 
 const PORT = Number(process.env.PORT || 10000);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -162,6 +163,9 @@ function parseBody(req) {
 }
 
 function classifyMemory(text) {
+  const correction = parseUserCorrection(text);
+  if (correction) return { type: 'correction', importance: 0.99, correction };
+
   const value = String(text || '').trim().toLowerCase();
   if (/\\b(call me|my name is|i am|i'm)\\b/.test(value)) return { type: 'identity', importance: 0.95 };
   if (/\\b(i prefer|i like|i love|my favorite|i dislike|i hate|i don't like)\\b/.test(value)) return { type: 'preference', importance: 0.85 };
@@ -1387,7 +1391,7 @@ export async function handleApi(req, res, pathname, url) {
     }
 
     const memoryContext = semanticMemories.length
-      ? `Relevant long-term memories for this user, ranked by relevance and importance:\n${semanticMemories.map((m, i) => `${i + 1}. [${String(m.memory_type || 'memory')}] ${String(m.content || '').trim()}`).join('\n')}\nUse only memories that genuinely help answer the current request. Prefer identity, preferences, goals, project decisions, decision memories, and explicit instructions when relevant. Treat active JARVIS decision memories as user constraints: do not re-propose a rejected alternative unless the user explicitly reopens it or relevant circumstances have materially changed, and explain the change when appropriate. Do not mention the memory system unless asked.`
+      ? `Relevant long-term memories for this user, ranked by relevance and importance:\n${semanticMemories.map((m, i) => `${i + 1}. [${String(m.memory_type || 'memory')}] ${String(m.content || '').trim()}`).join('\n')}\nUse only memories that genuinely help answer the current request. Prefer correction memories first when relevant, then identity, preferences, goals, project decisions, decision memories, and explicit instructions. Treat active JARVIS correction memories as the highest-priority user-provided update: when an older memory conflicts with a correction, use the correction as current truth and do not silently revive the superseded value. Corrections are not deletions; do not claim that older records were removed. Treat active JARVIS decision memories as user constraints: do not re-propose a rejected alternative unless the user explicitly reopens it or relevant circumstances have materially changed, and explain the change when appropriate. Do not mention the memory system unless asked.`
       : '';
 
     const timeContext = getTimeContextForRequest({
@@ -1587,7 +1591,22 @@ export async function handleApi(req, res, pathname, url) {
       const decision = parseExplicitDecision(latestUserMessage);
       const memory = classifyMemory(latestUserMessage);
       try {
-        if (decision) {
+        if (memory.type === 'correction' && memory.correction) {
+          await saveSemanticMemory(
+            userId,
+            formatCorrectionMemory(memory.correction),
+            {
+              source: 'explicit_user_correction',
+              importance: 0.99,
+              correction: true,
+              scope: memory.correction.scope,
+              field: memory.correction.field,
+              previous: memory.correction.previous,
+              current: memory.correction.current,
+            },
+            'correction',
+          );
+        } else if (decision) {
           await saveSemanticMemory(
             userId,
             formatDecisionMemory(decision),
