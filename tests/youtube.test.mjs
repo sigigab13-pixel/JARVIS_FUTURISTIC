@@ -1,3 +1,6 @@
+process.env.GOOGLE_YOUTUBE_CLIENT_ID = 'test-client-id';
+process.env.GOOGLE_YOUTUBE_CLIENT_SECRET = 'test-client-secret';
+
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
