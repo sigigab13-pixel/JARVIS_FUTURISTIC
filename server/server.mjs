@@ -48,6 +48,9 @@ import {
   getRoutineForUser,
   listRoutinesForUser,
   updateRoutineForUser,
+  listSemanticMemories,
+  deleteSemanticMemory,
+  deleteAllSemanticMemories,
 } from './store.mjs';
 import { enqueueJob, isRedisConfigured } from './queue.mjs';
 import { createMediaKey, getMedia, isSupabaseStorageConfigured, putMedia } from './media.mjs';
@@ -61,6 +64,7 @@ import { getRepairOfficeDiagnostics, getRepairOfficePolicy } from './repair-offi
 import { generateIntelligentResponse, getOpenAIModels } from './intelligence-core.mjs';
 import { formatDecisionMemory, parseExplicitDecision } from './decision-memory.mjs';
 import { buildRepairInstruction, inspectAssistantResponse, selfCheckAndNormalize } from './self-check-core.mjs';
+import { normalizeMemoryList, parseMemoryDeletionRequest } from './memory-control.mjs';
 
 const PORT = Number(process.env.PORT || 10000);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -1169,6 +1173,71 @@ export async function handleApi(req, res, pathname, url) {
     if (!authenticated) return json(res, 200, { messages: [], persistent: false, guest: true });
     const history = await getConversationMessages(authenticated.jarvisUser.id, 100);
     return json(res, 200, { messages: history, persistent: true }, { 'Set-Cookie': jarvisCookie(authenticated.jarvisUser.id) });
+  }
+
+  if (req.method === 'GET' && pathname === '/api/memory') {
+    const { jarvisUser } = await requireAuthenticatedJarvisUser(req);
+    const limit = Number(url.searchParams.get('limit') || 50);
+    try {
+      const rows = await listSemanticMemories(jarvisUser.id, limit);
+      const memories = normalizeMemoryList(rows, limit);
+      return json(res, 200, {
+        memories,
+        count: memories.length,
+        persistent: true,
+      }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+    } catch (error) {
+      console.error('JARVIS memory list error:', error);
+      return json(res, 502, { error: 'Could not load your JARVIS memories.' });
+    }
+  }
+
+  if (req.method === 'DELETE' && pathname === '/api/memory') {
+    const { jarvisUser } = await requireAuthenticatedJarvisUser(req);
+    const request = parseMemoryDeletionRequest(await parseBody(req));
+    if (request.mode === 'invalid') {
+      return json(res, 400, { error: request.reason, code: 'MEMORY_DELETE_CONFIRMATION_REQUIRED' });
+    }
+
+    try {
+      const result = request.mode === 'all'
+        ? await deleteAllSemanticMemories(jarvisUser.id)
+        : await deleteSemanticMemory(jarvisUser.id, request.memoryId);
+
+      return json(res, 200, {
+        deleted: result.deleted,
+        deletedCount: result.deletedCount,
+        scope: request.mode,
+      }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+    } catch (error) {
+      console.error('JARVIS memory delete error:', error);
+      return json(res, 502, { error: 'Could not delete the requested JARVIS memory.' });
+    }
+  }
+
+  if (req.method === 'DELETE' && pathname.startsWith('/api/memory/')) {
+    const { jarvisUser } = await requireAuthenticatedJarvisUser(req);
+    const memoryId = decodeURIComponent(pathname.slice('/api/memory/'.length));
+    const request = parseMemoryDeletionRequest({ id: memoryId });
+    if (request.mode === 'invalid') {
+      return json(res, 400, { error: request.reason, code: 'INVALID_MEMORY_ID' });
+    }
+
+    try {
+      const result = await deleteSemanticMemory(jarvisUser.id, request.memoryId);
+      if (!result.deleted) {
+        return json(res, 404, { error: 'That JARVIS memory was not found.' });
+      }
+      return json(res, 200, {
+        deleted: true,
+        deletedCount: result.deletedCount,
+        scope: 'single',
+        memoryId: request.memoryId,
+      }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+    } catch (error) {
+      console.error('JARVIS memory delete-by-id error:', error);
+      return json(res, 502, { error: 'Could not delete the requested JARVIS memory.' });
+    }
   }
 
   if (req.method === 'GET' && pathname === '/api/chat') {
