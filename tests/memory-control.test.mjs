@@ -44,7 +44,7 @@ test('normalizes a memory record without exposing embeddings', () => {
 
 test('normalizes and bounds memory lists', () => {
   const rows = Array.from({ length: 105 }, (_, index) => ({
-    id: `223e4567-e89b-12d3-a456-4266141740${String(index).padStart(2, '0')}`.slice(0, 36),
+    id: `223e4567-e89b-12d3-a456-${String(426614174000 + index).padStart(12, '0')}`,
     content: `memory ${index}`,
     memory_type: 'chat_memory',
   }));
