@@ -38,6 +38,14 @@ test('detects repeated substantive lines', () => {
   assert.equal(result.issues[0].code, 'REPEATED_BLOCK');
 });
 
+test('rejects oversized responses without truncating them', () => {
+  const value = 'x'.repeat(20001);
+  const result = inspectAssistantResponse(value);
+  assert.equal(result.ok, false);
+  assert.equal(result.repairable, false);
+  assert.equal(result.issues[0].code, 'RESPONSE_TOO_LARGE');
+});
+
 test('does not auto-repair an empty response', () => {
   const result = inspectAssistantResponse('');
   assert.equal(result.ok, false);
