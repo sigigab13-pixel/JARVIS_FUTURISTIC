@@ -67,6 +67,7 @@ import { buildRepairInstruction, inspectAssistantResponse, selfCheckAndNormalize
 import { assessUncertainty, buildEpistemicInstruction } from './uncertainty-core.mjs';
 import { normalizeMemoryList, parseMemoryDeletionRequest } from './memory-control.mjs';
 import { buildTimeAwarenessInstruction, getTimeContextForRequest } from './time-freshness-core.mjs';
+import { buildContradictionInstruction, detectMemoryContradictions } from './contradiction-core.mjs';
 import { formatCorrectionMemory, parseUserCorrection } from './correction-memory.mjs';
 
 const PORT = Number(process.env.PORT || 10000);
@@ -1399,6 +1400,8 @@ export async function handleApi(req, res, pathname, url) {
       route,
       memories: semanticMemories,
     });
+    const memoryConsistency = detectMemoryContradictions(semanticMemories);
+    const contradictionAwareness = buildContradictionInstruction(memoryConsistency);
     const timeAwareness = buildTimeAwarenessInstruction({
       timeContext,
       timeSensitive: timeContext.timeSensitive,
@@ -1414,6 +1417,7 @@ export async function handleApi(req, res, pathname, url) {
         : 'No capability was confidently identified from simple routing hints; use reasoning and available tools rather than inventing a capability.',
       routeContextForPrompt(route),
       timeAwareness,
+      contradictionAwareness,
       "The JARVIS application provides you with the current conversation messages and, when available, relevant long-term memories retrieved from its persistent memory system.",
       "Use the supplied conversation and memory context to maintain continuity. Do not claim that you cannot remember previous conversations when relevant history or memory is supplied.",
       "Do not describe yourself as ChatGPT, Claude, Hugging Face, or another underlying model unless the user explicitly asks which model/provider is being used.",
@@ -1655,6 +1659,7 @@ export async function handleApi(req, res, pathname, url) {
           detectedIssues: initialSelfCheck.before.issues.map(item => item.code),
           epistemic: assessUncertainty({ latestUserMessage, route, responseText: text, webSearchUsed }),
           time: timeContext,
+          memoryConsistency,
         },
         routing: {
         mode: route.mode,
