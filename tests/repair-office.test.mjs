@@ -59,8 +59,20 @@ test('Repair Office diagnostics are read-only and report a structured result', a
   assert.equal(result.policy.autonomousMutation, false);
   assert.ok(Array.isArray(result.checks));
   assert.ok(result.checks.some(item => item.name === 'JARVIS API'));
+  const safeActions = new Set([
+    'none',
+    'bounded_retry',
+    'report_configuration_gap',
+    'degrade_optional_dependency',
+    'require_reauthentication',
+    'deny_and_escalate',
+    'stop_and_escalate',
+  ]);
   for (const item of result.checks) {
     assert.ok(['READY', 'ATTENTION', 'BLOCKED'].includes(item.status));
     assert.equal(typeof item.evidence, 'string');
+    assert.ok(item.recovery);
+    assert.ok(safeActions.has(item.recovery.action));
+    assert.equal(typeof item.recovery.terminal, 'boolean');
   }
 });

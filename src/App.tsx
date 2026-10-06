@@ -1824,12 +1824,24 @@ function App() {
                   {repairDiagnosticsBusy ? 'Checking…' : 'Recheck'}
                 </button>
               </div>
-              {repairDiagnostics?.checks?.map((check: any) => (
-                <div className={'repair-check repair-' + String(check.status || 'ATTENTION').toLowerCase()} key={String(check.name)}>
+              {repairDiagnostics?.checks?.map((check: any) => {
+                const recoveryAction = ({
+                  bounded_retry: 'Bounded retry',
+                  report_configuration_gap: 'Report configuration gap',
+                  degrade_optional_dependency: 'Degrade optional dependency',
+                  require_reauthentication: 'Require re-authentication',
+                  deny_and_escalate: 'Deny and escalate',
+                  stop_and_escalate: 'Stop and escalate',
+                } as Record<string, string>)[String(check.recovery?.action || '')] || 'No action';
+                return <div className={'repair-check repair-' + String(check.status || 'ATTENTION').toLowerCase()} key={String(check.name)}>
                   <span className="repair-check-status">{String(check.status || 'ATTENTION')}</span>
-                  <div><b>{String(check.name)}</b><small>{String(check.evidence || '')}</small></div>
-                </div>
-              ))}
+                  <div>
+                    <b>{String(check.name)}</b>
+                    <small>{String(check.evidence || '')}</small>
+                    <span className="repair-recovery">Recovery: <strong>{recoveryAction}</strong>{check.recovery?.terminal ? ' · terminal' : ''}</span>
+                  </div>
+                </div>;
+              })}
             </div>
             <div className="lock-note"><Monitor size={16} /><span>Repair Office is read-only in this phase. It can detect and report problems, but it cannot mutate production automatically.</span></div>
           </section>
