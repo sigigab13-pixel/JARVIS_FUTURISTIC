@@ -165,6 +165,10 @@ function App() {
   const [empireOpen, setEmpireOpen] = useState(false);
   const [capabilityOpen, setCapabilityOpen] = useState(false);
   const [systemOpen, setSystemOpen] = useState(false);
+  const [memoryOpen, setMemoryOpen] = useState(false);
+  const [memories, setMemories] = useState<any[]>([]);
+  const [memoryBusy, setMemoryBusy] = useState(false);
+  const [memoryError, setMemoryError] = useState('');
   const [systemResults, setSystemResults] = useState<string[]>([]);
   const [repairDiagnostics, setRepairDiagnostics] = useState<any>(null);
   const [repairDiagnosticsBusy, setRepairDiagnosticsBusy] = useState(false);
@@ -683,6 +687,61 @@ function App() {
     }
   };
 
+  const loadMemories = async () => {
+    if (!session?.user?.id) {
+      setMemoryError('Sign in to manage saved JARVIS memories.');
+      return;
+    }
+    setMemoryBusy(true);
+    setMemoryError('');
+    try {
+      const response = await api.memory.list(100);
+      setMemories(Array.isArray(response.data?.memories) ? response.data.memories : []);
+    } catch (error: any) {
+      setMemoryError(String(error?.response?.data?.error || error?.message || 'Could not load saved memories.'));
+    } finally {
+      setMemoryBusy(false);
+    }
+  };
+
+  const openMemoryCenter = () => {
+    setMemoryOpen(true);
+    void loadMemories();
+  };
+
+  const forgetMemory = async (memoryId: string) => {
+    if (memoryBusy) return;
+    setMemoryBusy(true);
+    setMemoryError('');
+    try {
+      await api.memory.forget(memoryId);
+      setMemories(current => current.filter(item => String(item.id) !== memoryId));
+    } catch (error: any) {
+      setMemoryError(String(error?.response?.data?.error || error?.message || 'Could not forget that memory.'));
+    } finally {
+      setMemoryBusy(false);
+    }
+  };
+
+  const forgetAllMemories = async () => {
+    if (memoryBusy || !memories.length) return;
+    const confirmed = window.confirm('Delete all saved JARVIS memories? This cannot be undone.');
+    if (!confirmed) return;
+    setMemoryBusy(true);
+    setMemoryError('');
+    try {
+      const response = await api.memory.forgetAll();
+      setMemories([]);
+      if (Number(response.data?.deletedCount || 0) === 0) {
+        setMemoryError('No saved memories were found to delete.');
+      }
+    } catch (error: any) {
+      setMemoryError(String(error?.response?.data?.error || error?.message || 'Could not delete saved memories.'));
+    } finally {
+      setMemoryBusy(false);
+    }
+  };
+
   const handleLocalCommand = (clean: string) => {
     const value = clean.toLowerCase().replace(/[!?.,]+$/g, '').trim();
     let response = '';
@@ -724,6 +783,7 @@ function App() {
     setSystemOpen(false);
     setSecurityOpen(false);
     setEmpireOpen(false);
+    setMemoryOpen(false);
 
     if (surface === 'children') {
       if (routeReason === 'children-content-request') setFactoryTopic(sourceText.trim().slice(0, 500));
@@ -1368,6 +1428,7 @@ function App() {
             ].map(([label, command]) => (
               <button key={label} onClick={() => void sendMessage(command)} disabled={busy}>{label}</button>
             ))}
+            <button onClick={openMemoryCenter} disabled={busy || !session} title={session ? 'Manage saved JARVIS memories' : 'Sign in to manage saved memories'}>Memory</button>
           </div>
 
           <div className="composer">
@@ -1405,6 +1466,64 @@ function App() {
           </section>
         </div>
       ), document.body)}
+
+      {memoryOpen && (
+        <div className="security-overlay" role="dialog" aria-modal="true" aria-label="JARVIS Memory Center">
+          <section className="security-panel" style={{ maxWidth: 900 }}>
+            <div className="security-head">
+              <div>
+                <span className="eyebrow">TRUE FORGET</span>
+                <h2>JARVIS Memory Center</h2>
+                <p>These are saved semantic memories JARVIS can use across conversations. Forgetting one removes it from the saved-memory store.</p>
+              </div>
+              <button className="close-security" onClick={() => setMemoryOpen(false)} aria-label="Close memory center"><X size={18} /></button>
+            </div>
+
+            {memoryError && <div className="lock-note"><AlertTriangle size={16} /><span>{memoryError}</span></div>}
+
+            <div style={{ display:'flex', gap:8, justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', margin:'12px 0' }}>
+              <span>{memories.length} saved memor{memories.length === 1 ? 'y' : 'ies'} shown</span>
+              <div style={{ display:'flex', gap:8 }}>
+                <button className="security-secondary" onClick={() => void loadMemories()} disabled={memoryBusy}>
+                  {memoryBusy ? 'Refreshing…' : 'Refresh'}
+                </button>
+                <button className="security-secondary" onClick={() => void forgetAllMemories()} disabled={memoryBusy || memories.length === 0}>
+                  <Trash2 size={15} /> Forget all
+                </button>
+              </div>
+            </div>
+
+            <div style={{ display:'grid', gap:8, maxHeight:520, overflowY:'auto' }}>
+              {!memoryBusy && memories.length === 0 && (
+                <div className="lock-note"><CheckCircle2 size={16} /><span>No saved semantic memories are currently stored for this account.</span></div>
+              )}
+              {memories.map(memory => (
+                <article key={String(memory.id)} className="security-card" style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:12 }}>
+                  <div style={{ minWidth:0 }}>
+                    <span className="eyebrow">{String(memory.memoryType || 'semantic').replace(/_/g, ' ')}</span>
+                    <p style={{ margin:'5px 0', whiteSpace:'pre-wrap', overflowWrap:'anywhere' }}>{String(memory.content || '')}</p>
+                    <small>Saved {memory.createdAt ? new Date(memory.createdAt).toLocaleString() : 'date unavailable'}</small>
+                  </div>
+                  <button
+                    className="security-secondary"
+                    onClick={() => void forgetMemory(String(memory.id))}
+                    disabled={memoryBusy}
+                    aria-label="Forget this saved memory"
+                    title="Forget this memory"
+                  >
+                    <Trash2 size={15} /> Forget
+                  </button>
+                </article>
+              ))}
+            </div>
+
+            <div className="lock-note" style={{ marginTop:14 }}>
+              <LockKeyhole size={16} />
+              <span>This controls saved semantic memory. It does not erase the visible chat transcript in your current conversation.</span>
+            </div>
+          </section>
+        </div>
+      )}
 
       {commandOpen && (
         <div className="security-overlay" role="dialog" aria-modal="true" aria-label="JARVIS Command Center">
