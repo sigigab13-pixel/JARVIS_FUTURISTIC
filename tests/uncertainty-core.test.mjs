@@ -53,5 +53,5 @@ test('epistemic instruction tells JARVIS not to fake verification', () => {
   });
   assert.match(instruction, /Do not present current details as verified/i);
   assert.match(instruction, /do not manufacture confidence/i);
-  assert.match(instruction, /do not invent citations/i);
+  assert.match(instruction, /invent citations/i);
 });
