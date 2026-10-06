@@ -765,13 +765,16 @@ function App() {
     if (!surface || action === 'chat') return '';
 
     if (action === 'open') {
-      openRoutedSurface(surface, String(route?.surfaceReason || ''));
+      openRoutedSurface(surface, String(route?.surfaceReason || ''), clean);
       return surface === 'children' && route?.surfaceReason === 'children-content-request'
         ? 'I routed this to Children Factory. Your idea is loaded into the story workflow for review.'
         : `Opening ${surface.replace(/_/g, ' ')}.`;
     }
 
-    if (action === 'generate' && surface === 'image') return 'GENERATE_IMAGE';
+    if (action === 'generate' && surface === 'image') {
+      setImageLabOpen(true);
+      return '';
+    }
     return '';
   };
 
@@ -784,39 +787,6 @@ function App() {
     setMessages(next);
     setInput('');
     setBusy(true);
-
-    try {
-      const routeResponse = await api.route.intent(next.slice(-16));
-      const route = routeResponse.data?.route || null;
-      const routedResponse = routeChatRequest(route, clean);
-
-      if (routedResponse === 'GENERATE_IMAGE') {
-        try {
-          const response = await api.post('/api/image/generate', { prompt: clean });
-          const generated = response.data?.image;
-          if (!generated?.data || !generated?.mimeType) throw new Error('Invalid image response');
-          const image = { data: String(generated.data), mimeType: String(generated.mimeType) };
-          const answer = 'Done — I generated the image here in the chat.';
-          setMessages(current => [...current, { role: 'assistant', content: answer, image }]);
-          if (voiceEnabled) void speak(answer);
-        } catch (error: any) {
-          const detail = String(error?.response?.data?.error || error?.message || '').trim();
-          setMessages(current => [...current, { role: 'assistant', content: detail ? `JARVIS image generation error: ${detail}` : 'JARVIS could not generate the image right now. Please try again.' }]);
-        } finally {
-          setBusy(false);
-        }
-        return;
-      }
-
-      if (routedResponse) {
-        setMessages(current => [...current, { role: 'assistant', content: routedResponse }]);
-        if (voiceEnabled) void speak(routedResponse);
-        setBusy(false);
-        return;
-      }
-    } catch {
-      // Routing is a decision aid; the normal chat path remains available if routing is unavailable.
-    }
 
     try {
       let response;
@@ -839,8 +809,10 @@ function App() {
         setImagePrompt(clean);
         setImageResult(`data:${generatedImage.mimeType};base64,${generatedImage.data}`);
         setImageError('');
-        setImageLabOpen(true);
       }
+
+      const routing = response.data?.routing;
+      const routedResponse = routeChatRequest(routing, clean);
 
       const answer = safeText(
         response.data?.text,
@@ -850,9 +822,14 @@ function App() {
       );
       setMessages(current => [
         ...current,
-        { role: 'assistant', content: answer },
+        { role: 'assistant', content: answer, ...(generatedImage?.data && generatedImage?.mimeType ? {
+          image: { data: String(generatedImage.data), mimeType: String(generatedImage.mimeType) },
+        } : {}) },
       ]);
       if (voiceEnabled) void speak(answer);
+
+      // The server made the routing decision; the browser only follows it.
+      void routedResponse;
     } catch (error: any) {
       const detail = safeText(error?.response?.data?.error, error?.message || '').trim();
       setMessages(current => [
