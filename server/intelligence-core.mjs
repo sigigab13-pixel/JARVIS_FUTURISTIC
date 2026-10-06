@@ -132,6 +132,8 @@ export async function callOpenAIResponses({
     });
   }
 
+  const webCitations = extractWebCitations(data);
+
   return {
     text,
     provider: 'OpenAI Responses API',
@@ -139,8 +141,8 @@ export async function callOpenAIResponses({
     tier,
     responseId: cleanText(data?.id, 200),
     usage: data?.usage || null,
-    webSearchUsed: Array.isArray(data?.output) && data.output.some(item => String(item?.type || '').includes('search')),
-    webCitations: extractWebCitations(data),
+    webSearchUsed: webCitations.length > 0 || (Array.isArray(data?.output) && data.output.some(item => String(item?.type || '').includes('search'))),
+    webCitations,
   };
 }
 
