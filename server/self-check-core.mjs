@@ -9,9 +9,8 @@ function issue(code, message, repairable = true) {
   return { code, message, repairable };
 }
 
-export function inspectAssistantResponse(text, { request = '', provider = '' } = {}) {
+export function inspectAssistantResponse(text, { provider = '' } = {}) {
   const value = cleanText(text);
-  const requestText = cleanText(request, 12000);
   const issues = [];
 
   if (!value) {
@@ -48,11 +47,6 @@ export function inspectAssistantResponse(text, { request = '', provider = '' } =
 
   if (/^\s*(?:internal\s+server\s+error|error:\s*\[object\s+Object\])/i.test(value)) {
     issues.push(issue('INTERNAL_ERROR_LEAK', 'The response appears to expose an internal error rather than a user-facing answer.'));
-  }
-
-  const normalizedRequest = requestText.toLowerCase();
-  if (normalizedRequest && value.toLowerCase() === normalizedRequest) {
-    issues.push(issue('ECHO_ONLY', 'The assistant response only echoes the user message.'));
   }
 
   const limitedIssues = issues.slice(0, MAX_REPAIR_ISSUES);
