@@ -42,17 +42,17 @@ function inferMode(input) {
 
 
 const surfaceRules = [
-  { surface: 'children', patterns: [/\bchildren factory\b/i, /\bchildren content factory\b/i], openOnly: true },
-  { surface: 'image', patterns: [/\bimage lab\b/i, /\bimage studio\b/i], openOnly: true },
-  { surface: 'video', patterns: [/\bvideo lab\b/i, /\bvideo studio\b/i, /\bvideo engine\b/i], openOnly: true },
-  { surface: 'youtube', patterns: [/\byoutube center\b/i, /\byoutube\b/i], openOnly: true },
-  { surface: 'business', patterns: [/\bbusiness center\b/i, /\bbusiness manager\b/i, /\bbrand kit\b/i], openOnly: true },
-  { surface: 'mission', patterns: [/\bmission center\b/i, /\bmissions\b/i], openOnly: true },
-  { surface: 'security', patterns: [/\bsecurity center\b/i, /\bsecurity check\b/i], openOnly: true },
-  { surface: 'system', patterns: [/\bsystem center\b/i, /\bsystem check\b/i, /\bhealth check\b/i], openOnly: true },
-  { surface: 'capabilities', patterns: [/\bcapabilit(?:y|ies)\b/i, /\bwhat can you do\b/i, /\bavailable tools\b/i], openOnly: true },
-  { surface: 'command', patterns: [/\bcommand center\b/i, /\bcommands\b/i], openOnly: true },
-  { surface: 'empire', patterns: [/\bempire command\b/i], openOnly: true },
+  { surface: 'children', patterns: [/\bchildren factory\b/i, /\bchildren content factory\b/i], exact: ['children factory', 'children content factory'] },
+  { surface: 'image', patterns: [/\bimage lab\b/i, /\bimage studio\b/i], exact: ['image lab', 'image studio'] },
+  { surface: 'video', patterns: [/\bvideo lab\b/i, /\bvideo studio\b/i, /\bvideo engine\b/i], exact: ['video lab', 'video studio', 'video engine'] },
+  { surface: 'youtube', patterns: [/\byoutube center\b/i, /\byoutube\b/i], exact: ['youtube', 'youtube center'] },
+  { surface: 'business', patterns: [/\bbusiness center\b/i, /\bbusiness manager\b/i, /\bbrand kit\b/i], exact: ['business', 'business center', 'business manager', 'brand kit'] },
+  { surface: 'mission', patterns: [/\bmission center\b/i, /\bmissions\b/i], exact: ['mission', 'missions', 'mission center'] },
+  { surface: 'security', patterns: [/\bsecurity center\b/i, /\bsecurity check\b/i], exact: ['security', 'security center', 'security check'] },
+  { surface: 'system', patterns: [/\bsystem center\b/i, /\bsystem check\b/i, /\bhealth check\b/i], exact: ['system', 'system center', 'system check', 'health check'] },
+  { surface: 'capabilities', patterns: [/\bcapabilit(?:y|ies)\b/i, /\bwhat can you do\b/i, /\bavailable tools\b/i], exact: ['capability', 'capabilities', 'what can you do', 'available tools'] },
+  { surface: 'command', patterns: [/\bcommand center\b/i, /\bcommands\b/i], exact: ['command center', 'commands'] },
+  { surface: 'empire', patterns: [/\bempire command\b/i], exact: ['empire command'] },
 ];
 
 const navigationPattern = /\b(open|show|launch|go to|take me to|take me into|run)\b/i;
@@ -60,7 +60,8 @@ const navigationPattern = /\b(open|show|launch|go to|take me to|take me into|run
 function resolveSurface(input, intent, mode) {
   const value = normalizeText(input);
   const explicitSurface = surfaceRules.find(rule => rule.patterns.some(pattern => pattern.test(value)));
-  if (explicitSurface && (navigationPattern.test(value) || explicitSurface.openOnly)) {
+  const exactSurface = explicitSurface && explicitSurface.exact.includes(value.toLowerCase());
+  if (explicitSurface && (navigationPattern.test(value) || exactSurface)) {
     return { surface: explicitSurface.surface, surfaceAction: 'open', reason: 'explicit-navigation' };
   }
 
