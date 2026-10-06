@@ -267,6 +267,46 @@ export async function searchSemanticMemories(userId, input, options = {}) {
   });
 }
 
+export async function listSemanticMemories(userId, limit = 50) {
+  if (!configured || !validUuid(userId)) return [];
+  const safeLimit = Math.min(100, Math.max(1, Number(limit) || 50));
+  const rows = await request(
+    `jarvis_semantic_memory?select=id,memory_type,content,metadata,importance,created_at,last_accessed_at&user_id=eq.${encodeURIComponent(userId)}&order=updated_at.desc&limit=${safeLimit}`
+  );
+  return Array.isArray(rows) ? rows : [];
+}
+
+export async function deleteSemanticMemory(userId, memoryId) {
+  if (!validUuid(userId)) throw new Error('Invalid JARVIS user id.');
+  if (!validUuid(memoryId)) throw new Error('Invalid JARVIS memory id.');
+  if (!configured) return { deleted: false, deletedCount: 0 };
+
+  const rows = await request(
+    `jarvis_semantic_memory?id=eq.${encodeURIComponent(memoryId)}&user_id=eq.${encodeURIComponent(userId)}`,
+    {
+      method: 'DELETE',
+      headers: { Prefer: 'return=representation' },
+    }
+  );
+  const deletedCount = Array.isArray(rows) ? rows.length : 0;
+  return { deleted: deletedCount > 0, deletedCount };
+}
+
+export async function deleteAllSemanticMemories(userId) {
+  if (!validUuid(userId)) throw new Error('Invalid JARVIS user id.');
+  if (!configured) return { deleted: false, deletedCount: 0 };
+
+  const rows = await request(
+    `jarvis_semantic_memory?user_id=eq.${encodeURIComponent(userId)}`,
+    {
+      method: 'DELETE',
+      headers: { Prefer: 'return=representation' },
+    }
+  );
+  const deletedCount = Array.isArray(rows) ? rows.length : 0;
+  return { deleted: deletedCount > 0, deletedCount };
+}
+
 export async function saveSemanticMemory(userId, content, metadata = {}, memoryType = 'semantic') {
   if (!configured || !validUuid(userId)) return null;
   const text = String(content || '').trim();
