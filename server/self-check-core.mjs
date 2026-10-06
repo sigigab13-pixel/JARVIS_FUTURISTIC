@@ -85,15 +85,16 @@ export function repairTextDeterministically(text) {
 }
 
 export function selfCheckAndNormalize(text, options = {}) {
-  const normalized = repairTextDeterministically(text);
-  const before = inspectAssistantResponse(text, options);
+  const original = String(text ?? '');
+  const normalized = repairTextDeterministically(original);
+  const before = inspectAssistantResponse(original, options);
   const after = inspectAssistantResponse(normalized, options);
 
   return {
     text: normalized,
     before,
     after,
-    repaired: normalized !== cleanText(text),
+    repaired: normalized !== original,
   };
 }
 
