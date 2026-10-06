@@ -40,6 +40,54 @@ function inferMode(input) {
   return 'answer';
 }
 
+
+const surfaceRules = [
+  { surface: 'children', patterns: [/\bchildren factory\b/i, /\bchildren content factory\b/i], exact: ['children factory', 'children content factory'] },
+  { surface: 'image', patterns: [/\bimage lab\b/i, /\bimage studio\b/i], exact: ['image lab', 'image studio'] },
+  { surface: 'video', patterns: [/\bvideo lab\b/i, /\bvideo studio\b/i, /\bvideo engine\b/i], exact: ['video lab', 'video studio', 'video engine'] },
+  { surface: 'youtube', patterns: [/\byoutube center\b/i, /\byoutube\b/i], exact: ['youtube', 'youtube center'] },
+  { surface: 'business', patterns: [/\bbusiness center\b/i, /\bbusiness manager\b/i, /\bbrand kit\b/i], exact: ['business', 'business center', 'business manager', 'brand kit'] },
+  { surface: 'mission', patterns: [/\bmission center\b/i, /\bmissions\b/i], exact: ['mission', 'missions', 'mission center'] },
+  { surface: 'security', patterns: [/\bsecurity center\b/i, /\bsecurity check\b/i], exact: ['security', 'security center', 'security check'] },
+  { surface: 'system', patterns: [/\bsystem center\b/i, /\bsystem check\b/i, /\bhealth check\b/i], exact: ['system', 'system center', 'system check', 'health check'] },
+  { surface: 'capabilities', patterns: [/\bcapabilit(?:y|ies)\b/i, /\bwhat can you do\b/i, /\bavailable tools\b/i], exact: ['capability', 'capabilities', 'what can you do', 'available tools'] },
+  { surface: 'command', patterns: [/\bcommand center\b/i, /\bcommands\b/i], exact: ['command center', 'commands'] },
+  { surface: 'empire', patterns: [/\bempire command\b/i], exact: ['empire command'] },
+];
+
+const navigationPattern = /\b(open|show|launch|go to|take me to|take me into|run)\b/i;
+
+function resolveSurface(input, intent, mode, candidateCapabilities = []) {
+  const value = normalizeText(input).toLowerCase();
+  const explicitSurface = surfaceRules.find(rule => rule.patterns.some(pattern => pattern.test(value)));
+  const exactSurface = explicitSurface && explicitSurface.exact.includes(value);
+  if (explicitSurface && (navigationPattern.test(value) || exactSurface)) {
+    return { surface: explicitSurface.surface, surfaceAction: 'open', reason: 'explicit-navigation' };
+  }
+
+  if (intent === 'children-story') return { surface: 'children', surfaceAction: 'open', reason: 'children-content-request' };
+  if (intent === 'repair') return { surface: 'system', surfaceAction: 'open', reason: 'repair-request' };
+
+  const topCapability = candidateCapabilities[0]?.id || '';
+  if (topCapability === 'video' && mode === 'create') {
+    return { surface: 'video', surfaceAction: 'open', reason: 'video-creation-request' };
+  }
+  if (topCapability === 'business' && ['manage', 'decide'].includes(mode)) {
+    return { surface: 'business', surfaceAction: 'open', reason: 'business-management-request' };
+  }
+  if (topCapability === 'youtube' && mode === 'execute') {
+    return { surface: 'youtube', surfaceAction: 'open', reason: 'youtube-action-request' };
+  }
+  if (topCapability === 'durable_missions' && ['execute', 'manage'].includes(mode)) {
+    return { surface: 'mission', surfaceAction: 'open', reason: 'mission-management-request' };
+  }
+  if (intent === 'image' && mode === 'create') {
+    return { surface: 'image', surfaceAction: 'generate', reason: 'image-request' };
+  }
+
+  return { surface: null, surfaceAction: 'chat', reason: 'no-supported-surface-route' };
+}
+
 function extractReferences(input, priorMessages = []) {
   const value = normalizeText(input);
   const prior = Array.isArray(priorMessages) ? priorMessages : [];
@@ -95,14 +143,19 @@ export function routeIntent({ messages = [], availableCapabilities = [], user = 
 
   const references = extractReferences(latest, prior);
   const needsClarification = references.some(reference => reference.requiresResolution) && prior.length === 0;
+  const candidateCapabilities = capabilityScores.filter(item => item.routeScore > 0).slice(0, 6);
+  const surfaceRoute = resolveSurface(latest, intent, mode, candidateCapabilities);
 
   return {
     intent,
     mode,
     latestUserMessage: latest,
-    candidateCapabilities: capabilityScores.filter(item => item.routeScore > 0).slice(0, 6),
+    candidateCapabilities,
     references,
     needsClarification,
+    surface: surfaceRoute.surface,
+    surfaceAction: surfaceRoute.surfaceAction,
+    surfaceReason: surfaceRoute.reason,
     authenticatedUserId: user?.id || null,
   };
 }
@@ -114,6 +167,8 @@ export function routeContextForPrompt(route) {
     `- intent: ${route.intent || 'chat'}`,
     `- mode: ${route.mode}`,
     `- candidate capabilities: ${route.candidateCapabilities?.map(item => item.id).join(', ') || 'none confidently identified'}`,
+    `- surface: ${route.surface || 'none'}`,
+    `- surface action: ${route.surfaceAction || 'chat'}`,
     `- contextual references detected: ${route.references?.length || 0}`,
     '- Treat references as unresolved until they can be grounded in the supplied conversation, files, memory, or tool context.',
   ];
