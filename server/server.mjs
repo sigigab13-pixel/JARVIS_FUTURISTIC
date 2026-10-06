@@ -59,6 +59,7 @@ import { generateHuggingFaceImage, HF_IMAGE_MODELS, HF_IMAGE_EDIT_MODELS, HF_IMA
 import { getYouTubeAccessToken, getYouTubeAnalytics, getYouTubeChannel, uploadYouTubeVideo } from './youtube.mjs';
 import { getRepairOfficeDiagnostics, getRepairOfficePolicy } from './repair-office.mjs';
 import { generateIntelligentResponse, getOpenAIModels } from './intelligence-core.mjs';
+import { formatDecisionMemory, parseExplicitDecision } from './decision-memory.mjs';
 
 const PORT = Number(process.env.PORT || 10000);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -1314,7 +1315,7 @@ export async function handleApi(req, res, pathname, url) {
     }
 
     const memoryContext = semanticMemories.length
-      ? `Relevant long-term memories for this user, ranked by relevance and importance:\n${semanticMemories.map((m, i) => `${i + 1}. [${String(m.memory_type || 'memory')}] ${String(m.content || '').trim()}`).join('\n')}\nUse only memories that genuinely help answer the current request. Prefer identity, preferences, goals, project decisions, and explicit instructions when relevant. Do not mention the memory system unless asked.`
+      ? `Relevant long-term memories for this user, ranked by relevance and importance:\n${semanticMemories.map((m, i) => `${i + 1}. [${String(m.memory_type || 'memory')}] ${String(m.content || '').trim()}`).join('\n')}\nUse only memories that genuinely help answer the current request. Prefer identity, preferences, goals, project decisions, decision memories, and explicit instructions when relevant. Treat active JARVIS decision memories as user constraints: do not re-propose a rejected alternative unless the user explicitly reopens it or relevant circumstances have materially changed, and explain the change when appropriate. Do not mention the memory system unless asked.`
       : '';
 
     const systemMessage = [
@@ -1411,12 +1412,29 @@ export async function handleApi(req, res, pathname, url) {
     }
 
     if (userId && latestUserMessage.length >= 12) {
+      const decision = parseExplicitDecision(latestUserMessage);
       const memory = classifyMemory(latestUserMessage);
       try {
-        await saveSemanticMemory(userId, latestUserMessage, {
-          source: 'chat',
-          importance: memory.importance,
-        }, memory.type);
+        if (decision) {
+          await saveSemanticMemory(
+            userId,
+            formatDecisionMemory(decision),
+            {
+              source: 'chat',
+              importance: 0.97,
+              decision: decision.decision,
+              rationale: decision.rationale,
+              rejected: decision.rejected,
+              scope: decision.scope,
+            },
+            'decision',
+          );
+        } else {
+          await saveSemanticMemory(userId, latestUserMessage, {
+            source: 'chat',
+            importance: memory.importance,
+          }, memory.type);
+        }
       } catch (memoryError) {
         console.error('Semantic memory save error:', memoryError);
       }
