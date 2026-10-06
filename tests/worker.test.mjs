@@ -42,6 +42,7 @@ test('Children Factory scene worker rejects foreign project mission identities',
   );
 });
 import { buildChildrenFactoryPipeline, canPublishChildrenFactoryMission } from '../server/server.mjs';
+import { buildChildrenFactoryDemoDraft, buildChildrenFactoryDemoFrame } from '../server/server.mjs';
 
 test('worker creates unique stable ids', () => {
   const a = createWorkerId();
@@ -173,4 +174,19 @@ test('Children Factory can publish only after verified video and approval', () =
     },
   };
   assert.equal(canPublishChildrenFactoryMission(mission), true);
+});
+
+
+test('Children Factory zero-credit demo draft is deterministic and age-bounded', () => {
+  const draft = buildChildrenFactoryDemoDraft('sharing with friends', 6);
+  assert.equal(draft.character.name, 'Kobi');
+  assert.equal(draft.age, 6);
+  assert.match(draft.story, /sharing with friends/);
+  assert.equal(typeof draft.title, 'string');
+});
+
+test('Children Factory zero-credit demo frames are valid PPM images', () => {
+  const frame = buildChildrenFactoryDemoFrame(2);
+  assert.match(frame.subarray(0, 80).toString('ascii'), /^P6\n\d+ \d+\n255\n/);
+  assert.ok(frame.length > 100000);
 });
