@@ -17,9 +17,9 @@ Because development time is limited, JARVIS will first ship a focused V1 instead
 - [x] Children Factory foundation: story, character bible, sequential image assets, approval gate, first MP4 renderer.
 - [x] YouTube publishing foundation.
 - [x] Upstash queue + GitHub worker foundation.
-- [ ] Core permission/approval surface exposed cleanly in the product.
-- [ ] Basic Repair Office / health dashboard with safe recovery actions.
-- [ ] Unified natural-language routing for the supported V1 capabilities.
+- [x] Core permission/approval surface exposed cleanly in the product (verified by merged PR #42 and production deployment).
+- [x] Basic Repair Office / health dashboard with bounded safe-recovery policy and read-only diagnostics (verified by merged PRs #41 and #44 and production deployment).
+- [x] Unified natural-language routing for the supported V1 capabilities (verified by merged PR #43 and production deployment).
 - [ ] End-to-end Children Factory demo path from idea to publish-ready package.
 - [ ] Final V1 UI polish and release QA.
 
