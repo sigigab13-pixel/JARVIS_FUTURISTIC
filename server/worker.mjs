@@ -16,7 +16,7 @@ import {
 } from './store.mjs';
 import { executeMissionStep } from './mission-executor.mjs';
 import { transitionMission } from './mission-runtime.mjs';
-import { cleanupExpiredMedia, createMediaKey, getMedia, isSupabaseStorageConfigured, markMediaRetention, putMedia } from './media.mjs';
+import { cleanupExpiredMedia, createMediaKey, getMedia, isSupabaseStorageConfigured, putMedia } from './media.mjs';
 import { generateHuggingFaceImage } from './image-generator.mjs';
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
