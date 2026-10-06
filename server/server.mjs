@@ -1197,12 +1197,7 @@ export async function handleApi(req, res, pathname, url) {
     });
 
     return json(res, 200, {
-      route,
-      capabilities: getAvailableCapabilities().map(item => ({
-        id: item.id,
-        label: item.label,
-        category: item.category,
-      })),
+      route: { ...route, authenticatedUserId: null },
       evidence: {
         generatedAt: new Date().toISOString(),
         sideEffects: false,
