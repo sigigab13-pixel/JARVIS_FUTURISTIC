@@ -34,7 +34,19 @@ import {
   Apple,
 } from 'lucide-react';
 
-type Message = { role: 'user' | 'assistant'; content: string; image?: { data: string; mimeType: string } };
+type Provenance = {
+  evidenceLevel?: string;
+  basis?: string[];
+  sources?: Array<{ type?: string; title?: string; url?: string; evidence?: string }>;
+  note?: string;
+};
+
+type Message = {
+  role: 'user' | 'assistant';
+  content: string;
+  image?: { data: string; mimeType: string };
+  provenance?: Provenance;
+};
 
 function safeText(value: unknown, fallback = ''): string {
   if (typeof value === 'string') return value;
@@ -58,7 +70,8 @@ function normalizeMessages(value: unknown, fallback: Message[] = starter): Messa
       if (item?.role !== 'user' && item?.role !== 'assistant') return null;
       const content = safeText(item?.content).trim();
       const image = item?.image?.data && item?.image?.mimeType ? { data: String(item.image.data), mimeType: String(item.image.mimeType) } : undefined;
-      return content || image ? { role: item.role, content, ...(image ? { image } : {}) } : null;
+      const provenance = item?.provenance && typeof item.provenance === 'object' ? item.provenance as Provenance : undefined;
+      return content || image ? { role: item.role, content, ...(image ? { image } : {}), ...(provenance ? { provenance } : {}) } : null;
     })
     .filter(Boolean) as Message[];
 }
@@ -82,6 +95,27 @@ function renderInlineMarkdown(value: string) {
     if (part.startsWith('*') && part.endsWith('*')) return <em key={index}>{part.slice(1, -1)}</em>;
     return <span key={index}>{part}</span>;
   });
+}
+
+function provenanceBasisLabel(value: string): string {
+  const labels: Record<string, string> = {
+    externally_verified_web: 'Live web',
+    live_web_search_without_citation: 'Live search',
+    saved_user_memory: 'Saved memory',
+    conversation_context: 'Current chat',
+    model_inference: 'AI inference',
+  };
+  return labels[value] || value.replace(/_/g, ' ');
+}
+
+function provenanceEvidenceLabel(value: string): string {
+  const labels: Record<string, string> = {
+    externally_verified: 'Externally verified',
+    live_search_no_citation: 'Live search, no citation',
+    contextual: 'Contextual',
+    inferred: 'Inference',
+  };
+  return labels[value] || value.replace(/_/g, ' ');
 }
 
 function renderRichMessage(content: string): ReactNode[] {
@@ -884,7 +918,7 @@ function App() {
         ...current,
         { role: 'assistant', content: answer, ...(generatedImage?.data && generatedImage?.mimeType ? {
           image: { data: String(generatedImage.data), mimeType: String(generatedImage.mimeType) },
-        } : {}) },
+        } : {}), ...(response.data?.provenance ? { provenance: response.data.provenance as Provenance } : {}) },
       ]);
       if (voiceEnabled) void speak(answer);
 
@@ -1404,6 +1438,28 @@ function App() {
                   {message.image?.data && message.image?.mimeType && (
                     <div className="chat-generated-image">
                       <img src={`data:${message.image.mimeType};base64,${message.image.data}`} alt="JARVIS generated result" />
+                    </div>
+                  )}
+                  {message.role === 'assistant' && message.provenance && (
+                    <div className="message-provenance" aria-label="JARVIS evidence and source trail">
+                      <div className="provenance-head">
+                        <span>Evidence: {provenanceEvidenceLabel(String(message.provenance.evidenceLevel || 'inferred'))}</span>
+                        <span>{(Array.isArray(message.provenance.basis) ? message.provenance.basis : ['model_inference']).map(provenanceBasisLabel).join(' · ')}</span>
+                      </div>
+                      {Array.isArray(message.provenance.sources) && message.provenance.sources.filter(source => source?.type === 'live_web' && source?.url).length > 0 && (
+                        <div className="provenance-sources">
+                          {message.provenance.sources.filter(source => source?.type === 'live_web' && source?.url).map((source, sourceIndex) => (
+                            <a
+                              key={String(source.url) + '-' + sourceIndex}
+                              href={String(source.url)}
+                              target="_blank"
+                              rel="noreferrer noopener"
+                            >
+                              {String(source.title || source.url)}
+                            </a>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

@@ -66,6 +66,7 @@ import { formatDecisionMemory, parseExplicitDecision } from './decision-memory.m
 import { buildRepairInstruction, inspectAssistantResponse, selfCheckAndNormalize } from './self-check-core.mjs';
 import { assessUncertainty, buildEpistemicInstruction } from './uncertainty-core.mjs';
 import { normalizeMemoryList, parseMemoryDeletionRequest } from './memory-control.mjs';
+import { buildProvenance } from './provenance-core.mjs';
 
 const PORT = Number(process.env.PORT || 10000);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -1403,6 +1404,7 @@ export async function handleApi(req, res, pathname, url) {
       "Do not output generic capability lists or generic knowledge-cutoff disclaimers unless the user explicitly asks for them.",
       "Be accurate, concise, friendly, and honest about capabilities. Do not claim an external action happened unless the connected service confirms it.",
       "Distinguish verified facts from inference. For current, latest, recent, source, or verification requests, never present unverified current details as confirmed. When evidence is insufficient, say so plainly instead of guessing. Never invent citations, sources, browsing, or verification.",
+      "When live web sources are provided by the AI provider, ground current factual claims in those sources. Do not cite or describe sources that JARVIS did not actually receive.",
       "Never claim that an image, file, video, or other external asset was generated unless JARVIS actually received and returned that asset from its connected generation service. Never invent image URLs or markdown image links.",
       "For security topics, stay defensive and educational. For NEXORA, keep trading simulated/paper-only.",
       memoryContext,
@@ -1419,6 +1421,7 @@ export async function handleApi(req, res, pathname, url) {
     let intelligenceTier = '';
     let responseId = null;
     let webSearchUsed = false;
+    let webCitations = [];
 
     if (openaiKey) {
       try {
@@ -1436,6 +1439,7 @@ export async function handleApi(req, res, pathname, url) {
         intelligenceTier = result.tier;
         responseId = result.responseId || null;
         webSearchUsed = Boolean(result.webSearchUsed);
+        webCitations = Array.isArray(result.webCitations) ? result.webCitations : [];
       } catch (error) {
         console.error('JARVIS OpenAI intelligence core failed:', error?.statusCode || '', error?.message || error);
       }
@@ -1524,6 +1528,7 @@ export async function handleApi(req, res, pathname, url) {
           model = repaired.model;
           intelligenceTier = repaired.tier;
           responseId = repaired.responseId || responseId;
+          if (Array.isArray(repaired.webCitations) && repaired.webCitations.length > 0) webCitations = repaired.webCitations;
         } else if (provider === 'Hugging Face Inference Providers' && hfToken) {
           const response = await fetch(HF_CHAT_URL, {
             method: 'POST',
@@ -1569,6 +1574,14 @@ export async function handleApi(req, res, pathname, url) {
         repairAttempted: selfRepairAttempted,
       });
     }
+
+    const provenance = buildProvenance({
+      messageCount: messages.length,
+      memoryCount: semanticMemories.length,
+      webSearchUsed,
+      webCitations,
+      provider,
+    });
 
     if (userId && latestUserMessage.length >= 12) {
       const decision = parseExplicitDecision(latestUserMessage);
@@ -1622,6 +1635,7 @@ export async function handleApi(req, res, pathname, url) {
           repairAttempted: selfRepairAttempted,
           detectedIssues: initialSelfCheck.before.issues.map(item => item.code),
           epistemic: assessUncertainty({ latestUserMessage, route, responseText: text, webSearchUsed }),
+          provenance,
         },
         routing: {
         mode: route.mode,

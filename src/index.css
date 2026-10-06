@@ -450,6 +450,37 @@ button {
   font-size: 13px;
   white-space: pre-wrap;
 }
+.message-provenance {
+  margin-top: 9px;
+  padding-top: 7px;
+  border-top: 1px solid #132b39;
+  color: #607987;
+  font-size: 8px;
+  line-height: 1.45;
+}
+.provenance-head {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.provenance-head span:first-child {
+  color: #78afc4;
+  letter-spacing: 0.04em;
+}
+.provenance-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 9px;
+  margin-top: 4px;
+}
+.provenance-sources a {
+  color: #76c6e4;
+  text-decoration: none;
+}
+.provenance-sources a:hover {
+  text-decoration: underline;
+}
 .thinking {
   color: #577586;
   font-size: 11px;
