@@ -69,6 +69,7 @@ import { normalizeMemoryList, parseMemoryDeletionRequest } from './memory-contro
 import { buildTimeAwarenessInstruction, getTimeContextForRequest } from './time-freshness-core.mjs';
 import { buildContradictionInstruction, detectMemoryContradictions } from './contradiction-core.mjs';
 import { formatCorrectionMemory, parseUserCorrection } from './correction-memory.mjs';
+import { planGoal } from './goal-outcome-core.mjs';
 
 const PORT = Number(process.env.PORT || 10000);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -1310,6 +1311,8 @@ export async function handleApi(req, res, pathname, url) {
 
     const childrenFactoryRoute = route.intent === 'children-story';
 
+    const goalPlan = planGoal({ request: latestUserMessage });
+
     const imageAction = /\b(generate|create|make|draw|illustrate|render)\b/i.test(latestUserMessage);
     const imageNoun = /\b(image|picture|photo|illustration)\b/i.test(latestUserMessage);
     const imageRequest = imageAction && imageNoun;
@@ -1416,6 +1419,7 @@ export async function handleApi(req, res, pathname, url) {
         ? `Likely capabilities for the current request (hints, not execution): ${intentCandidates.map(item => item.id).join(', ')}`
         : 'No capability was confidently identified from simple routing hints; use reasoning and available tools rather than inventing a capability.',
       routeContextForPrompt(route),
+      `Goal-to-Outcome planning metadata (planning only; never an authorization): ${JSON.stringify(goalPlan)}`,
       timeAwareness,
       contradictionAwareness,
       "The JARVIS application provides you with the current conversation messages and, when available, relevant long-term memories retrieved from its persistent memory system.",
@@ -1653,6 +1657,7 @@ export async function handleApi(req, res, pathname, url) {
         responseId,
         persistent: Boolean(userId),
         guest: !userId,
+        planning: goalPlan,
         verification: {
           selfCheck: selfRepairSucceeded ? 'repaired-and-verified' : 'passed',
           repairAttempted: selfRepairAttempted,
