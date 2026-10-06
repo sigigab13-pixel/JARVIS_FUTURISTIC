@@ -4,6 +4,14 @@ All notable JARVIS changes are documented here.
 
 The project is currently in active development, so this changelog focuses on major milestones rather than every individual source change.
 
+## [Unreleased] — 2026-10-06
+
+### Reliability & Governance
+
+- Bound mission execution to executable JARVIS Parent Laws for autonomy policy, retry ceilings, and stable side-effect identity.
+- Required shared Verification Core evidence before mission steps can advance as verified.
+- Fixed Parent Gate checklist parsing so unchecked merge requirements are actually enforced.
+
 ## [v41] — 2026-09-19
 
 ### Added
