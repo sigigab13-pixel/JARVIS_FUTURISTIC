@@ -69,6 +69,7 @@ import { normalizeMemoryList, parseMemoryDeletionRequest } from './memory-contro
 import { buildTimeAwarenessInstruction, getTimeContextForRequest } from './time-freshness-core.mjs';
 import { buildContradictionInstruction, detectMemoryContradictions } from './contradiction-core.mjs';
 import { formatCorrectionMemory, parseUserCorrection } from './correction-memory.mjs';
+import { assessActionUncertainty, buildUncertaintyManagerInstruction } from './uncertainty-manager-core.mjs';
 import { buildProvenance, extractWebCitations } from './provenance-core.mjs';
 import { planGoal } from './goal-outcome-core.mjs';
 
@@ -1313,6 +1314,7 @@ export async function handleApi(req, res, pathname, url) {
     const childrenFactoryRoute = route.intent === 'children-story';
 
     const goalPlan = planGoal({ request: latestUserMessage });
+    const uncertaintyManager = assessActionUncertainty({ plan: goalPlan, route });
 
     const imageAction = /\b(generate|create|make|draw|illustrate|render)\b/i.test(latestUserMessage);
     const imageNoun = /\b(image|picture|photo|illustration)\b/i.test(latestUserMessage);
@@ -1421,6 +1423,7 @@ export async function handleApi(req, res, pathname, url) {
         : 'No capability was confidently identified from simple routing hints; use reasoning and available tools rather than inventing a capability.',
       routeContextForPrompt(route),
       `Goal-to-Outcome planning metadata (planning only; never an authorization): ${JSON.stringify(goalPlan)}`,
+      buildUncertaintyManagerInstruction(uncertaintyManager),
       timeAwareness,
       contradictionAwareness,
       "The JARVIS application provides you with the current conversation messages and, when available, relevant long-term memories retrieved from its persistent memory system.",
@@ -1670,6 +1673,7 @@ export async function handleApi(req, res, pathname, url) {
         persistent: Boolean(userId),
         guest: !userId,
         planning: goalPlan,
+        uncertaintyManager,
         provenance,
         verification: {
           selfCheck: selfRepairSucceeded ? 'repaired-and-verified' : 'passed',
