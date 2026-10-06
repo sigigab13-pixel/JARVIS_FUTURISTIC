@@ -60,6 +60,7 @@ import { getYouTubeAccessToken, getYouTubeAnalytics, getYouTubeChannel, uploadYo
 import { getRepairOfficeDiagnostics, getRepairOfficePolicy } from './repair-office.mjs';
 import { generateIntelligentResponse, getOpenAIModels } from './intelligence-core.mjs';
 import { formatDecisionMemory, parseExplicitDecision } from './decision-memory.mjs';
+import { buildRepairInstruction, inspectAssistantResponse, selfCheckAndNormalize } from './self-check-core.mjs';
 
 const PORT = Number(process.env.PORT || 10000);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -1411,6 +1412,89 @@ export async function handleApi(req, res, pathname, url) {
       });
     }
 
+    const initialSelfCheck = selfCheckAndNormalize(text, {
+      request: latestUserMessage,
+      provider,
+    });
+    text = initialSelfCheck.text;
+    let selfCheck = initialSelfCheck.after;
+    let selfRepairAttempted = false;
+    let selfRepairSucceeded = false;
+
+    if (!selfCheck.ok) {
+      if (!selfCheck.repairable) {
+        return json(res, 502, {
+          error: 'JARVIS self-check rejected the response because the detected failure is not safely repairable.',
+          code: 'SELF_CHECK_FAILED',
+          issues: selfCheck.issues.map(item => item.code),
+        });
+      }
+
+      selfRepairAttempted = true;
+      const repairInstruction = buildRepairInstruction(selfCheck);
+      let repairedText = '';
+
+      try {
+        if (provider === 'OpenAI Responses API' && openaiKey) {
+          const repaired = await generateIntelligentResponse({
+            apiKey: openaiKey,
+            instructions: systemMessage + '\n\n' + repairInstruction,
+            messages: [...messages, { role: 'assistant', content: text }],
+            latestUserMessage,
+            route,
+            enableWebSearch: false,
+          });
+          repairedText = repaired.text;
+          provider = repaired.provider;
+          model = repaired.model;
+          intelligenceTier = repaired.tier;
+          responseId = repaired.responseId || responseId;
+        } else if (provider === 'Hugging Face Inference Providers' && hfToken) {
+          const response = await fetch(HF_CHAT_URL, {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + hfToken, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: HF_MODEL,
+              messages: [
+                { role: 'system', content: systemMessage + '\n\n' + repairInstruction },
+                ...messages,
+                { role: 'assistant', content: text },
+              ],
+              max_tokens: 1200,
+              temperature: 0.3,
+            }),
+          });
+          const data = await response.json().catch(() => ({}));
+          if (response.ok) repairedText = String(data?.choices?.[0]?.message?.content || '').trim();
+        }
+      } catch (repairError) {
+        console.error('JARVIS self-repair attempt failed:', repairError?.message || repairError);
+      }
+
+      if (repairedText) {
+        const repairedCheck = selfCheckAndNormalize(repairedText, {
+          request: latestUserMessage,
+          provider,
+        });
+        if (repairedCheck.after.ok) {
+          text = repairedCheck.text;
+          selfCheck = repairedCheck.after;
+          selfRepairSucceeded = true;
+        } else {
+          selfCheck = repairedCheck.after;
+        }
+      }
+    }
+
+    if (!selfCheck.ok) {
+      return json(res, 502, {
+        error: 'JARVIS self-check could not produce a verified user-facing response.',
+        code: 'SELF_CHECK_FAILED',
+        issues: selfCheck.issues.map(item => item.code),
+        repairAttempted: selfRepairAttempted,
+      });
+    }
+
     if (userId && latestUserMessage.length >= 12) {
       const decision = parseExplicitDecision(latestUserMessage);
       const memory = classifyMemory(latestUserMessage);
@@ -1450,7 +1534,20 @@ export async function handleApi(req, res, pathname, url) {
     return json(
       res,
       200,
-      { text, provider, model, intelligenceTier, responseId, persistent: Boolean(userId), guest: !userId, routing: {
+      {
+        text,
+        provider,
+        model,
+        intelligenceTier,
+        responseId,
+        persistent: Boolean(userId),
+        guest: !userId,
+        verification: {
+          selfCheck: selfRepairSucceeded ? 'repaired-and-verified' : 'passed',
+          repairAttempted: selfRepairAttempted,
+          detectedIssues: initialSelfCheck.before.issues.map(item => item.code),
+        },
+        routing: {
         mode: route.mode,
         intent: route.intent || 'chat',
         factory: childrenFactoryRoute ? 'children-v1' : null,
