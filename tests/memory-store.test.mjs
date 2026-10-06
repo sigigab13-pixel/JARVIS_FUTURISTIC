@@ -88,5 +88,5 @@ test('deletes all memories for exactly one owner', async () => {
   const request = calls.at(-1);
   assert.equal(request.options.method, 'DELETE');
   assert.match(request.url, /user_id=eq\.123e4567-e89b-12d3-a456-426614174000/);
-  assert.doesNotMatch(request.url, /id=eq/);
+  assert.equal(new URL(request.url).searchParams.has('id'), false);
 });
