@@ -319,3 +319,10 @@ See the active queues: [#17 Future-Ready Cryptography](https://github.com/sigiga
 **GPT-5.6 Luna** — AI development partner helping build, debug, document, and evolve the platform.
 
 > **JARVIS Futuristic is being built in public — one verified capability at a time.**
+
+
+## 📈 Content Trend & Idea Discovery Office
+
+Phase 3D adds an isolated trend-ranking layer. JARVIS can normalize supplied platform signals, rank opportunities, and describe a six-hour collection plan. It requires fresh evidence and never claims automatic publishing or live trend data without a real data source.
+
+Endpoints: `GET /api/content/trends/config`, `POST /api/content/trends/rank`, and `POST /api/content/trends/check-plan`.
