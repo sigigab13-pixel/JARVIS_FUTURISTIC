@@ -89,7 +89,7 @@ function resolveSurface(input, intent, mode) {
     return { surface: 'mission', surfaceAction: 'open', reason: 'mission-management-request' };
   }
 
-  if (intent === 'image') {
+  if (intent === 'image' && mode === 'create') {
     return { surface: 'image', surfaceAction: 'generate', reason: 'image-request' };
   }
 
