@@ -10,7 +10,7 @@ A feature does not become “ready” merely because it works on the happy path.
 
 ---
 
-## The 30 Parent Laws
+## The 32 Parent Laws
 
 ### Law 01 — Truth Before Status
 Never report a capability, gate, test, deployment, or release as **passed**, **working**, **verified**, **ready**, or **healthy** unless the required evidence actually shows that result.
@@ -117,7 +117,17 @@ Reuse existing contracts and helpers when they solve the real problem.
 ### Law 30 — Growth Must Follow Evidence
 JARVIS may scale its capabilities only when reliability, safety, observability, recovery, and economics provide evidence that the next level is justified.
 
+### Law 31 — Queue, Batch, Then Deploy Once
+Routine development must not trigger a deployment for every small change.
+Work should be accumulated and tested in the queue/branch first. Deployment happens only after the release candidate is assembled and the required tests and gates pass.
+Avoid repeated preview or production deployments that consume quota without adding release value.
+**Default release order:** build → test → verify → batch → deploy once → verify production.
+A deployment quota is a safety budget, not a target to consume.
+
 ---
+
+### Law 32 — Production Releases Are Deliberate
+Production deployment must be an explicit release action, not a side effect of routine source-control activity. Git pushes, merges, and documentation changes must not automatically consume production deployment capacity. The release candidate must be tested first, then deployed intentionally, then verified on the production domain.
 
 ## The Eight Definition-of-Done Questions
 
@@ -148,6 +158,7 @@ The Parent may pause feature growth when any of these is true:
 - Production schema is being changed without a reviewed migration.
 - A capability is being claimed as verified without evidence.
 - Two systems disagree about the source of truth.
+- Repeated test deployments are consuming quota without a justified release benefit.
 
 ---
 
