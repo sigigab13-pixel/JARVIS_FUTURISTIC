@@ -193,12 +193,15 @@ export async function executeMissionStep(job) {
   if (current.currentStep !== stepIndex) {
     const existingStep = current.steps?.[stepIndex];
     if (existingStep?.status === 'succeeded') {
-      const idempotentEvidence = verifyMissionStepResult(stepAdapterType(existingStep), {
+      const priorEvidence = current?.lastEvidence?.evidence && typeof current.lastEvidence.evidence === 'object'
+      ? current.lastEvidence.evidence
+      : {};
+    const idempotentEvidence = verifyMissionStepResult(stepAdapterType(existingStep), {
       accepted: true,
       status: 'already_completed',
-      routineRunId: String(current?.metadata?.routineRunId || ''),
-      mediaKey: existingStep?.mediaKey || current?.lastEvidence?.result?.mediaKey || null,
-      sha256: existingStep?.sha256 || current?.lastEvidence?.result?.sha256 || null,
+      routineRunId: String(current?.metadata?.routineRunId || priorEvidence.routineRunId || ''),
+      mediaKey: existingStep?.mediaKey || priorEvidence.asset || null,
+      sha256: existingStep?.sha256 || priorEvidence.checksum || null,
     });
     if (!idempotentEvidence.verified) {
       throw Object.assign(new Error('Previously completed mission step has no verifiable completion evidence.'), { code: 'MISSION_COMPLETION_NOT_VERIFIED' });
