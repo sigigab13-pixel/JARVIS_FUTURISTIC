@@ -117,6 +117,10 @@ async function blobToBase64(blob: Blob): Promise<string> {
 }
 
 
+export const repairOffice = {
+  diagnostics: async () => api.get('/api/repair/diagnostics'),
+};
+
 export const missions = {
   list: async () => api.get('/api/missions?limit=20'),
   createImage: async (prompt: string) => api.post('/api/missions', {

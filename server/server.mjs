@@ -57,7 +57,7 @@ import { createMissionState, transitionMission, advanceMissionStep } from './mis
 import { preflightMission, getMissionAdapters } from './mission-executor.mjs';
 import { generateHuggingFaceImage, HF_IMAGE_MODELS, HF_IMAGE_EDIT_MODELS, HF_IMAGE_PROVIDERS } from './image-generator.mjs';
 import { getYouTubeAccessToken, getYouTubeAnalytics, getYouTubeChannel, uploadYouTubeVideo } from './youtube.mjs';
-import { getRepairOfficePolicy } from './repair-office.mjs';
+import { getRepairOfficeDiagnostics, getRepairOfficePolicy } from './repair-office.mjs';
 
 const PORT = Number(process.env.PORT || 10000);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -282,6 +282,12 @@ export async function handleApi(req, res, pathname, url) {
       message: 'Repair Office is bounded: it may classify failures and recommend safe recovery, but it cannot mutate production autonomously.',
     });
   }
+
+  if (req.method === 'GET' && pathname === '/api/repair/diagnostics') {
+    await requireAuthenticatedJarvisUser(req);
+    return json(res, 200, await getRepairOfficeDiagnostics());
+  }
+
 
   if (req.method === 'GET' && pathname === '/api/capabilities') {
     await requireAuthenticatedJarvisUser(req);

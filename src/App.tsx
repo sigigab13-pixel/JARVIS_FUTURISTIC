@@ -171,6 +171,8 @@ function App() {
   const [capabilityOpen, setCapabilityOpen] = useState(false);
   const [systemOpen, setSystemOpen] = useState(false);
   const [systemResults, setSystemResults] = useState<string[]>([]);
+  const [repairDiagnostics, setRepairDiagnostics] = useState<any>(null);
+  const [repairDiagnosticsBusy, setRepairDiagnosticsBusy] = useState(false);
   const [passiveStatus, setPassiveStatus] = useState('STARTING');
   const [imageLabOpen, setImageLabOpen] = useState(false);
   const [imagePrompt, setImagePrompt] = useState('');
@@ -1042,6 +1044,26 @@ function App() {
     setSecurityResults(results);
   };
 
+  const runRepairDiagnostics = async () => {
+    if (repairDiagnosticsBusy) return;
+    setRepairDiagnosticsBusy(true);
+    try {
+      const response = await api.get('/api/repair/diagnostics');
+      setRepairDiagnostics(response.data || null);
+    } catch (error: any) {
+      setRepairDiagnostics({
+        overallStatus: 'ATTENTION',
+        checks: [{
+          name: 'Repair Office',
+          status: 'ATTENTION',
+          evidence: String(error?.response?.data?.error || error?.message || 'Diagnostic request failed.'),
+        }],
+      });
+    } finally {
+      setRepairDiagnosticsBusy(false);
+    }
+  };
+
   const runSystemCheck = () => {
     const checks = [
       window.isSecureContext ? 'Secure browser context: OK' : 'Secure browser context: check browser security',
@@ -1053,6 +1075,7 @@ function App() {
     const battery = (navigator as any).getBattery;
     if (battery) checks.push('Battery API: AVAILABLE');
     setSystemResults(checks);
+    void runRepairDiagnostics();
   };
 
   const openSecurityCenter = () => {
@@ -1729,7 +1752,21 @@ function App() {
             <div className="security-status">
               {systemResults.map(result => <div key={result} className="security-result"><CheckCircle2 size={14} /> {result}</div>)}
             </div>
-            <div className="lock-note"><Monitor size={16} /><span>JARVIS can guide you through Mac actions, but a browser cannot secretly execute Terminal commands or control macOS.</span></div>
+            <div className="repair-diagnostics" aria-live="polite">
+              <div className="repair-diagnostics-head">
+                <div><b>Repair Office</b><span>{repairDiagnosticsBusy ? 'RUNNING READ-ONLY PROBES' : repairDiagnostics?.overallStatus || 'NOT RUN'}</span></div>
+                <button type="button" className="repair-refresh" onClick={() => { void runRepairDiagnostics(); }} disabled={repairDiagnosticsBusy}>
+                  {repairDiagnosticsBusy ? 'Checking…' : 'Recheck'}
+                </button>
+              </div>
+              {repairDiagnostics?.checks?.map((check: any) => (
+                <div className={'repair-check repair-' + String(check.status || 'ATTENTION').toLowerCase()} key={String(check.name)}>
+                  <span className="repair-check-status">{String(check.status || 'ATTENTION')}</span>
+                  <div><b>{String(check.name)}</b><small>{String(check.evidence || '')}</small></div>
+                </div>
+              ))}
+            </div>
+            <div className="lock-note"><Monitor size={16} /><span>Repair Office is read-only in this phase. It can detect and report problems, but it cannot mutate production automatically.</span></div>
           </section>
         </div>
       )}
