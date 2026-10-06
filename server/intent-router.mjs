@@ -40,6 +40,61 @@ function inferMode(input) {
   return 'answer';
 }
 
+
+const surfaceRules = [
+  { surface: 'children', patterns: [/\bchildren factory\b/i, /\bchildren content factory\b/i], openOnly: true },
+  { surface: 'image', patterns: [/\bimage lab\b/i, /\bimage studio\b/i], openOnly: true },
+  { surface: 'video', patterns: [/\bvideo lab\b/i, /\bvideo studio\b/i, /\bvideo engine\b/i], openOnly: true },
+  { surface: 'youtube', patterns: [/\byoutube center\b/i, /\byoutube\b/i], openOnly: true },
+  { surface: 'business', patterns: [/\bbusiness center\b/i, /\bbusiness manager\b/i, /\bbrand kit\b/i], openOnly: true },
+  { surface: 'mission', patterns: [/\bmission center\b/i, /\bmissions\b/i], openOnly: true },
+  { surface: 'security', patterns: [/\bsecurity center\b/i, /\bsecurity check\b/i], openOnly: true },
+  { surface: 'system', patterns: [/\bsystem center\b/i, /\bsystem check\b/i, /\bhealth check\b/i], openOnly: true },
+  { surface: 'capabilities', patterns: [/\bcapabilit(?:y|ies)\b/i, /\bwhat can you do\b/i, /\bavailable tools\b/i], openOnly: true },
+  { surface: 'command', patterns: [/\bcommand center\b/i, /\bcommands\b/i], openOnly: true },
+  { surface: 'empire', patterns: [/\bempire command\b/i], openOnly: true },
+];
+
+const navigationPattern = /\b(open|show|launch|go to|take me to|take me into|run)\b/i;
+
+function resolveSurface(input, intent, mode) {
+  const value = normalizeText(input);
+  const explicitSurface = surfaceRules.find(rule => rule.patterns.some(pattern => pattern.test(value)));
+  if (explicitSurface && (navigationPattern.test(value) || explicitSurface.openOnly)) {
+    return { surface: explicitSurface.surface, surfaceAction: 'open', reason: 'explicit-navigation' };
+  }
+
+  if (intent === 'children-story') {
+    return { surface: 'children', surfaceAction: 'open', reason: 'children-content-request' };
+  }
+
+  if (intent === 'repair') {
+    return { surface: 'system', surfaceAction: 'open', reason: 'repair-request' };
+  }
+
+  if (mode === 'create' && /\b(video|animation|reel|short|storyboard)\b/i.test(value)) {
+    return { surface: 'video', surfaceAction: 'open', reason: 'video-creation-request' };
+  }
+
+  if (mode === 'execute' && /\b(youtube|upload|publish)\b/i.test(value)) {
+    return { surface: 'youtube', surfaceAction: 'open', reason: 'youtube-action-request' };
+  }
+
+  if (mode === 'manage' && /\b(business|customer|client|crm|lead|company|sales|brand)\b/i.test(value)) {
+    return { surface: 'business', surfaceAction: 'open', reason: 'business-management-request' };
+  }
+
+  if ((mode === 'manage' || mode === 'execute') && /\b(mission|automate|schedule|workflow|background)\b/i.test(value)) {
+    return { surface: 'mission', surfaceAction: 'open', reason: 'mission-management-request' };
+  }
+
+  if (intent === 'image') {
+    return { surface: 'image', surfaceAction: 'generate', reason: 'image-request' };
+  }
+
+  return { surface: null, surfaceAction: 'chat', reason: 'no-supported-surface-route' };
+}
+
 function extractReferences(input, priorMessages = []) {
   const value = normalizeText(input);
   const prior = Array.isArray(priorMessages) ? priorMessages : [];
@@ -95,6 +150,7 @@ export function routeIntent({ messages = [], availableCapabilities = [], user = 
 
   const references = extractReferences(latest, prior);
   const needsClarification = references.some(reference => reference.requiresResolution) && prior.length === 0;
+  const surfaceRoute = resolveSurface(latest, intent, mode);
 
   return {
     intent,
@@ -103,6 +159,9 @@ export function routeIntent({ messages = [], availableCapabilities = [], user = 
     candidateCapabilities: capabilityScores.filter(item => item.routeScore > 0).slice(0, 6),
     references,
     needsClarification,
+    surface: surfaceRoute.surface,
+    surfaceAction: surfaceRoute.surfaceAction,
+    surfaceReason: surfaceRoute.reason,
     authenticatedUserId: user?.id || null,
   };
 }
@@ -114,7 +173,7 @@ export function routeContextForPrompt(route) {
     `- intent: ${route.intent || 'chat'}`,
     `- mode: ${route.mode}`,
     `- candidate capabilities: ${route.candidateCapabilities?.map(item => item.id).join(', ') || 'none confidently identified'}`,
-    `- contextual references detected: ${route.references?.length || 0}`,
+    `- surface: ${route.surface || 'none'}`,\n    `- surface action: ${route.surfaceAction || 'chat'}`,\n    `- contextual references detected: ${route.references?.length || 0}`,
     '- Treat references as unresolved until they can be grounded in the supplied conversation, files, memory, or tool context.',
   ];
   if (route.needsClarification) lines.push('- A reference appears unresolved because there is not enough prior context. Ask one focused question if it materially affects the task.');
