@@ -1,3 +1,760 @@
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import EmpireDashboard from './EmpireDashboard';
+import CapabilityCenter from './CapabilityCenter';
+import './EmpireDashboard.css';
+import { api, image } from './api';
+import { supabase, supabaseConfigured } from './supabase';
+import {
+  Mic,
+  MicOff,
+  Send,
+  Trash2,
+  Volume2,
+  VolumeX,
+  Shield,
+  Cpu,
+  Activity,
+  Sparkles,
+  Camera,
+  LockKeyhole,
+  CheckCircle2,
+  AlertTriangle,
+  X,
+  Radio,
+  Terminal,
+  Monitor,
+  BrainCircuit,
+  Download,
+  RotateCcw,
+  Globe,
+  Battery,
+  Mail,
+  Github,
+  Apple,
+} from 'lucide-react';
+
+type Message = { role: 'user' | 'assistant'; content: string; image?: { data: string; mimeType: string } };
+
+function safeText(value: unknown, fallback = ''): string {
+  if (typeof value === 'string') return value;
+  if (value == null) return fallback;
+  if (value instanceof Error) return value.message || fallback;
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    const message = typeof record.message === 'string' ? record.message : '';
+    const code = typeof record.code === 'string' ? record.code : '';
+    if (message && code) return `[${code}] ${message}`;
+    if (message) return message;
+    try { return JSON.stringify(value); } catch { return fallback; }
+  }
+  return String(value);
+}
+
+function normalizeMessages(value: unknown, fallback: Message[] = starter): Message[] {
+  if (!Array.isArray(value)) return fallback;
+  return value
+    .map((item: any) => {
+      if (item?.role !== 'user' && item?.role !== 'assistant') return null;
+      const content = safeText(item?.content).trim();
+      const image = item?.image?.data && item?.image?.mimeType ? { data: String(item.image.data), mimeType: String(item.image.mimeType) } : undefined;
+      return content || image ? { role: item.role, content, ...(image ? { image } : {}) } : null;
+    })
+    .filter(Boolean) as Message[];
+}
+
+function makeStarter(displayName = 'there'): Message[] {
+  const safeName = String(displayName || 'there').trim() || 'there';
+  return [{
+    role: 'assistant',
+    content: `Hello, ${safeName}. JARVIS is online. How can I help you?`,
+  }];
+}
+
+const starter: Message[] = makeStarter();
+
+
+
+function renderInlineMarkdown(value: string) {
+  const parts = value.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g);
+  return parts.map((part, index) => {
+    if (part.startsWith('**') && part.endsWith('**')) return <strong key={index}>{part.slice(2, -2)}</strong>;
+    if (part.startsWith('*') && part.endsWith('*')) return <em key={index}>{part.slice(1, -1)}</em>;
+    return <span key={index}>{part}</span>;
+  });
+}
+
+function renderRichMessage(content: string): ReactNode[] {
+  const lines = String(content || '').split(/\r?\n/);
+  const blocks: ReactNode[] = [];
+  let list: { ordered: boolean; text: string }[] = [];
+
+  const flushList = () => {
+    if (!list.length) return;
+    const ordered = list[0].ordered;
+    const items = list.map((item, index) => <li key={index}>{renderInlineMarkdown(item.text)}</li>);
+    blocks.push(
+      ordered
+        ? <ol className="rich-list" key={blocks.length}>{items}</ol>
+        : <ul className="rich-list" key={blocks.length}>{items}</ul>
+    );
+    list = [];
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const orderedMatch = trimmed.match(/^\d+\.\s+(.+)$/);
+    const bulletMatch = trimmed.match(/^[-*]\s+(.+)$/);
+
+    if (orderedMatch || bulletMatch) {
+      const ordered = Boolean(orderedMatch);
+      if (list.length && list[0].ordered !== ordered) flushList();
+      list.push({ ordered, text: (orderedMatch || bulletMatch)![1] });
+      continue;
+    }
+
+    flushList();
+
+    if (!trimmed) {
+      blocks.push(<div className="rich-spacer" key={blocks.length} />);
+      continue;
+    }
+
+    const headingMatch = trimmed.match(/^#{1,3}\s+(.+)$/);
+    if (headingMatch) {
+      blocks.push(<h3 className="rich-heading" key={blocks.length}>{renderInlineMarkdown(headingMatch[1])}</h3>);
+      continue;
+    }
+
+    blocks.push(<p className="rich-paragraph" key={blocks.length}>{renderInlineMarkdown(trimmed)}</p>);
+  }
+
+  flushList();
+  return blocks;
+}
+
+function App() {
+  const [session, setSession] = useState<any>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
+  const [entitlement, setEntitlement] = useState<any>(null);
+  const [messages, setMessages] = useState<Message[]>(starter);
+  const [input, setInput] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const [passiveWake, setPassiveWake] = useState(true);
+  const [commandOpen, setCommandOpen] = useState(false);
+  const [missionOpen, setMissionOpen] = useState(false);
+  const [missions, setMissions] = useState<any[]>([]);
+  const [missionPrompt, setMissionPrompt] = useState('');
+  const [missionBusy, setMissionBusy] = useState(false);
+  const [missionError, setMissionError] = useState('');
+  const [factoryOpen, setFactoryOpen] = useState(false);
+  const [factoryTopic, setFactoryTopic] = useState('');
+  const [factoryAge, setFactoryAge] = useState(5);
+  const [factoryBusy, setFactoryBusy] = useState(false);
+  const [factoryError, setFactoryError] = useState('');
+  const [factoryDraft, setFactoryDraft] = useState<any>(null);
+  const [factoryRenderJob, setFactoryRenderJob] = useState<any>(null);
+  const [empireOpen, setEmpireOpen] = useState(false);
+  const [capabilityOpen, setCapabilityOpen] = useState(false);
+  const [systemOpen, setSystemOpen] = useState(false);
+  const [systemResults, setSystemResults] = useState<string[]>([]);
+  const [repairDiagnostics, setRepairDiagnostics] = useState<any>(null);
+  const [repairDiagnosticsBusy, setRepairDiagnosticsBusy] = useState(false);
+  const [passiveStatus, setPassiveStatus] = useState('STARTING');
+  const [imageLabOpen, setImageLabOpen] = useState(false);
+  const [imagePrompt, setImagePrompt] = useState('');
+  const [imageBusy, setImageBusy] = useState(false);
+  const [imageResult, setImageResult] = useState<string | null>(null);
+  const [imageError, setImageError] = useState('');
+  const [referenceImage, setReferenceImage] = useState<{ data: string; mimeType: string } | null>(null);
+  const [referencePreview, setReferencePreview] = useState<string | null>(null);
+  const [businessOpen, setBusinessOpen] = useState(false);
+  const [business, setBusiness] = useState<any>(null);
+  const [brandKit, setBrandKit] = useState<any>(null);
+  const [businessBusy, setBusinessBusy] = useState(false);
+  const [videoOpen, setVideoOpen] = useState(false);
+  const [youtubeOpen, setYoutubeOpen] = useState(false);
+  const [youtubeStatus, setYoutubeStatus] = useState<any>(null);
+  const [youtubeAnalytics, setYoutubeAnalytics] = useState<any>(null);
+  const [youtubeBusy, setYoutubeBusy] = useState(false);
+  const [youtubeError, setYoutubeError] = useState('');
+  const [youtubeTitle, setYoutubeTitle] = useState('');
+  const [youtubeDescription, setYoutubeDescription] = useState('');
+  const [youtubeMediaKey, setYoutubeMediaKey] = useState('');
+  const [youtubeMissionId, setYoutubeMissionId] = useState('');
+  const [youtubePrivacy, setYoutubePrivacy] = useState<'private' | 'unlisted' | 'public'>('private');
+  const [youtubeMadeForKids, setYoutubeMadeForKids] = useState(true);
+  const [youtubePublishBusy, setYoutubePublishBusy] = useState(false);
+  const [youtubePublishResult, setYoutubePublishResult] = useState<any>(null);
+  const [videoProjects, setVideoProjects] = useState<any[]>([]);
+  const [videoProject, setVideoProject] = useState<any>(null);
+  const [videoCharacters, setVideoCharacters] = useState<any[]>([]);
+  const [videoScenes, setVideoScenes] = useState<any[]>([]);
+  const [videoBusy, setVideoBusy] = useState(false);
+  const [videoError, setVideoError] = useState('');
+  const [editingCharacter, setEditingCharacter] = useState<any>(null);
+  const [editingScene, setEditingScene] = useState<any>(null);
+  const [securityOpen, setSecurityOpen] = useState(false);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraStatus, setCameraStatus] = useState('Not tested');
+  const [securityResults, setSecurityResults] = useState<string[]>([]);
+  const endRef = useRef<HTMLDivElement>(null);
+  const cameraRef = useRef<HTMLVideoElement>(null);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
+  const recognitionRef = useRef<any>(null);
+  const passiveRecognitionRef = useRef<any>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    const palette = [185, 212, 238, 268, 302, 334, 28, 52, 118, 154];
+    const hue = palette[Math.floor(Math.random() * palette.length)];
+    document.documentElement.style.setProperty('--jarvis-hue', String(hue));
+    return () => {};
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    if (!supabaseConfigured || !supabase) {
+      setAuthError('Supabase Auth is not configured in this deployment.');
+      setAuthReady(true);
+      return () => { active = false; };
+    }
+
+    const syncSession = async (currentSession: any) => {
+      if (!currentSession?.access_token) return;
+      try {
+        const response = await api.post('/api/auth/sync', { accessToken: currentSession.access_token });
+        if (!response.data?.ok) throw new Error(response.data?.error || 'Authentication sync failed.');
+      } catch (error: any) {
+        if (active) setAuthError(error?.message || 'Could not connect your JARVIS account.');
+      }
+    };
+    void supabase.auth.getSession().then(({ data, error }) => {
+      if (!active) return;
+      if (error) setAuthError(error.message);
+      setSession(data.session || null);
+      setAuthReady(true);
+      if (data.session) void syncSession(data.session);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (!active) return;
+      setSession(nextSession);
+      setAuthReady(true);
+      setAuthError('');
+      if (event === 'SIGNED_IN' && nextSession) void syncSession(nextSession);
+    });
+    return () => { active = false; listener.subscription.unsubscribe(); };
+  }, []);
+
+  useEffect(() => {
+    if (!session) { setEntitlement(null); return; }
+    let active = true;
+    const authUser = session.user || {};
+    const metadata = authUser.user_metadata || {};
+    const displayName = String(metadata.full_name || metadata.name || authUser.email || 'there').trim() || 'there';
+    const historyKey = `jarvis-history:${String(authUser.id || authUser.email || 'user')}`;
+    try {
+      const saved = localStorage.getItem(historyKey);
+      setMessages(saved ? normalizeMessages(JSON.parse(saved), makeStarter(displayName)) : makeStarter(displayName));
+      localStorage.removeItem('jarvis-history');
+    } catch {
+      setMessages(makeStarter(displayName));
+    }
+    void api.get('/api/plans').then(response => {
+      if (active) setEntitlement(response.data?.entitlement || null);
+    }).catch(() => {
+      if (active) setEntitlement(null);
+    });
+    return () => { active = false; };
+  }, [session]);
+
+  const signInWithOAuth = async (provider: 'google' | 'github' | 'azure' | 'apple', label: string) => {
+    setAuthBusy(true);
+    setAuthError('');
+    if (!supabaseConfigured || !supabase) {
+      setAuthError('Supabase Auth is not configured in this deployment.');
+      setAuthBusy(false);
+      return;
+    }
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: { redirectTo: window.location.origin },
+    });
+    if (error) {
+      setAuthError(error.message || label + ' sign-in failed.');
+      setAuthBusy(false);
+    }
+  };
+
+  const signInWithGoogle = () => signInWithOAuth('google', 'Google');
+
+  const signInWithEmail = async () => {
+    setAuthBusy(true);
+    setAuthError('');
+    if (!supabaseConfigured || !supabase) {
+      setAuthError('Supabase Auth is not configured in this deployment.');
+      setAuthBusy(false);
+      return;
+    }
+    const email = authEmail.trim();
+    const password = authPassword;
+    if (!email || !password) {
+      setAuthError('Enter your email and password.');
+      setAuthBusy(false);
+      return;
+    }
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) setAuthError(error.message);
+    setAuthBusy(false);
+  };
+
+  const createEmailAccount = async () => {
+    setAuthBusy(true);
+    setAuthError('');
+    if (!supabaseConfigured || !supabase) {
+      setAuthError('Supabase Auth is not configured in this deployment.');
+      setAuthBusy(false);
+      return;
+    }
+    const email = authEmail.trim();
+    const password = authPassword;
+    if (!email || password.length < 8) {
+      setAuthError('Use a valid email and a password of at least 8 characters.');
+      setAuthBusy(false);
+      return;
+    }
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: window.location.origin },
+    });
+    if (error) {
+      setAuthError(error.message);
+    } else if (!data.session) {
+      setAuthError('Account created. Check your email to confirm your address before signing in.');
+      setAuthMode('signin');
+    }
+    setAuthBusy(false);
+  };
+
+  const sendMagicLink = async () => {
+    setAuthBusy(true);
+    setAuthError('');
+    if (!supabaseConfigured || !supabase) {
+      setAuthError('Supabase Auth is not configured in this deployment.');
+      setAuthBusy(false);
+      return;
+    }
+    const email = authEmail.trim();
+    if (!email) {
+      setAuthError('Enter your email address first.');
+      setAuthBusy(false);
+      return;
+    }
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: window.location.origin },
+    });
+    setAuthError(error ? error.message : 'Magic link sent. Check your email.');
+    setAuthBusy(false);
+  };
+
+  const signOut = async () => {
+    if (supabase) await supabase.auth.signOut();
+    setSession(null);
+    setMessages(starter);
+  };
+
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    localStorage.setItem(`jarvis-history:${session.user.id}`, JSON.stringify(messages));
+    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, busy]);
+
+  useEffect(() => {
+    if (!session) return;
+    let active = true;
+    void api.get('/api/chat/history').then(response => {
+      const cloudMessages = Array.isArray(response.data?.messages) ? response.data.messages : [];
+      if (!active || cloudMessages.length === 0) return;
+      setMessages(normalizeMessages(cloudMessages));
+    }).catch(() => {
+      // Local memory remains available if the cloud memory service is temporarily unavailable.
+    });
+    return () => { active = false; };
+  }, [session]);
+
+  const speak = async (text: string) => {
+    if (!voiceEnabled || !text.trim()) return;
+    try {
+      audioRef.current?.pause();
+      audioRef.current = null;
+      setSpeaking(true);
+      const response = await api.post('/api/tts/synthesize', { text: text.slice(0, 5000) });
+      const audioContent = String(response.data?.audioContent || '');
+      const mimeType = String(response.data?.mimeType || 'audio/mpeg');
+      if (!audioContent) throw new Error('No audio returned.');
+      const audio = new Audio('data:' + mimeType + ';base64,' + audioContent);
+      audioRef.current = audio;
+      audio.onended = () => {
+        if (audioRef.current === audio) audioRef.current = null;
+        setSpeaking(false);
+      };
+      audio.onerror = () => {
+        if (audioRef.current === audio) audioRef.current = null;
+        setSpeaking(false);
+      };
+      await audio.play();
+    } catch {
+      setSpeaking(false);
+      // Keep the chat usable if ElevenLabs is temporarily unavailable.
+    }
+  };
+
+  const loadMissions = async () => {
+    if (!session?.user?.id) return;
+    setMissionBusy(true);
+    setMissionError('');
+    try {
+      const response = await api.missions.list();
+      setMissions(Array.isArray(response.data?.missions) ? response.data.missions : []);
+    } catch (error: any) {
+      setMissionError(String(error?.response?.data?.error || error?.message || 'Could not load missions.'));
+    } finally {
+      setMissionBusy(false);
+    }
+  };
+
+  const openYouTubeCenter = async () => {
+    setYoutubeOpen(true);
+    setYoutubeBusy(true);
+    setYoutubeError('');
+    try {
+      const response = await api.get('/api/youtube/status');
+      setYoutubeStatus(response.data || null);
+    } catch (error: any) {
+      setYoutubeError(String(error?.response?.data?.error || error?.message || 'Could not load YouTube status.'));
+    } finally {
+      setYoutubeBusy(false);
+    }
+  };
+
+  const connectYouTube = async () => {
+    setYoutubeBusy(true);
+    setYoutubeError('');
+    try {
+      const response = await api.get('/api/youtube/connect');
+      const authorizationUrl = String(response.data?.authorizationUrl || '');
+      if (!authorizationUrl) throw new Error('YouTube authorization URL was not returned.');
+      window.location.assign(authorizationUrl);
+    } catch (error: any) {
+      setYoutubeError(String(error?.response?.data?.error || error?.message || 'Could not start YouTube connection.'));
+      setYoutubeBusy(false);
+    }
+  };
+
+  const publishToYouTube = async () => {
+    if (!youtubeMissionId.trim() || !youtubeMediaKey.trim() || !youtubeTitle.trim() || youtubePublishBusy) return;
+    setYoutubePublishBusy(true);
+    setYoutubeError('');
+    setYoutubePublishResult(null);
+    try {
+      const response = await api.youtube.publish({
+        missionId: youtubeMissionId.trim(),
+        mediaKey: youtubeMediaKey.trim(),
+        title: youtubeTitle.trim(),
+        description: youtubeDescription.trim(),
+        privacyStatus: youtubePrivacy,
+        madeForKids: youtubeMadeForKids,
+      });
+      setYoutubePublishResult(response.data || null);
+    } catch (error: any) {
+      setYoutubeError(String(error?.response?.data?.error || error?.message || 'YouTube publishing failed.'));
+    } finally {
+      setYoutubePublishBusy(false);
+    }
+  };
+
+  const loadYouTubeAnalytics = async () => {
+    setYoutubeBusy(true);
+    setYoutubeError('');
+    try {
+      const response = await api.get('/api/youtube/analytics');
+      setYoutubeAnalytics(response.data?.analytics || null);
+    } catch (error: any) {
+      setYoutubeError(String(error?.response?.data?.error || error?.message || 'Could not load YouTube analytics.'));
+    } finally {
+      setYoutubeBusy(false);
+    }
+  };
+
+  const watchChildrenFactoryScenes = async (missionId: string, initialResponse: any) => {
+    const maxAttempts = 45;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const response = await api.missions.list();
+      const mission = (response.data?.missions || []).find((item: any) => String(item?.id || '') === missionId);
+      if (!mission) throw new Error('Children Factory mission could not be found while scene jobs are running.');
+
+      const metadata = mission.metadata || {};
+      const images = Array.isArray(metadata.images) ? metadata.images : [];
+      const pipeline = Array.isArray(metadata.pipeline) ? metadata.pipeline : initialResponse?.draft?.pipeline || [];
+      setFactoryDraft((current: any) => current
+        ? {
+            ...current,
+            mission,
+            draft: {
+              ...current.draft,
+              images,
+              pipeline,
+            },
+          }
+        : current);
+
+      if (String(mission.status || '') === 'failed') {
+        const failure = metadata.factoryFailure || {};
+        throw new Error(String(
+          failure.message ||
+          'Children Factory scene generation failed after bounded retries. Partial progress was preserved.'
+        ));
+      }
+
+      if (images.length >= 3 && String(pipeline.find((stage: any) => stage.id === 'scene_assets')?.status || '') === 'completed') {
+        return mission;
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+
+    throw new Error('Scene generation is still running. The durable jobs have been kept; refresh the factory to continue checking without creating duplicates.');
+  };
+
+  const createImageMission = async () => {
+    const prompt = missionPrompt.trim();
+    if (!prompt || missionBusy) return;
+    setMissionBusy(true);
+    setMissionError('');
+    try {
+      await api.missions.createImage(prompt);
+      setMissionPrompt('');
+      await loadMissions();
+    } catch (error: any) {
+      setMissionError(String(error?.response?.data?.error || error?.message || 'Could not create mission.'));
+    } finally {
+      setMissionBusy(false);
+    }
+  };
+
+  const requestMissionApproval = async (id: string) => {
+    setMissionBusy(true);
+    setMissionError('');
+    try {
+      await api.missions.requestApproval(id);
+      await loadMissions();
+    } catch (error: any) {
+      setMissionError(String(error?.response?.data?.error || error?.message || 'Could not request approval.'));
+    } finally {
+      setMissionBusy(false);
+    }
+  };
+
+  const createChildrenFactory = async () => {
+    const topic = factoryTopic.trim();
+    if (!topic || factoryBusy) return;
+    setFactoryBusy(true);
+    setFactoryError('');
+    setFactoryDraft(null);
+    setFactoryRenderJob(null);
+    try {
+      const response = await api.post('/api/factory/children', { topic, age: factoryAge });
+      setFactoryDraft(response.data);
+      setFactoryTopic('');
+      await loadMissions();
+
+      const missionId = String(response.data?.approvalGate?.missionId || '').trim();
+      if (missionId && response.data?.status === 'scenes_queued') {
+        try {
+          await watchChildrenFactoryScenes(missionId, response.data);
+        } catch (watchError: any) {
+          setFactoryError(String(watchError?.message || 'Children Factory scene generation is still in progress.'));
+        }
+      }
+    } catch (error: any) {
+      setFactoryError(String(error?.response?.data?.error || error?.message || 'Children Factory could not create the draft.'));
+    } finally {
+      setFactoryBusy(false);
+    }
+  };
+
+  const renderChildrenFactoryVideo = async () => {
+    const draft = factoryDraft && factoryDraft.draft;
+    const projectId = String(draft && draft.project && draft.project.id || '').trim();
+    const imageKeys = Array.isArray(draft && draft.images) ? draft.images.map((item: any) => String(item && item.media && (item.media.path || item.media.key) || '').trim()).filter(Boolean) : [];
+    const existingJobId = String(factoryRenderJob && factoryRenderJob.id || '').trim();
+    const existingStatus = String(factoryRenderJob && factoryRenderJob.status || '');
+    const pipeline = Array.isArray(draft?.pipeline) ? draft.pipeline : [];
+    const sceneAssetsComplete = String(pipeline.find((stage: any) => stage.id === 'scene_assets')?.status || '') === 'completed';
+    if (!projectId || imageKeys.length < 3 || !sceneAssetsComplete || factoryBusy) return;
+    setFactoryBusy(true);
+    setFactoryError('');
+    try {
+      let jobId = existingJobId;
+      if (!jobId || !['queued', 'running'].includes(existingStatus)) {
+        setFactoryRenderJob({ status: 'queued' });
+        const response = await api.video.render(projectId, imageKeys, String((factoryDraft && factoryDraft.approvalGate && factoryDraft.approvalGate.missionId) || ''));
+        const job = response.data && response.data.job;
+        if (!job || !job.id) throw new Error('Video render job was not created.');
+        jobId = String(job.id);
+        setFactoryRenderJob(job);
+      }
+      for (let attempt = 0; attempt < 45; attempt += 1) {
+        const statusResponse = await api.video.job(jobId);
+        const current = statusResponse.data && statusResponse.data.job;
+        if (!current) throw new Error('Video render job could not be found.');
+        setFactoryRenderJob(current);
+        if (current.status === 'succeeded') {
+          const result = current.result || {};
+          const mediaKey = String(result.mediaKey || (result.media && (result.media.path || result.media.key)) || '').trim();
+          if (!mediaKey) throw new Error('Render completed without a stored video media key.');
+          setFactoryDraft((draftState: any) => draftState ? { ...draftState, renderedVideo: result } : draftState);
+          setYoutubeMissionId(String(factoryDraft && factoryDraft.approvalGate && factoryDraft.approvalGate.missionId || ''));
+          setYoutubeMediaKey(mediaKey);
+          setYoutubeTitle(String(draft && draft.project && draft.project.title || 'JARVIS Children Video').slice(0, 100));
+          setYoutubeDescription(String(draft && draft.story || '').slice(0, 5000));
+          return;
+        }
+        if (current.status === 'failed' || current.status === 'canceled') throw new Error((current.error && current.error.message) || 'Video render failed.');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+      throw new Error('Video render is still running. The existing job has been kept so you can check it again without creating a duplicate.');
+    } catch (error: any) {
+      setFactoryError(String((error.response && error.response.data && error.response.data.error) || error.message || 'Could not render the children video.'));
+    } finally {
+      setFactoryBusy(false);
+    }
+  };
+
+  const approveChildrenFactory = async (id: string) => {
+    setFactoryBusy(true);
+    setFactoryError('');
+    try {
+      const response = await api.missions.approve(id);
+      setFactoryDraft((current: any) => current ? { ...current, approved: true, mission: response.data?.mission } : current);
+      await loadMissions();
+    } catch (error: any) {
+      setFactoryError(String(error?.response?.data?.error || error?.message || 'Could not approve the draft.'));
+    } finally {
+      setFactoryBusy(false);
+    }
+  };
+
+  const approveAndStartMission = async (id: string) => {
+    setMissionBusy(true);
+    setMissionError('');
+    try {
+      await api.missions.approve(id);
+      await api.missions.start(id);
+      await loadMissions();
+    } catch (error: any) {
+      setMissionError(String(error?.response?.data?.error || error?.message || 'Could not start mission.'));
+    } finally {
+      setMissionBusy(false);
+    }
+  };
+
+  const cancelMission = async (id: string) => {
+    setMissionBusy(true);
+    setMissionError('');
+    try {
+      await api.missions.cancel(id);
+      await loadMissions();
+    } catch (error: any) {
+      setMissionError(String(error?.response?.data?.error || error?.message || 'Could not cancel mission.'));
+    } finally {
+      setMissionBusy(false);
+    }
+  };
+
+  const handleLocalCommand = (clean: string) => {
+    const value = clean.toLowerCase().replace(/[!?.,]+$/g, '').trim();
+    let response = '';
+
+    if (/^(export|download) (my )?memory$/.test(value)) {
+      exportMemory();
+      response = 'Your local JARVIS memory export has been prepared.';
+    } else if (/^(clear|delete) (my )?(local )?memory$/.test(value)) {
+      clearMemory();
+      response = 'Local JARVIS memory has been cleared from this browser.';
+    } else if (/^(turn|switch|set) voice (on|off)$/.test(value)) {
+      const enabled = value.endsWith('on');
+      setVoiceEnabled(enabled);
+      response = enabled ? 'Voice output is now on.' : 'Voice output is now off.';
+    } else if (/^(turn|switch|set) passive wake (on|off)$/.test(value)) {
+      const enabled = value.endsWith('on');
+      setPassiveWake(enabled);
+      if (enabled) startPassiveWake();
+      else stopPassiveWake();
+      response = enabled ? 'Passive wake is now on.' : 'Passive wake is now off.';
+    }
+
+    if (!response) return false;
+    setInput('');
+    setMessages(current => [...current, { role: 'user', content: clean }, { role: 'assistant', content: response }]);
+    if (voiceEnabled) void speak(response);
+    return true;
+  };
+
+  const openRoutedSurface = (surface: string) => {
+    setCommandOpen(false);
+    setMissionOpen(false);
+    setFactoryOpen(false);
+    setCapabilityOpen(false);
+    setBusinessOpen(false);
+    setVideoOpen(false);
+    setYoutubeOpen(false);
+    setImageLabOpen(false);
+    setSystemOpen(false);
+    setSecurityOpen(false);
+    setEmpireOpen(false);
+
+    if (surface === 'children') {
+      setFactoryOpen(true);
+      void loadMissions();
+    } else if (surface === 'video') {
+      void openVideoStudio();
+    } else if (surface === 'youtube') {
+      void openYouTubeCenter();
+    } else if (surface === 'business') {
+      void openBusinessCenter();
+    } else if (surface === 'image') {
+      setImageLabOpen(true);
+    } else if (surface === 'mission') {
+      setMissionOpen(true);
+      void loadMissions();
+    } else if (surface === 'security') {
+      setSecurityOpen(true);
+      runSecurityCheck();
+      void loadMissions();
+    } else if (surface === 'system') {
+      setSystemOpen(true);
+      runSystemCheck();
+    } else if (surface === 'capabilities') {
+      setCapabilityOpen(true);
+    } else if (surface === 'command') {
+      setCommandOpen(true);
+    } else if (surface === 'empire') {
+      setEmpireOpen(true);
+    }
+  };
+
   const sendMessage = async (text = input) => {
     const clean = text.trim();
     if (!clean || busy) return;
@@ -960,12 +1717,24 @@
                   {repairDiagnosticsBusy ? 'Checking…' : 'Recheck'}
                 </button>
               </div>
-              {repairDiagnostics?.checks?.map((check: any) => (
-                <div className={'repair-check repair-' + String(check.status || 'ATTENTION').toLowerCase()} key={String(check.name)}>
+              {repairDiagnostics?.checks?.map((check: any) => {
+                const recoveryAction = ({
+                  bounded_retry: 'Bounded retry',
+                  report_configuration_gap: 'Report configuration gap',
+                  degrade_optional_dependency: 'Degrade optional dependency',
+                  require_reauthentication: 'Require re-authentication',
+                  deny_and_escalate: 'Deny and escalate',
+                  stop_and_escalate: 'Stop and escalate',
+                } as Record<string, string>)[String(check.recovery?.action || '')] || 'No action';
+                return <div className={'repair-check repair-' + String(check.status || 'ATTENTION').toLowerCase()} key={String(check.name)}>
                   <span className="repair-check-status">{String(check.status || 'ATTENTION')}</span>
-                  <div><b>{String(check.name)}</b><small>{String(check.evidence || '')}</small></div>
-                </div>
-              ))}
+                  <div>
+                    <b>{String(check.name)}</b>
+                    <small>{String(check.evidence || '')}</small>
+                    <span className="repair-recovery">Recovery: <strong>{recoveryAction}</strong>{check.recovery?.terminal ? ' · terminal' : ''}</span>
+                  </div>
+                </div>;
+              })}
             </div>
             <div className="lock-note"><Monitor size={16} /><span>Repair Office is read-only in this phase. It can detect and report problems, but it cannot mutate production automatically.</span></div>
           </section>
