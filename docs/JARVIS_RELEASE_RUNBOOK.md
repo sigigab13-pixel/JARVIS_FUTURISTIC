@@ -20,7 +20,7 @@ Routine Git pushes must not be treated as releases.
 - Only the canonical jarvis-futuristic project is allowed.
 - Production deployment must be intentional.
 - Never create a deployment just to test basic correctness when CI or local verification can answer the question.
-- After deployment, verify the production domain and critical health endpoint before calling the release live.
+- After deployment, verify the production domain and critical health endpoint before calling the release live. A domain returning a Vercel serving/usage pause is a release failure, even when the underlying deployment object is marked READY.
 
 ## Quota protection
 Deployment capacity is treated as a safety budget. Before release, check that the account/project is not paused and that the required deployment capacity is available. If Vercel reports a quota or spend-management block, stop releases rather than repeatedly retrying.
