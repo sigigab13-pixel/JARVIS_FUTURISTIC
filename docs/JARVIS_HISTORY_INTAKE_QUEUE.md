@@ -707,4 +707,126 @@ This queue is considered complete for the currently recoverable project history 
 - roadmap items are preserved without being mistaken for implementation,
 - and each promoted item has provenance.
 
+
+
+---
+
+# P. Additional Historical Technical Context Recovered From Prior Conversations
+
+### JQ-151 — Development hardware constraint
+**Evidence:** CHAT-RECOVERED  
+**Record:** The user has worked on JARVIS from a phone with 2 GB RAM, so lightweight workflows and cloud execution are important.
+
+### JQ-152 — Primary Mac development environment
+**Evidence:** CHAT-RECOVERED  
+**Record:** Earlier development environment included a 2020 Intel i7 MacBook Pro with 16 GB RAM, macOS 15.7.9, Homebrew 6.0.21 and Python 3.14.7.
+
+### JQ-153 — Vercel plan at last known state
+**Evidence:** REPO/TOOL-VERIFIED / CHAT-RECOVERED  
+**Record:** The canonical Vercel team was on the Hobby plan at the last verified inspection.
+
+### JQ-154 — Vercel operational constraints observed
+**Evidence:** CHAT-RECOVERED / INCIDENT  
+**Record:** Earlier work encountered build/deployment limits including deployment-count exhaustion, build-rate blocking, a reported function execution ceiling, and payload-size concerns. Exact limits should always be freshly verified before planning around them.
+
+### JQ-155 — Earlier Vercel traffic snapshot
+**Evidence:** CHAT-RECOVERED  
+**Record:** A previous dashboard snapshot showed roughly 324 CDN requests and 54 function invocations during the observed period. These were development-era observations, not scale guarantees.
+
+### JQ-156 — Earlier payload/build concern
+**Evidence:** CHAT-RECOVERED / INCIDENT  
+**Record:** Earlier work encountered a reported payload around 4.5 MB and a 300-second execution/build-related limit. Treat as historical incident evidence, not current platform limits.
+
+### JQ-157 — Hugging Face model/router history
+**Evidence:** CHAT-RECOVERED  
+**Record:** Earlier configuration discussions used a Hugging Face router model identified as `openai/gpt-oss-120b:fastest` with Anthropic Claude Sonnet fallback. A Qwen model attempt produced a model-not-supported error. Current active provider/model routing must be verified before treating this as present configuration.
+
+### JQ-158 — Supabase permission incident
+**Evidence:** CHAT-RECOVERED / INCIDENT  
+**Record:** Earlier deployment work hit a Supabase permission error involving `jarvis_users`. Lesson: inspect live schema/RLS/policies before assuming frontend/backend access is correct.
+
+### JQ-159 — Pricing/RLS hardening targets
+**Evidence:** CHAT-RECOVERED / REPO-VERIFIED  
+**Record:** Earlier security review identified `jarvis_plan_prices` and `jarvis_family_access` as tables requiring explicit RLS/policy attention. A LAB-only PR proposed policies. Do not assume the hardening was applied to production unless current database evidence proves it.
+
+### JQ-160 — Pricing source duplication risk
+**Evidence:** CHAT-RECOVERED  
+**Record:** Earlier work identified risk of duplicate pricing definitions between `jarvis_plans` and a creator/studio pricing proposal. Parent Law 07 requires one authoritative pricing source.
+
+### JQ-161 — Redis development state
+**Evidence:** CHAT-RECOVERED  
+**Record:** Upstash Redis was previously observed healthy and empty, with an indicated 256 MB / 500K-style allowance display. These quota figures are historical and must be rechecked before budgeting.
+
+### JQ-162 — Worker hardening gap recorded previously
+**Evidence:** CHAT-RECOVERED / VERIFY  
+**Record:** Earlier review identified missing or incomplete idempotency, lease and heartbeat hardening in a worker path. Later PRs added worker safety changes. Current active worker implementation must be inspected before declaring the gap fully closed.
+
+### JQ-163 — Image Lab provider history
+**Evidence:** CHAT-RECOVERED  
+**Record:** The user reported that Image Lab eventually worked after earlier failures. This should remain a user-reported milestone until an end-to-end current-environment test provides fresh evidence.
+
+### JQ-164 — Viewmax connection
+**Evidence:** CHAT-RECOVERED  
+**Record:** Viewmax was connected during media-provider work. Current credential/connection health must be verified before production use.
+
+### JQ-165 — Higgsfield credential history
+**Evidence:** CHAT-RECOVERED  
+**Record:** A Higgsfield API key was created. Never store or reproduce its secret value in project documentation.
+
+### JQ-166 — ElevenLabs credential history
+**Evidence:** CHAT-RECOVERED  
+**Record:** An ElevenLabs key was created for voice work. A verified voice ID had not yet been established at the last known point.
+
+### JQ-167 — OpenAI image/chat usage
+**Evidence:** CHAT-RECOVERED  
+**Record:** OpenAI API usage was discussed for JARVIS chat and image capabilities. Exact active usage should be checked against current environment configuration.
+
+### JQ-168 — Old AppDeploy project
+**Evidence:** CHAT-RECOVERED  
+**Record:** An older AppDeploy project was named “JARVIS Empire Command.” The user later wanted AppDeploy removed/paused rather than used as the canonical production path.
+
+### JQ-169 — Old AppDeploy usage snapshot
+**Evidence:** CHAT-RECOVERED  
+**Record:** An earlier AppDeploy snapshot reported roughly 173 views / 227.18 credits. This is historical usage information and not a current billing/usage state.
+
+### JQ-170 — Canonical-project-only rule
+**Evidence:** DECISION  
+**Record:** Do not split JARVIS across the old AppDeploy project and duplicate Vercel projects. The canonical source/application path must remain clear.
+
+### JQ-171 — Children media-provider credit priority
+**Evidence:** CHAT-RECOVERED  
+**Record:** The user wants to manage expensive image/video/voice provider credits carefully, especially while producing Kobi content. Credits should be spent only after the pipeline and release gates justify generation.
+
+### JQ-172 — Video-provider selection history
+**Evidence:** CHAT-RECOVERED  
+**Record:** The user compared Higgsfield, Viewmax and Everygen for children's video creation. Provider choice should depend on capability quality, continuity, credits, cost, reliability, and verified integration rather than brand name alone.
+
+### JQ-173 — Kobi production workflow
+**Evidence:** CHAT-RECOVERED  
+**Record:** Kobi Episode 1 was to be structured for an Everygen-compatible 9:16 children's Short and later evaluated alongside other providers. The workflow should preserve the same character/world identity across scenes.
+
+### JQ-174 — User's cost preference
+**Evidence:** CHAT-RECOVERED / DECISION  
+**Record:** The project should prefer free/low-cost infrastructure while validating the product, without compromising the Parent Laws around security, reliability and truthfulness.
+
+### JQ-175 — No deployment while quota is exhausted
+**Evidence:** DECISION  
+**Record:** During an exhausted deployment quota, repository/CI testing is preferred over creating additional Vercel deployments. A release should be assembled first and deployed once the platform is available.
+
+### JQ-176 — Current release-control intent
+**Evidence:** DECISION  
+**Record:** The queue-first policy is meant to survive beyond the current incident: batch related work, prove it in CI/lab, then spend one deliberate production deployment.
+
+---
+
+# Q. Historical Chat Sources Not Fully Exportable
+
+### JQ-177 — Available history boundary
+**Evidence:** CHAT-RECOVERED  
+**Record:** The session can recover prior JARVIS context that is surfaced to it, but it does not have a guaranteed raw export of every older conversation thread. Therefore this queue is comprehensive for the currently recoverable context, not a promise of access to unavailable chats.
+
+### JQ-178 — Conflict rule
+**Evidence:** DECISION  
+**Record:** When an older conversation claim conflicts with current repository/database/provider evidence, current verified evidence wins and the conflict is preserved as historical context rather than silently overwritten.
+
 Updated: 2026-10-06
