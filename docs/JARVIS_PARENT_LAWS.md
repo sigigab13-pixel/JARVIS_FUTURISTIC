@@ -10,7 +10,7 @@ A feature does not become “ready” merely because it works on the happy path.
 
 ---
 
-## The 31 Parent Laws
+## The 32 Parent Laws
 
 ### Law 01 — Truth Before Status
 Never report a capability, gate, test, deployment, or release as **passed**, **working**, **verified**, **ready**, or **healthy** unless the required evidence actually shows that result.
