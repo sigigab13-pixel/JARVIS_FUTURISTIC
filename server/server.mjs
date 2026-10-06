@@ -53,7 +53,7 @@ import {
   deleteAllSemanticMemories,
 } from './store.mjs';
 import { enqueueJob, isRedisConfigured } from './queue.mjs';
-import { createMediaKey, getMedia, isSupabaseStorageConfigured, putMedia } from './media.mjs';
+import { createMediaKey, getMedia, isSupabaseStorageConfigured, markMediaRetention, putMedia } from './media.mjs';
 import { capabilityContextForPrompt, getCapabilityRegistry, getAvailableCapabilities, rankCapabilitiesForIntent } from './capabilities.mjs';
 import { routeContextForPrompt, routeIntent } from './intent-router.mjs';
 import { createMissionState, transitionMission, advanceMissionStep } from './mission-runtime.mjs';
@@ -1835,6 +1835,12 @@ export async function handleApi(req, res, pathname, url) {
       });
       const videoId = String(video.id || '').trim();
       if (!videoId) return json(res, 502, { published: false, provider: 'youtube', error: 'YouTube did not return a video id.' });
+      const retention = await markMediaRetention({
+        userId: jarvisUser.id,
+        key: mediaKey,
+        retentionClass: 'published',
+        metadata: { publishedTo: 'youtube', videoId },
+      });
       const evidence = {
         provider: 'youtube',
         videoId,
