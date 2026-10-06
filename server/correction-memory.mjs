@@ -39,6 +39,19 @@ export function parseUserCorrection(input) {
     };
   }
 
+  match = source.match(/^my\s+name\s+is\s+(.+?),?\s+not\s+(.+?)\s*[.!]?$/i);
+  if (match) {
+    const pair = normalizePair(match[2], match[1]);
+    return {
+      kind: 'correction',
+      scope: 'identity',
+      field: 'name',
+      ...pair,
+      statement: 'The user says their name should be ' + pair.current + ', not ' + pair.previous + '.',
+      source: 'explicit_user_correction',
+    };
+  }
+
   match = source.match(/^don'?t\s+call\s+me\s+(.+?),?\s+(?:call|use)\s+me\s+(.+?)\s*[.!]?$/i);
   if (match) {
     const pair = normalizePair(match[1], match[2]);
