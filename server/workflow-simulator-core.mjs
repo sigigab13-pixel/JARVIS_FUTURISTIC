@@ -47,13 +47,19 @@ function deriveSteps(plan, mission) {
 
   const requestMode = String(plan?.requestMode || 'answer');
   const subtasks = asArray(plan?.subtasks).slice(0, MAX_STEPS);
-  return subtasks.map((title, index) => normalizeStep({
-    id: `plan-${index + 1}`,
-    title,
-    capability: 'chat',
-    executorType: 'reasoning',
-    sideEffect: requestMode === 'execute' && index === Math.max(0, subtasks.length - 2),
-  }, index, requestMode));
+  return subtasks.map((item, index) => {
+    const subtask = item && typeof item === 'object' ? item : { title: item };
+    return normalizeStep({
+      id: `plan-${index + 1}`,
+      ...subtask,
+      title: subtask.title || subtask.name || `Step ${index + 1}`,
+      capability: subtask.capability || 'chat',
+      executorType: subtask.executorType || subtask.executor_type || 'reasoning',
+      sideEffect: subtask.sideEffect ?? subtask.side_effect ?? (
+        requestMode === 'execute' && index === Math.max(0, subtasks.length - 2)
+      ),
+    }, index, requestMode);
+  });
 }
 
 function capabilityLookup(capabilities) {
@@ -167,10 +173,11 @@ export function simulateWorkflow({ plan = {}, mission = null, capabilities = [],
   ).toLowerCase() || 'not_granted';
 
   const rawSteps = deriveSteps(plan, mission);
+  const adapterChecks = mission ? supportedAdapters : [];
   const steps = rawSteps.map((step, index) =>
     assessStep({ ...step }, index, {
       capabilities,
-      supportedAdapters,
+      supportedAdapters: adapterChecks,
       approvalStatus: effectiveApprovalStatus,
       requestMode,
     })
