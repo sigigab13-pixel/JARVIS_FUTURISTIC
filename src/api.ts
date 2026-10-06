@@ -122,6 +122,10 @@ export const route = {
     api.post('/api/route', { messages }),
 };
 
+export const childrenFactory = {
+  demo: async (topic: string, age: number) => api.post('/api/factory/children/demo', { topic, age }),
+};
+
 export const repairOffice = {
   diagnostics: async () => api.get('/api/repair/diagnostics'),
 };
