@@ -29,7 +29,10 @@ test('evaluates completed missions across outcome dimensions', () => {
 
 test('failed mission evaluation identifies the exact failed dimensions', () => {
   const result = evaluateMissionOutcome({
-    mission: mission({ steps: [{ status: 'succeeded' }, { status: 'failed' }] }),
+    mission: mission({
+      steps: [{ status: 'succeeded' }, { status: 'failed' }],
+      lastEvidence: {},
+    }),
     criteria: { minQuality: 0.9, maxCost: 2 },
     observation: { quality: 0.7, cost: 4 },
   });
