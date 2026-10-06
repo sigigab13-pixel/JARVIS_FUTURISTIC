@@ -40,14 +40,29 @@ async function refreshAccessToken(connection) {
   };
 }
 
-export async function getYouTubeAccessToken(connection) {
+export async function getYouTubeAccessToken(connection, { forceRefresh = false } = {}) {
   const current = String(connection?.access_token || connection?.accessToken || '').trim();
   const expiresAt = new Date(connection?.expires_at || connection?.expiresAt || 0).getTime();
-  if (current && Number.isFinite(expiresAt) && expiresAt > Date.now() + 60_000) {
+  if (!forceRefresh && current && Number.isFinite(expiresAt) && expiresAt > Date.now() + 60_000) {
     return { accessToken: current, refreshed: false };
   }
   const refreshed = await refreshAccessToken(connection);
   return { ...refreshed, refreshed: true };
+}
+
+export async function withYouTubeAccessToken(connection, operation) {
+  if (typeof operation !== 'function') throw new TypeError('A YouTube token operation is required.');
+
+  let token = await getYouTubeAccessToken(connection);
+  try {
+    return { result: await operation(token.accessToken), token };
+  } catch (error) {
+    // A stored token can become invalid before its recorded expiry. Retry exactly once
+    // with a fresh access token; never loop, because refresh failures must surface.
+    if (Number(error?.statusCode) !== 401 || token.refreshed) throw error;
+    token = await getYouTubeAccessToken(connection, { forceRefresh: true });
+    return { result: await operation(token.accessToken), token };
+  }
 }
 
 async function youtubeJson(pathname, accessToken) {

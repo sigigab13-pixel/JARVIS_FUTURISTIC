@@ -59,7 +59,7 @@ import { routeContextForPrompt, routeIntent } from './intent-router.mjs';
 import { createMissionState, transitionMission, advanceMissionStep } from './mission-runtime.mjs';
 import { preflightMission, getMissionAdapters } from './mission-executor.mjs';
 import { generateHuggingFaceImage, HF_IMAGE_MODELS, HF_IMAGE_EDIT_MODELS, HF_IMAGE_PROVIDERS } from './image-generator.mjs';
-import { getYouTubeAccessToken, getYouTubeAnalytics, getYouTubeChannel, uploadYouTubeVideo } from './youtube.mjs';
+import { getYouTubeAccessToken, getYouTubeAnalytics, getYouTubeChannel, uploadYouTubeVideo, withYouTubeAccessToken } from './youtube.mjs';
 import { getRepairOfficeDiagnostics, getRepairOfficePolicy } from './repair-office.mjs';
 import { generateIntelligentResponse, getOpenAIModels } from './intelligence-core.mjs';
 import { formatDecisionMemory, parseExplicitDecision } from './decision-memory.mjs';
@@ -1762,21 +1762,22 @@ export async function handleApi(req, res, pathname, url) {
     const connection = await getYouTubeConnection(jarvisUser.id);
     if (!connection) return json(res, 409, { error: 'Connect YouTube before requesting analytics.', code: 'YOUTUBE_NOT_CONNECTED' });
     try {
-      const token = await getYouTubeAccessToken(connection);
-      if (token.refreshed) {
-        await saveYouTubeConnection(jarvisUser.id, {
-          ...connection,
-          accessToken: token.accessToken,
-          expiresAt: token.expiresAt,
-        });
-      }
       const endDate = String(url.searchParams.get('endDate') || new Date().toISOString().slice(0, 10));
       const startDate = String(url.searchParams.get('startDate') || new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10));
       if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
         return json(res, 400, { error: 'startDate and endDate must use YYYY-MM-DD.' });
       }
-      const analytics = await getYouTubeAnalytics(token.accessToken, { startDate, endDate });
-      return json(res, 200, { startDate, endDate, analytics }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
+      const execution = await withYouTubeAccessToken(connection, accessToken =>
+        getYouTubeAnalytics(accessToken, { startDate, endDate })
+      );
+      if (execution.token.refreshed) {
+        await saveYouTubeConnection(jarvisUser.id, {
+          ...connection,
+          accessToken: execution.token.accessToken,
+          expiresAt: execution.token.expiresAt,
+        });
+      }
+      return json(res, 200, { startDate, endDate, analytics: execution.result }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
     } catch (error) {
       return json(res, Number(error?.statusCode) || 502, { error: error instanceof Error ? error.message : 'YouTube Analytics failed.' });
     }
@@ -1818,11 +1819,7 @@ export async function handleApi(req, res, pathname, url) {
       if (!String(media.contentType).startsWith('video/')) {
         return json(res, 400, { error: 'The selected media asset is not a video.' });
       }
-      const token = await getYouTubeAccessToken(connection);
-      if (token.refreshed) {
-        await saveYouTubeConnection(jarvisUser.id, { ...connection, accessToken: token.accessToken, expiresAt: token.expiresAt });
-      }
-      const video = await uploadYouTubeVideo(token.accessToken, {
+      const uploadPayload = {
         videoBuffer: media.body,
         contentType: media.contentType,
         body: {
@@ -1832,7 +1829,18 @@ export async function handleApi(req, res, pathname, url) {
             selfDeclaredMadeForKids: Boolean(body?.madeForKids),
           },
         },
-      });
+      };
+      const execution = await withYouTubeAccessToken(connection, accessToken =>
+        uploadYouTubeVideo(accessToken, uploadPayload)
+      );
+      if (execution.token.refreshed) {
+        await saveYouTubeConnection(jarvisUser.id, {
+          ...connection,
+          accessToken: execution.token.accessToken,
+          expiresAt: execution.token.expiresAt,
+        });
+      }
+      const video = execution.result;
       const videoId = String(video.id || '').trim();
       if (!videoId) return json(res, 502, { published: false, provider: 'youtube', error: 'YouTube did not return a video id.' });
       const evidence = {
