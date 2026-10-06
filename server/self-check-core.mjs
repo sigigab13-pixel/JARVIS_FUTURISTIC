@@ -1,8 +1,8 @@
 const MAX_RESPONSE_LENGTH = 20000;
 const MAX_REPAIR_ISSUES = 6;
 
-function cleanText(value, max = MAX_RESPONSE_LENGTH) {
-  return String(value ?? '').trim().slice(0, max);
+function cleanText(value) {
+  return String(value ?? '').trim();
 }
 
 function issue(code, message, repairable = true) {
@@ -54,7 +54,7 @@ export function inspectAssistantResponse(text, { provider = '' } = {}) {
     ok: limitedIssues.length === 0,
     issues: limitedIssues,
     repairable: limitedIssues.length > 0 && limitedIssues.every(item => item.repairable),
-    provider: cleanText(provider, 120),
+    provider: cleanText(provider).slice(0, 120),
     checkedAt: new Date().toISOString(),
   };
 }
