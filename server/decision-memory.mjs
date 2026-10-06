@@ -37,10 +37,11 @@ function firstMarkerIndex(text, markers) {
 }
 
 function extractRejected(text) {
+  const rationaleStop = '(?:\\s+(?:because|so that|since|due to|to avoid|in order to)\\b)';
   const patterns = [
-    /\binstead\s+of\s+(.+?)(?:[.,;]|$)/i,
-    /\brather\s+than\s+(.+?)(?:[.,;]|$)/i,
-    /\bdo\s+not\s+use\s+(.+?)(?:[.,;]|$)/i,
+    new RegExp('\\binstead\\\\s+of\\\\s+(.+?)(?=' + rationaleStop + '|[.,;]|$)', 'i'),
+    new RegExp('\\brather\\\\s+than\\\\s+(.+?)(?=' + rationaleStop + '|[.,;]|$)', 'i'),
+    new RegExp('\\bdo\\\\s+not\\\\s+use\\\\s+(.+?)(?=' + rationaleStop + '|[.,;]|$)', 'i'),
   ];
 
   for (const pattern of patterns) {
