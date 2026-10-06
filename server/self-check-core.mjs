@@ -86,8 +86,6 @@ export function buildRepairInstruction(check) {
 
 export function repairTextDeterministically(text) {
   let value = cleanText(text);
-  value = value.replace(/\[object\s+Object\]/gi, '');
-  value = value.replace(/(^|\s)(?:undefined|null)(?=\s|[.,!?;:]|$)/gi, '$1');
   value = value.replace(/\n{4,}/g, '\n\n');
   return value.trim();
 }
