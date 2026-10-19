@@ -244,3 +244,48 @@ These notes preserve context to guide verification; they must not be treated as 
 8. Update this log when the user makes a durable decision; mark an item complete only with reproducible evidence.
 
 **Source note:** This document is a curated reconstruction from prior planning conversations and existing repository documentation. It is not a verbatim export of all chats, and absence from this document does not prove that a topic was never discussed.
+
+
+## 12. Additional recovered decisions and historical implementation notes
+
+### Goal Drift Detection — recovered next-priority item
+
+A prior intelligence-planning conversation identified **Goal Drift Detection** as the next stated priority after work on epistemic uncertainty, provenance/source links, time/freshness awareness, correction memory and contradiction detection.
+
+- [ ] Track the user's approved goal and constraints across a long-running mission.
+- [ ] Compare each planned or completed step with the current goal, permissions and success criteria.
+- [ ] Detect scope creep, conflicting subgoals, stale assumptions and actions that no longer contribute to the intended outcome.
+- [ ] Pause and explain the drift when the next action would materially change the goal, exceed scope or introduce a new side effect.
+- [ ] Keep a record of the original goal, approved revisions, evidence that triggered a revision and the user's approval where needed.
+- [ ] Test with harmless simulated missions: unrelated subtask injection, stale plan, contradictory instruction, changed deadline and legitimate user-approved goal revision.
+
+**Status:** Recovered backlog requirement. Do not treat this as implemented until current code and tests demonstrate it.
+
+### Intelligence-provider constraint and historical routing work
+
+- **User constraint (2026-10-06):** JARVIS should aim for strong reasoning comparable to leading assistants **without using the Anthropic API**. This is a provider constraint, not a claim that any particular model or router currently meets the quality target.
+- A prior assistant report described a provider-neutral intelligence core, GPT-6 Luna/Sol routing, an OpenAI fast-tier fallback, a Hugging Face fallback, use of the Responses API and complexity tests. That report is **historical and unverified here**; inspect the current branch, environment configuration, provider adapters, spend limits and live CI before relying on it.
+- Historical status reported at the time: CI run #212 passed; Parent Gate runs #71 and #72 failed, #73 was queued; PR #49 was unmerged; no Vercel deployment was reported. These are historical snapshots, not current status. Recheck GitHub and deployment records before drawing conclusions.
+- Do not silently migrate providers or add a paid dependency. Preserve the user's no-Anthropic-API constraint unless the user explicitly changes it. Verify fallback order, capability compatibility, timeout/retry bounds, privacy implications and cost ceilings.
+
+### Earlier stability-first sequencing
+
+A prior stability review proposed this order before expanding features:
+
+1. Verify the Vercel deployment path across the three linked projects and identify one useful, authoritative lab; treat any old claim of successful production verification as historical until independently rechecked.
+2. Harden worker resilience: idempotency, leases/heartbeats, bounded retries, cancellation, safe recovery and observable job state.
+3. Review Supabase row-level security (RLS), authorization and workspace isolation.
+4. Only then promote additional autonomy, concurrency or provider usage.
+
+An earlier assistant report said video-job idempotency was added in PR #33 and described claim/heartbeat/retry primitives plus RPC execution restrictions. It also said behavioral database lifecycle testing remained necessary. **These are historical claims, not proof of the current implementation.** Inspect current code, merged PRs, database policies and lifecycle tests before marking any item complete.
+
+### Audit classification rule
+
+When recovering more conversation history, place every finding into one of four buckets:
+
+1. **User-stated constraint or requirement** — retain the original meaning and date when known.
+2. **Assistant proposal or recommendation** — do not convert it into user approval.
+3. **Historical implementation or test report** — preserve as dated, unverified history until rechecked.
+4. **Current verified state** — require evidence tied to the exact commit, workflow, environment or deployment.
+
+A conversation-memory search is not guaranteed to cover every prior chat. Keep the audit open until additional sources have been searched; never label this backlog exhaustive without evidence.
