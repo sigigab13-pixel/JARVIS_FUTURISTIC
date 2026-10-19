@@ -1,7 +1,7 @@
 # JARVIS Portfolio & Cross-Project Integration Register
 
 **Last reviewed:** 2026-10-19  
-**Purpose:** Keep the known project portfolio, unfinished JARVIS capabilities, cross-project opportunities, and verification rules in one version-controlled place. This is a planning and tracking document, not a claim that every listed capability is implemented.
+**Purpose:** Keep the known project portfolio, unfinished JARVIS capabilities, cross-project opportunities, and verification rules in one version-controlled place. This is a planning and tracking document, not a claim that every listed capability is implemented. See also the [JARVIS Decision Log & Recovered Backlog](JARVIS_DECISION_LOG_AND_RECOVERED_BACKLOG.md) for durable product decisions, AI repair/alliance requirements, autonomy boundaries, historical incident notes, and recovered priorities.
 
 ## Truth labels
 
@@ -17,7 +17,7 @@ Never promote a planned item to “working” merely because it appears in a roa
 | Project / workstream | Purpose | Relationship to JARVIS | Current planning status |
 |---|---|---|---|
 | **JARVIS Futuristic** | Unified AI assistant and operating platform for chat, research, memory, missions, tools, content, business, personal workflows, and reliability | Main assistant product and source of truth for its own roadmap | Active repository; use CI, branch and runtime evidence for each capability |
-| **Optimum Prime** | Separate fake-ransomware / security-awareness simulation project | Separate project; not JARVIS PRIME and not part of JARVIS's core product identity | Track independently. Keep it a harmless simulation: no real file encryption, destructive behavior, persistence, evasion, credential theft, or uncontrolled propagation |
+| **Optimus Prime** | Separate fake-ransomware / security-awareness simulation project | Separate project; not JARVIS PRIME and not part of JARVIS's core product identity | Track independently. Keep it a harmless simulation: no real file encryption, destructive behavior, persistence, evasion, credential theft, or uncontrolled propagation |
 | **Children Factory / FOREST** | Age-appropriate rhymes, stories, character-consistent images/video/voice, quality checks, approvals, publishing, analytics and learning | First-class JARVIS workflow, not a separate replacement for JARVIS | Foundations and provider adapters exist in the repository; full production loop and provider-specific outcomes must be verified |
 | **Kobi & the Singing Bird — Episode 1** | First focused vertical children's story/video production example | Reference workflow for proving Children Factory end to end | Planned execution target: 9:16; keep character/world consistency; do not mark render/publish complete without asset and provider evidence |
 | **SENTINEL** | Defensive security/scanning project with bounded scans, protocol-aware results, evidence and reports | Separate specialist product; JARVIS may later help explain reports or coordinate authorized lab workflows through a narrow integration | Separate codebase/workstream; do not merge its code into JARVIS by default or treat JARVIS as a scanner until a reviewed adapter exists |
@@ -27,7 +27,7 @@ Never promote a planned item to “working” merely because it appears in a roa
 | **Maverick Legion design workstream** | Distinctive motorcycle/helmet/suit visual-design concept, including the Arctic Phantom styling direction | Creative workspace use case for reference images, design briefs, asset/version management and marketing content | Creative concept; no vehicle purchase, manufacturing, or physical-world action is implied |
 | **JARVIS platform and infrastructure** | Vercel frontend, Supabase durable data/auth, Upstash dispatch/queues, media storage and approved worker/provider adapters | Shared operating foundation | Configuration and deployment state must be checked from the connected systems before changes are made |
 
-This register captures known project context from prior planning. **Optimum Prime is the fake-ransomware project; it is not JARVIS PRIME.** Add additional projects here when they are identified; do not invent project status or imply that separate systems are already connected.
+This register captures known project context from prior planning. **Optimus Prime is the fake-ransomware project; it is not JARVIS PRIME.** Add additional projects here when they are identified; do not invent project status or imply that separate systems are already connected.
 
 ## JARVIS capability backlog — one unified assistant
 
@@ -106,9 +106,9 @@ The central chat should remain the front door. Users describe an outcome; JARVIS
 
 ## Cross-project integration boundaries
 
-### Optimum Prime — fake-ransomware simulation
+### Optimus Prime — fake-ransomware simulation
 
-Optimum Prime is a separate project intended as a fake-ransomware simulation. Keep its scope clearly separated from JARVIS Futuristic and from real ransomware. Any future implementation should be a harmless, clearly labelled demonstration in an isolated test directory or disposable lab, using simulated events or reversible dummy artifacts only. It must not encrypt or damage real files, persist, evade detection, steal credentials, spread, or run against other people's systems. Verify the simulation's boundaries and cleanup behavior before calling it complete.
+Optimus Prime is a separate project intended as a fake-ransomware simulation. Keep its scope clearly separated from JARVIS Futuristic and from real ransomware. Any future implementation should be a harmless, clearly labelled demonstration in an isolated test directory or disposable lab, using simulated events or reversible dummy artifacts only. It must not encrypt or damage real files, persist, evade detection, steal credentials, spread, or run against other people's systems. Verify the simulation's boundaries and cleanup behavior before calling it complete.
 
 ### SENTINEL → JARVIS
 
