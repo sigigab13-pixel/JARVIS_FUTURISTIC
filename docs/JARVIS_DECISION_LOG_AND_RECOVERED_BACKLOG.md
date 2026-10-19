@@ -322,3 +322,57 @@ The user asked to finish JARVIS with production health, chat, memory/worker veri
 ### Evidence discipline for operations
 
 For every production check, store the exact target URL/environment, commit SHA, deployment identifier, check timestamp, expected result, observed result and relevant log/reference. Never put API keys or secret values in the log; record only whether required configuration is present and correctly scoped.
+
+
+## 14. Recovered commercial, memory and security decisions
+
+### Plans and family entitlements — user-stated (2026-10-04)
+
+- Public users may have a Free tier. The user's sister should have access without paying; the user later clarified that owner/family access should receive paid-tier entitlements at $0 rather than being charged.
+- User-stated target prices: **Pro $5/month** and **Premium $9/month**, with regional pricing adjusted to purchasing power/currency strength and Nigeria intended to be the cheapest market.
+- Exact local-currency price tables, tax treatment, billing provider, entitlement enforcement and checkout status must be inspected before being described as live. A prior assistant suggested Nigeria prices of ₦4,500 and ₦8,000 and said Stripe checkout was not connected; treat those as historical proposal/report, not approved current prices or working billing.
+- [ ] Keep entitlements enforced server-side; do not trust client-supplied plan labels or family status.
+- [ ] Verify family-access ownership/authorization rules before enabling access. Never invent a family relationship or allow arbitrary users to self-grant owner/family privileges.
+- [ ] Verify free-tier quotas and paid-tier limits against actual model, storage, voice and video costs before launching pricing.
+
+### Stability freeze — user-stated (2026-10-05)
+
+The user explicitly asked to pause feature expansion and prioritize provider failure modes, health checks, row-level security (RLS), quotas, secret leakage and queue safety.
+
+- [ ] Follow this stability-first ordering before adding more autonomy or broad capabilities.
+- [ ] Verify provider configuration failures, useful error responses and bounded retries/fallbacks.
+- [ ] Review quotas and cost limits across API/model, queue, storage, voice and media generation.
+- [ ] Check secrets are server-side only and absent from logs, browser bundles and public error responses.
+- [ ] Verify queue safety: idempotency, leases/heartbeats, retry limits, cancellation, dead-letter handling and recoverable job states.
+
+### RLS findings — historical audit, recheck current database
+
+A prior assistant report dated 2026-10-05 said RLS was enabled on audited jarvis_* tables but **jarvis_family_access** and **jarvis_plan_prices** had zero policies. A draft PR #31 reportedly proposed public read of active plan prices and self-row-only family-access reads, with browser writes disabled. This is historical, and does not prove current policy state or that the proposal was merged.
+
+- [ ] Inspect the current Supabase schema and policies for plan prices, family access, memories, user data and job tables.
+- [ ] Test both allowed and denied cases as anonymous, ordinary user, family user and owner.
+- [ ] Ensure policy design matches server-side authorization and cannot permit privilege escalation or cross-user data access.
+
+### Memory Center and True Forget — historical implementation report
+
+A prior assistant report dated 2026-10-06 said PR #53 (“True Forget”) was merged, with a Memory Center supporting view, forget-one and forget-all for semantic memories, server-side user ownership, hidden embeddings, 110/110 tests, a passing build and no residual test rows. The report also explicitly said deletion covered saved semantic memory, **not the visible chat transcript**, and no Vercel deployment had occurred.
+
+- [ ] Recheck the current default branch and implementation before relying on this report.
+- [ ] Test view, delete-one, delete-all, user isolation, embedding/vector deletion, and failure recovery against the current database.
+- [ ] Clearly distinguish saved-memory deletion from transcript deletion and any provider-retained data; never promise a broader erasure than the system can prove.
+
+### Provenance / source tracking — historical PR report
+
+A prior assistant report dated 2026-10-06 said PR #55 remained open and unmerged. The proposed provenance system distinguished conversation, saved memory, live web evidence and model inference; it reportedly captured provider source URLs and deduplicated up to 10 sources. Full local verification was unavailable at the time, and no Vercel deployment was reported.
+
+- [ ] Check current PR and branch status before treating this as implemented.
+- [ ] Preserve source URLs and evidence timestamps where available; distinguish retrieved facts, user-provided claims, memory and model inference.
+- [ ] Test missing sources, stale sources, duplicate sources, tool failures and unsupported certainty. Do not invent citations or claim source verification without evidence.
+
+### YouTube and content-economics guardrails — historical operational notes
+
+A prior assistant note cited YouTube API quota as 10,000 units/day and videos.insert as 1,600 units. These are historical figures that may change; verify official current quota documentation before planning publishing throughput. Keep publishing approval, copyright/IP provenance, child-safety review, generation costs and revenue attribution explicit.
+
+- [ ] No automatic public publishing without the configured approval gate.
+- [ ] Keep the content chain auditable from idea/strategy through asset, approval, publish, analytics and revenue.
+- [ ] Enforce per-job and per-day spend ceilings, with a safe stop when quotas or budget limits are reached.
