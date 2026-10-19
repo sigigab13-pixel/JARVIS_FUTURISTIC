@@ -432,3 +432,48 @@ For any provider/configuration incident:
 3. Resolve the canonical hosting target from live project/domain evidence before any destructive project cleanup.
 4. Keep the no-visible-clock preference and voice time command in the local desktop UX requirements.
 5. Add tests for each verified gap; do not claim a historical feature is currently working based solely on an old assistant report.
+
+
+## 16. Additional recovered implementation constraints: modular work, OpenAI brain and environment configuration
+
+### Working method and infrastructure budget — 2026-09-24
+
+The user explicitly accepted a **modular, inspect-first, no-guessing, one-step-at-a-time** way of building JARVIS, with free/low-cost infrastructure as the starting point.
+
+Operational requirements:
+- Inspect the existing repository, runtime and configuration before editing; do not rebuild a working subsystem from assumptions.
+- Make a bounded change, test it, verify the actual result, then proceed to the next step.
+- Prefer the existing stack and free/low-cost options unless a specific requirement justifies cost.
+- Surface recurring costs, quotas and deployment limits before introducing a new service.
+- Keep the user informed of exact evidence and status; never treat an intended design or a successful build as proof of production behavior.
+
+### OpenAI as the hosted JARVIS brain — explicit user choice, 2026-10-03
+
+The user asked to use **OpenAI as JARVIS's brain**, replacing the Hugging Face provider in the hosted `/api/chat` path. OpenAI API usage is separately billed and configured from a ChatGPT subscription; do not imply a ChatGPT plan provides API credits.
+
+Implementation/verification checklist:
+- Inspect the current `/api/chat` handler and provider abstraction before changing it; preserve existing authorization, input validation, error handling and rate/cost controls.
+- Keep the OpenAI API key server-side only. Never expose it through `VITE_*`, client-visible configuration, logs or source control.
+- Confirm the configured model is currently supported and available to this account; don't revive old model strings from historical notes without checking.
+- Make provider failures explicit and safe; do not silently report an AI response when the provider failed.
+- Smoke-test the actual deployed chat endpoint using the established prompt: **“Hello JARVIS, reply with: AI CORE ONLINE”**. Capture status and response, and distinguish a local test from Preview and Production.
+- Treat Hugging Face references elsewhere in this backlog as historical unless current code and user-approved architecture show otherwise.
+
+### Supabase build-time frontend configuration — historical setup, 2026-09-24
+
+A prior report recorded `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` configured for Vercel Production and Preview, with a redeploy required for build-time variables to be picked up. Verify current variable names and framework behavior before relying on this report.
+
+Rules:
+- Public/publishable Supabase client configuration may be included in the frontend only where intended; never put a service-role key or other secret in a `VITE_*` variable.
+- After changing build-time frontend environment variables, build and test the correct environment, then deploy only through the approved deployment queue.
+- Test sign-in, session restoration, database authorization and logout on the actual target environment; a successful build alone is insufficient.
+- Do not print secret values when comparing environments.
+
+### API method and historical branch map — 2026-10-03
+
+A prior code report described `/api/chat` as **POST-only** and listed branches named `children-content-foundation`, `agent-orchestrator`, `multitask-workers`, `chat-history` fix and `guest-auth` fix. These names and implementation status are historical evidence, not a current branch inventory.
+
+Before changing routes or features:
+- Inspect the current handler's accepted methods, request schema, response schema and error contract.
+- Check the current default branch, open PRs and branch heads; do not assume a historical branch still exists or is deployable.
+- Preserve a single clear main-chat contract and test unsupported methods, malformed requests, auth failures, provider failures and structured error responses.
