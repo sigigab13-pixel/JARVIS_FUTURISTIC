@@ -1,6 +1,6 @@
 # JARVIS Futuristic
 
-> An independent AI platform being built by Saviour, with GPT-5.6 Luna as the AI development partner.
+> An independent AI platform stewarded by **Nexora**, with **Mythos** as the AI development partner.
 
 JARVIS is being built as a broader AI operating platform — not just a chatbot and not just a content generator. The long-term goal is to bring conversation, memory, business management, specialized offices, missions, automation, image generation, video production, voice, publishing, research, and reliability systems into one product.
 
@@ -272,7 +272,7 @@ The public repository should contain source code and documentation, not private 
 
 ## 🗂️ Project portfolio and integration roadmap
 
-The unified [Project Portfolio & Integration Queue](docs/PROJECT_PORTFOLIO_AND_INTEGRATION_QUEUE.md) records unfinished JARVIS capabilities and the boundaries for related workstreams including SENTINEL, Vantora, Nexora, the Nexora hospitality scenario, Maverick Legion creative work, and Children Factory / Kobi Episode 1. Roadmap entries are not claims of completed functionality.
+The unified [Project Portfolio & Integration Queue](docs/PROJECT_PORTFOLIO_AND_INTEGRATION_QUEUE.md) records unfinished JARVIS capabilities and the boundaries for related workstreams including Optimum Prime (a separate harmless simulation project), SENTINEL, Vantora, Nexora, the Nexora hospitality scenario, Maverick Legion creative work, and Children Factory / Kobi Episode 1. Roadmap entries are not claims of completed functionality.
 
 ## 📖 Build in public
 
