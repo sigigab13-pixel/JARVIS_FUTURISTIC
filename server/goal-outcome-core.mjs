@@ -3,38 +3,38 @@ const MAX_TEXT = 500;
 const MODES = new Set(['answer', 'decide', 'prepare', 'execute']);
 
 function clean(value, max = MAX_TEXT) {
-  return String(value ?? '').replace(/\\s+/g, ' ').trim().slice(0, max);
+  return String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 }
 
 function classifyRequestMode(text) {
   const value = clean(text).toLowerCase();
 
-  if (/\\b(help me decide|should i|which (one|option)|compare|choose)\\b/.test(value)) return 'decide';
+  if (/\b(help me decide|should i|which (one|option)|compare|choose)\b/.test(value)) return 'decide';
 
   // Educational/how-to requests describe an action but do not authorize JARVIS
   // to perform it. Keep these in answer mode so they don't trigger execution previews.
-  if (/^(?:please\\s+)?(?:explain|describe|define|teach me|show me how|tell me how|what is|what are|why|how do i|how can i|how to|steps to|guide me through)\\b/.test(value)) {
+  if (/^(?:please\s+)?(?:explain|describe|define|teach me|show me how|tell me how|what is|what are|why|how do i|how can i|how to|steps to|guide me through)\b/.test(value)) {
     return 'answer';
   }
 
-  const executionVerb = /\\b(?:send|publish|upload|book|buy|delete|apply|run|execute|submit|schedule|launch|post|update|change|transfer|order|deploy|cancel|invite|email|message|share|install|remove|revoke|enable|disable|connect|disconnect|purchase|release|commit|merge|pay)\\b/;
-  const preparationLead = /^(?:please\\s+)?(?:prepare|draft|write|make|create|build|design|plan|generate|produce|compose)\\b/;
+  const executionVerb = /\b(?:send|publish|upload|book|buy|delete|apply|run|execute|submit|schedule|launch|post|update|change|transfer|order|deploy|cancel|invite|email|message|share|install|remove|revoke|enable|disable|connect|disconnect|purchase|release|commit|merge|pay)\b/;
+  const preparationLead = /^(?:please\s+)?(?:prepare|draft|write|make|create|build|design|plan|generate|produce|compose)\b/;
 
   // An explicit external side effect takes precedence over generic creation words:
   // "create and publish" is execution, while "build a plan" is preparation.
   if (executionVerb.test(value)) return 'execute';
   if (preparationLead.test(value)) return 'prepare';
-  if (/\\b(do it|actually do|go ahead and)\\b/.test(value)) return 'execute';
+  if (/\b(do it|actually do|go ahead and)\b/.test(value)) return 'execute';
   return 'answer';
 }
 
 function extractConstraints(text) {
   const constraints = [];
   const patterns = [
-    /\\b(?:under|below|less than)\\s+[$€£₦]?\\s*\\d+(?:\\.\\d+)?\\b[^,.!?]*/i,
-    /\\b(?:by|before|within)\\s+(?:today|tomorrow|tonight|\\d+\\s+(?:days?|hours?|weeks?))\\b[^,.!?]*/i,
-    /\\b(?:using|with|without)\\s+[^,.!?]+/i,
-    /\\b(?:free|cheap|lowest cost|no subscription|no extra cost)\\b[^,.!?]*/i,
+    /\b(?:under|below|less than)\s+[$€£₦]?\s*\d+(?:\.\d+)?\b[^,.!?]*/i,
+    /\b(?:by|before|within)\s+(?:today|tomorrow|tonight|\d+\s+(?:days?|hours?|weeks?))\b[^,.!?]*/i,
+    /\b(?:using|with|without)\s+[^,.!?]+/i,
+    /\b(?:free|cheap|lowest cost|no subscription|no extra cost)\b[^,.!?]*/i,
   ];
   for (const pattern of patterns) {
     const match = text.match(pattern);
@@ -46,8 +46,8 @@ function extractConstraints(text) {
 function extractTarget(text) {
   const cleaned = clean(text);
   const stripped = cleaned
-    .replace(/^(please\\s+)?(help me|can you|could you|i need you to|i want you to)\\s+/i, '')
-    .replace(/^(answer|prepare|create|make|write|do|execute|run)\\s+/i, '');
+    .replace(/^(please\s+)?(help me|can you|could you|i need you to|i want you to)\s+/i, '')
+    .replace(/^(answer|prepare|create|make|write|do|execute|run)\s+/i, '');
   return clean(stripped || cleaned);
 }
 
@@ -76,9 +76,9 @@ function buildDependencies(mode) {
 
 function buildCompletion(mode, target) {
   if (mode === 'answer') return `The answer addresses “${target}” and clearly separates evidence from inference.`;
-  if (mode === 'decide') return 'The options are compared, trade-offs are stated, and one recommendation is supported by evidence.';
-  if (mode === 'prepare') return 'The requested artifact is produced, checked, and ready for user review or the next approved step.';
-  return 'The requested action is completed only within authorized scope, and the result has verified evidence.';
+  if (mode === 'decide') return `The options are compared, trade-offs are stated, and one recommendation is supported by evidence.`;
+  if (mode === 'prepare') return `The requested artifact is produced, checked, and ready for user review or the next approved step.`;
+  return `The requested action is completed only within authorized scope, and the result has verified evidence.`;
 }
 
 export function planGoal(input = {}) {
