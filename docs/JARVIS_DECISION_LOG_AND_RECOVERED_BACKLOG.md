@@ -376,3 +376,59 @@ A prior assistant note cited YouTube API quota as 10,000 units/day and videos.in
 - [ ] No automatic public publishing without the configured approval gate.
 - [ ] Keep the content chain auditable from idea/strategy through asset, approval, publish, analytics and revenue.
 - [ ] Enforce per-job and per-day spend ceilings, with a safe stop when quotas or budget limits are reached.
+
+
+## 15. Additional recovered decisions: local GUI, time command, routing and hosting history
+
+This section records older conversation evidence that was not yet explicit in the backlog. These are **historical requirements or reports**, not proof of current implementation. Where older reports conflict with newer decisions or repository state, verify before acting.
+
+### Local Mac GUI and voice controls — 2026-09-09
+
+The requested desktop GUI concept included:
+- A central glowing core with explicit states: **STANDBY, LISTENING, THINKING, SPEAKING**.
+- A visible waveform, CPU/RAM/battery indicators, activity log, microphone/AI/system status indicators.
+- Start/Stop, mute, and listening controls.
+- Preserve the existing local brain and voice system during the initial UI upgrade; do not rewrite the core just to change the interface.
+
+The user explicitly preferred **no always-visible display clock**. Time should be available as a separate voice command: **“Jarvis, what time is it?”** Keep a visible clock out of the default GUI unless the user changes this preference.
+
+Acceptance checks:
+- GUI state reflects the real listener, model request and speaker state rather than decorative animation.
+- Mic permission/availability and mute/listening status are unmistakable.
+- Start/Stop does not leave duplicate listeners or speakers running.
+- CPU/RAM/battery values are actual readings or clearly marked unavailable.
+- The time command returns the machine's current local time and handles unavailable clock/time services honestly.
+
+### Children’s Factory and main-chat routing — historical implementation report, 2026-10-04
+
+A prior report said that a Children’s Factory implementation in `server/server.mjs` could create a story, character, three images and an approval-gated mission, while main-chat routing remained unwired. It also said Intent Router v0.1 and Children’s Factory v1 had not yet been deployed at that time.
+
+Treat that report as a **dated lead only**. Inspect current `main`, open PRs, routes and deployment before deciding whether this is still a gap. The product requirement remains that the main chat hub should route an explicitly requested workflow to the right office, show the selected route/tool and job state, and return structured results/errors instead of leaking `[object Object]`. Do not duplicate a workflow implementation just because an old report said routing was unwired.
+
+### Hosting and canonical-project ambiguity — historical report, 2026-10-04 and 2026-10-11
+
+Older reports conflict about the canonical Vercel project:
+- A 2026-10-04 report called `jarvis-futureristic-679d` canonical and warned that `jarvis-futureristic` and `jarvis-futuristic` were duplicate projects.
+- Later user-facing context identifies `jarvis-futuristic` / `jarvis-futuristic.vercel.app` as the intended correctly spelled project/domain and says to pause/delete duplicates.
+- A 2026-10-11 report described Cloudflare Pages and a Vercel `/api/_healthcheck` both returning HTTP 200, while the normal homepage returned `DEPLOYMENT_NOT_FOUND`; it described a partial migration, not a fully verified healthy site.
+
+**Do not resolve this conflict by guessing or deleting projects.** Inventory live Vercel project IDs, domains, recent deployments and the Cloudflare Pages/Worker configuration. Confirm the user's intended canonical target against current evidence before changing, deleting, unpausing or deploying anything. Keep deployment quota constraints in force.
+
+### Preview/production configuration distinction — historical incident, 2026-10-03
+
+A prior report said Preview `/api/chat` returned HTTP 503 because Hugging Face was not configured, while Production returned an AI response; the report named `HUGGINGFACE_API_TOKEN` as a required Preview variable at that time. This is not a recommendation to restore Hugging Face or a claim that the current provider stack uses it.
+
+For any provider/configuration incident:
+- Compare Preview and Production environment-variable **names and configuration state** without printing secret values.
+- Confirm the selected provider/model against the current supported configuration; do not resurrect a deprecated provider from an old log.
+- Test the deployed route in the intended environment and capture HTTP status, safe error code, provider-configured status and correlation ID.
+- Never log API keys or expose secrets in client bundles.
+- Treat a working health endpoint as insufficient proof that normal chat works.
+
+### Implementation audit queue
+
+1. Inspect current code for the local GUI and voice-state behavior; distinguish the local Mac application from the hosted JARVIS web platform.
+2. Verify main-chat routing and Children’s Factory workflow wiring against current code and current deployment evidence.
+3. Resolve the canonical hosting target from live project/domain evidence before any destructive project cleanup.
+4. Keep the no-visible-clock preference and voice time command in the local desktop UX requirements.
+5. Add tests for each verified gap; do not claim a historical feature is currently working based solely on an old assistant report.
