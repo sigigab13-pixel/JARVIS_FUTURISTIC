@@ -94,3 +94,20 @@ test('classifies a direct build request as preparation rather than external exec
   assert.equal(plan.executionPolicy, 'plan_and_return');
 });
 
+test('distinguishes direct commands from planning or ambiguous intent', () => {
+  const planning = planGoal({ request: 'Create a plan to deploy the website.' });
+  assert.equal(planning.requestMode, 'prepare');
+
+  const compound = planGoal({ request: 'Build the app and then deploy it.' });
+  assert.equal(compound.requestMode, 'execute');
+  assert.ok(compound.dependencies.includes('Explicit authorization for consequential external actions'));
+
+  const addressed = planGoal({ request: 'Can you deploy the website?' });
+  assert.equal(addressed.requestMode, 'execute');
+
+  const educational = planGoal({ request: 'Can you explain how to deploy a website?' });
+  assert.equal(educational.requestMode, 'answer');
+
+  const ambiguous = planGoal({ request: 'I want to publish a video.' });
+  assert.notEqual(ambiguous.requestMode, 'execute');
+});
