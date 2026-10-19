@@ -60,7 +60,7 @@ jobs:
               : body.slice(parentGateStart);
 
           const unchecked = gateSection
-            .split(/\\r?\\n/)
+            .split(/\r?\n/)
             .filter((line) => line.trim().startsWith('- [ ]'));
 
           if (unchecked.length) {
