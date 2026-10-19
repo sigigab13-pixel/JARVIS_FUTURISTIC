@@ -1103,6 +1103,7 @@ This register collects known unfinished JARVIS capabilities and the boundaries/o
 
 ## Cross-project workstreams to track
 
+- [ ] **Optimum Prime:** track the separate harmless simulation project independently from JARVIS Futuristic.
 - [ ] **SENTINEL:** define a narrow, permissioned report-analysis/remediation adapter. Preserve target authorization, scan scope, evidence and execution controls inside Sentinel; never start a scan from ambiguous chat intent.
 - [ ] **Vantora:** document business workflows and provider contracts for payments, airtime/data, savings/investment, travel and logistics. Treat all transactions/bookings/dispatch as consequential and require verified APIs, user confirmation, idempotency and receipts.
 - [ ] **Nexora:** use JARVIS Business Manager for business workspaces, brand assets, operating procedures, reports and scenario planning. Public-facing company attribution should use Nexora.
