@@ -1091,3 +1091,27 @@ JARVIS should not only expose generic automation. It should package repeatable, 
 - [ ] Business and content workflows that can generate localized scripts, captions, titles, and descriptions.
 - [ ] Graceful fallback when a provider does not support a requested language, including clear disclosure instead of fake coverage.
 - [ ] Accessible language controls in the central chat and voice mode.
+
+
+---
+
+# Cross-Project Portfolio & Integration Queue
+
+**Portfolio register:** [docs/PROJECT_PORTFOLIO_AND_INTEGRATION_QUEUE.md](PROJECT_PORTFOLIO_AND_INTEGRATION_QUEUE.md)
+
+This register collects known unfinished JARVIS capabilities and the boundaries/opportunities for related projects. It is a roadmap, not proof of implementation.
+
+## Cross-project workstreams to track
+
+- [ ] **SENTINEL:** define a narrow, permissioned report-analysis/remediation adapter. Preserve target authorization, scan scope, evidence and execution controls inside Sentinel; never start a scan from ambiguous chat intent.
+- [ ] **Vantora:** document business workflows and provider contracts for payments, airtime/data, savings/investment, travel and logistics. Treat all transactions/bookings/dispatch as consequential and require verified APIs, user confirmation, idempotency and receipts.
+- [ ] **Nexora:** use JARVIS Business Manager for business workspaces, brand assets, operating procedures, reports and scenario planning. Public-facing company attribution should use Nexora.
+- [ ] **Nexora hospitality scenario:** model the 36-states × 50-suites concept only as an explicit scenario until real assumptions, funding, locations and approval are supplied.
+- [ ] **Maverick Legion creative workstream:** maintain design briefs, reference assets, color/finish specifications, variants and marketing materials; do not imply manufacturing or purchase.
+- [ ] **Kobi & the Singing Bird — Episode 1:** use the Children Factory as the first narrow proof of the trend/strategy/content/asset/QA/approval/publish/analytics/revenue chain.
+- [ ] **Provider and infrastructure inventory:** verify Viewmax, Higgsfield, ElevenLabs, Supabase, Upstash, storage and deployment status independently; a prior mention or saved key does not prove a working integration.
+- [ ] **Portfolio status reconciliation:** keep planned, partial, unavailable and verified statuses separate; link every claimed pass to the exact commit and workflow/runtime evidence.
+
+## Execution rule
+
+Finish reliability and evidence gates before widening autonomy. Keep related projects as separate trust boundaries and integrate them through reviewed contracts instead of merging their code or permissions indiscriminately. Follow **fix → test → verify → next**, queue changes, and deploy deliberately.
