@@ -59,3 +59,38 @@ test('replans only when new evidence exists', () => {
 test('rejects an empty goal', () => {
   assert.throws(() => planGoal({ request: '' }), /GOAL_REQUEST_REQUIRED/);
 });
+
+test('classifies consequential side-effect verbs as execution and requires authorization', () => {
+  for (const request of [
+    'Schedule the video for tomorrow.',
+    'Upload the finished file.',
+    'Deploy the website.',
+    'Change the account settings.',
+    'Cancel the scheduled post.',
+    'Create and publish the announcement.',
+  ]) {
+    const plan = planGoal({ request });
+    assert.equal(plan.requestMode, 'execute', request);
+    assert.ok(plan.dependencies.includes('Explicit authorization for consequential external actions'), request);
+    assert.equal(plan.executionPolicy, 'plan_then_authorize_then_execute_then_verify', request);
+  }
+});
+
+test('keeps how-to questions in answer mode even when they mention side effects', () => {
+  for (const request of [
+    'How do I publish a video?',
+    'Explain how to upload a file.',
+    'Show me how to delete a test record.',
+  ]) {
+    const plan = planGoal({ request });
+    assert.equal(plan.requestMode, 'answer', request);
+    assert.equal(plan.executionPolicy, 'plan_and_return', request);
+  }
+});
+
+test('classifies a direct build request as preparation rather than external execution', () => {
+  const plan = planGoal({ request: 'Build JARVIS PRIME.' });
+  assert.equal(plan.requestMode, 'prepare');
+  assert.equal(plan.executionPolicy, 'plan_and_return');
+});
+
