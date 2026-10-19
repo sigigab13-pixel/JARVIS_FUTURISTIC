@@ -270,6 +270,10 @@ Never commit:
 
 The public repository should contain source code and documentation, not private credentials.
 
+## 🗂️ Project portfolio and integration roadmap
+
+The unified [Project Portfolio & Integration Queue](docs/PROJECT_PORTFOLIO_AND_INTEGRATION_QUEUE.md) records unfinished JARVIS capabilities and the boundaries for related workstreams including SENTINEL, Vantora, Nexora, the Nexora hospitality scenario, Maverick Legion creative work, and Children Factory / Kobi Episode 1. Roadmap entries are not claims of completed functionality.
+
 ## 📖 Build in public
 
 This project is being built publicly so people can follow the real journey.
@@ -312,10 +316,10 @@ These are roadmap items, not claims that the features are already production-com
 
 See the active queues: [#17 Future-Ready Cryptography](https://github.com/sigigab13-pixel/JARVIS_FUTURISTIC/issues/17) and [#18 Simple Custom Domain + Search Discovery](https://github.com/sigigab13-pixel/JARVIS_FUTURISTIC/issues/18).
 
-## 👤 Creator
+## 🏢 Company
 
-**Saviour** — Creator and developer of JARVIS.
+**Nexora** — company building and stewarding JARVIS Futuristic.
 
-**GPT-5.6 Luna** — AI development partner helping build, debug, document, and evolve the platform.
+**Mythos** — AI development partner supporting planning, implementation, debugging, and verification.
 
 > **JARVIS Futuristic is being built in public — one verified capability at a time.**
