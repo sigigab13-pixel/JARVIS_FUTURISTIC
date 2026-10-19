@@ -289,3 +289,36 @@ When recovering more conversation history, place every finding into one of four 
 4. **Current verified state** — require evidence tied to the exact commit, workflow, environment or deployment.
 
 A conversation-memory search is not guaranteed to cover every prior chat. Keep the audit open until additional sources have been searched; never label this backlog exhaustive without evidence.
+
+
+## 13. Recovered deployment, smoke-test and passive-wake requirements
+
+### Production acceptance checklist — user-requested (2026-10-03)
+
+The user asked to finish JARVIS with production health, chat, memory/worker verification and an end-to-end children's-content test. These must be tested as separate acceptance checks; a successful build or health endpoint alone is not sufficient.
+
+- [ ] Confirm the intended production URL serves the expected JARVIS frontend (not a paused, missing or stale deployment).
+- [ ] Confirm API health and explicitly inspect provider configuration status.
+- [ ] Complete a real chat smoke test using the exact prompt: **“Hello JARVIS, reply with: AI CORE ONLINE”**. Record the response, commit, deployment and timestamp.
+- [ ] Verify memory read/write behavior and worker job lifecycle independently.
+- [ ] Run one end-to-end children's-content job through the currently supported path, recording each state and evidence. Do not equate a successful API call with a completed/rendered/published video.
+- [ ] Report each check as pass, fail, blocked or not run; never infer end-to-end success from a green build.
+
+### Deployment and provider incident history — historical, not current state
+
+- **2026-10-03:** Historical reports said POST /api/chat existed and Hugging Face integration was present, but requests returned HTTP 503 with providerConfigured:false. The reported configuration fix was to set HUGGINGFACE_API_TOKEN or HF_TOKEN in the Vercel Production environment and redeploy. A later assistant report said the token was added and redeployed, but the required chat smoke test must still be re-run against the exact current production deployment.
+- **2026-10-07:** The user accepted removing duplicate Vercel projects and keeping only **jarvis-futuristic**. Historical project names removed were jarvis-futureristic and jarvis-futureristic-679d. Verify current Vercel project inventory before making further changes; do not recreate duplicates.
+- **2026-10-07:** Historical deployment/build status was reported READY while the public deployment remained unavailable with 503 DEPLOYMENT_PAUSED and live:false. A READY build is not proof that the public site is live.
+- **2026-10-11:** The user reported Cloudflare staging diagnostics where Pages frontend and Vercel /api/_healthcheck both returned HTTP 200 and the Worker was active at 100%. The same report said the normal staging homepage returned Vercel DEPLOYMENT_NOT_FOUND; frontend Pages / API Vercel routing was only a partial migration. These historical observations do not prove the current route is healthy.
+- Current architecture and migration status must be read from the live project configuration and deployment records. Do not assert that Vercel-to-Cloudflare migration is complete without verifying the homepage, API routing, authentication, chat, memory, worker and content flow together.
+
+### Passive wake and visual identity — user-requested (2026-09-14)
+
+- [ ] **PASSIVE WAKE must start ON automatically whenever JARVIS opens or refreshes**, subject to browser/device microphone permission and a visible, understandable listening indicator.
+- [ ] If permission is unavailable or the listener fails, show a clear state and recovery action; do not falsely display active listening.
+- [ ] Preserve the requested highly futuristic, 3D, armored HUD aesthetic: dark metallic base, arc-reactor-style center glow, rotating rings, 3D grid and cyan energy with restrained red/gold accents. Treat this as a UI direction, not permission to copy protected character artwork or branding.
+- A prior assistant message claimed passive wake and the visual upgrade were implemented with zero reported errors. This is a historical claim only; recheck actual code, browser permissions, startup/refresh behavior and current deployed UI before marking complete.
+
+### Evidence discipline for operations
+
+For every production check, store the exact target URL/environment, commit SHA, deployment identifier, check timestamp, expected result, observed result and relevant log/reference. Never put API keys or secret values in the log; record only whether required configuration is present and correctly scoped.
