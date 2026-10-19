@@ -20,6 +20,7 @@ JARVIS is being built as a broader AI operating platform — not just a chatbot 
 - 💼 Business management and Brand Kit
 - 🔎 Web intelligence and research
 - 🛡️ Security, permissions, health checks, recovery, and observability
+- 🤝 Planned AI Intervention & Alliance: diagnose and help repair other AIs, then cooperate through verified, permissioned contracts
 - 🎨 User customization and branding
 - 📣 Future publishing and analytics integrations
 - ☁️ Multi-cloud architecture for scalable production
@@ -272,7 +273,7 @@ The public repository should contain source code and documentation, not private 
 
 ## 🗂️ Project portfolio and integration roadmap
 
-The unified [Project Portfolio & Integration Queue](docs/PROJECT_PORTFOLIO_AND_INTEGRATION_QUEUE.md) records unfinished JARVIS capabilities and the boundaries for related workstreams including Optimum Prime (a separate harmless simulation project), SENTINEL, Vantora, Nexora, the Nexora hospitality scenario, Maverick Legion creative work, and Children Factory / Kobi Episode 1. Roadmap entries are not claims of completed functionality.
+The [JARVIS Decision Log & Recovered Backlog](docs/JARVIS_DECISION_LOG_AND_RECOVERED_BACKLOG.md) preserves prior decisions, safety laws, historical incidents, and recovered feature requests. The unified [Project Portfolio & Integration Queue](docs/PROJECT_PORTFOLIO_AND_INTEGRATION_QUEUE.md) records unfinished JARVIS capabilities and the boundaries for related workstreams including Optimus Prime (a separate harmless simulation project), SENTINEL, Vantora, Nexora, the Nexora hospitality scenario, Maverick Legion creative work, and Children Factory / Kobi Episode 1. Roadmap entries are not claims of completed functionality.
 
 ## 📖 Build in public
 
