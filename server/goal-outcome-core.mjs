@@ -11,20 +11,24 @@ function classifyRequestMode(text) {
 
   if (/\b(help me decide|should i|which (one|option)|compare|choose)\b/.test(value)) return 'decide';
 
-  // Educational/how-to requests describe an action but do not authorize JARVIS
-  // to perform it. Keep these in answer mode so they don't trigger execution previews.
-  if (/^(?:please\s+)?(?:explain|describe|define|teach me|show me how|tell me how|what is|what are|why|how do i|how can i|how to|steps to|guide me through)\b/.test(value)) {
+  // Educational/how-to requests mention actions without asking JARVIS to perform them.
+  if (/^(?:(?:please|can you|could you)\s+)?(?:explain|describe|define|teach me|show me how|tell me how|what is|what are|why|how do i|how can i|how to|steps to|guide me through)\b/.test(value)
+      || /^(?:can you|could you)\s+explain\b/.test(value)
+      || /\b(?:want to know how to|need to know how to)\b/.test(value)) {
     return 'answer';
   }
 
-  const executionVerb = /\b(?:send|publish|upload|book|buy|delete|apply|run|execute|submit|schedule|launch|post|update|change|transfer|order|deploy|cancel|invite|email|message|share|install|remove|revoke|enable|disable|connect|disconnect|purchase|release|commit|merge|pay)\b/;
+  const actionVerbs = '(?:send|publish|upload|book|buy|delete|apply|run|execute|submit|schedule|launch|post|update|change|transfer|order|deploy|cancel|invite|email|message|share|install|remove|revoke|enable|disable|connect|disconnect|purchase|release|commit|merge|pay)';
+  const directAction = new RegExp('^(?:(?:please|now|just)\\s+)*' + actionVerbs + '\\b');
+  const addressedAction = new RegExp('\\b(?:can you|could you|please|i want you to|i need you to|go ahead and|proceed to|actually do)\\s+' + actionVerbs + '\\b');
   const preparationLead = /^(?:please\s+)?(?:prepare|draft|write|make|create|build|design|plan|generate|produce|compose)\b/;
+  const compoundAction = new RegExp('\\b(?:and then|then|and)\\s+' + actionVerbs + '\\b');
 
-  // An explicit external side effect takes precedence over generic creation words:
-  // "create and publish" is execution, while "build a plan" is preparation.
-  if (executionVerb.test(value)) return 'execute';
+  // Only an explicit command, addressed instruction, or compound "make and publish"
+  // request is treated as execution. "Create a plan to deploy" stays preparation.
+  if (directAction.test(value) || addressedAction.test(value) || /\b(do it|actually do it)\b/.test(value)) return 'execute';
+  if (preparationLead.test(value) && compoundAction.test(value)) return 'execute';
   if (preparationLead.test(value)) return 'prepare';
-  if (/\b(do it|actually do|go ahead and)\b/.test(value)) return 'execute';
   return 'answer';
 }
 
