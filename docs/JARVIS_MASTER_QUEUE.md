@@ -1097,13 +1097,14 @@ JARVIS should not only expose generic automation. It should package repeatable, 
 
 # Cross-Project Portfolio & Integration Queue
 
-**Portfolio register:** [docs/PROJECT_PORTFOLIO_AND_INTEGRATION_QUEUE.md](PROJECT_PORTFOLIO_AND_INTEGRATION_QUEUE.md)
+**Portfolio register:** [docs/PROJECT_PORTFOLIO_AND_INTEGRATION_QUEUE.md](PROJECT_PORTFOLIO_AND_INTEGRATION_QUEUE.md)  
+**Recovered decisions and backlog:** [docs/JARVIS_DECISION_LOG_AND_RECOVERED_BACKLOG.md](JARVIS_DECISION_LOG_AND_RECOVERED_BACKLOG.md) — includes Parent Laws, AI repair/alliance, controlled computer use, memory/self-checking, repair office, historical incident notes, and explicit boundaries.
 
 This register collects known unfinished JARVIS capabilities and the boundaries/opportunities for related projects. It is a roadmap, not proof of implementation.
 
 ## Cross-project workstreams to track
 
-- [ ] **Optimum Prime:** track the separate harmless simulation project independently from JARVIS Futuristic.
+- [ ] **Optimus Prime:** track the separate harmless simulation project independently from JARVIS Futuristic.
 - [ ] **SENTINEL:** define a narrow, permissioned report-analysis/remediation adapter. Preserve target authorization, scan scope, evidence and execution controls inside Sentinel; never start a scan from ambiguous chat intent.
 - [ ] **Vantora:** document business workflows and provider contracts for payments, airtime/data, savings/investment, travel and logistics. Treat all transactions/bookings/dispatch as consequential and require verified APIs, user confirmation, idempotency and receipts.
 - [ ] **Nexora:** use JARVIS Business Manager for business workspaces, brand assets, operating procedures, reports and scenario planning. Public-facing company attribution should use Nexora.
