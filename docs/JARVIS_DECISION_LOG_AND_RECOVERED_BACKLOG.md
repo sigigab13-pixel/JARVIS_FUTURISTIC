@@ -123,6 +123,35 @@ The user has requested ambitious computer-control abilities, including browser, 
 - [ ] Record failed attempts honestly; do not erase or relabel a historical failure as success.
 - [ ] Add self-healing only for bounded, reversible, pre-authorized actions. Schema changes, access changes, secret rotation, production releases and destructive repair require explicit approval.
 
+
+## 6A. Specific Repair Office requirements recovered from earlier chats
+
+These requirements are more specific than the general self-repair checklist above and should not be lost:
+
+- [ ] Five-level recovery ladder: **retry → restart → rollback → reroute → safe park and alert**. Each level must have explicit preconditions, attempt limits, cooldown/backoff, evidence, and a terminal state.
+- [ ] Six-week unattended-survival target was discussed. Treat this as a design target requiring a simulated endurance test and evidence—not as a proven uptime or guarantee.
+- [ ] Monitoring cadence of approximately **60 seconds** was requested for the Repair Office. Make cadence configurable and bounded; do not assume this is currently running.
+- [ ] Maintain a durable `repair_log`/repair event history so the system can learn from previous repair attempts. Store the failure signature, diagnosis, attempted action, result, rollback, evidence, and approval—not secrets or unrestricted raw payloads.
+- [ ] A phone-friendly `/repair` dashboard was requested to show health, current incident, recovery level, recent repair events, alerts, and the next safe action.
+- [ ] Proposed repair data entities included Supabase `repair_events`, `repair_state`, `repair_policies`, and `system_checkpoints`. These are historical design proposals only; inspect the actual schema and migrations before implementation.
+- [ ] The **Repair Supervisor / recovery bootstrap / checkpoints / Security Core** were intended to be immutable to the ordinary Self-Updater. Updates to these trusted recovery roots need a separate reviewed process, signed/verified artifacts where feasible, and a known-good rollback route.
+- [ ] The Repair Office was intended to monitor API, database, Redis/queue workers, external providers, and integrations, while stopping and escalating when a fault is unknown or a repair would exceed its authority.
+- [ ] A later planning note identified **unified natural-language routing** as a key V1 blocker. The central chat must route to a verified capability/adapter rather than pretend every request can be handled by the language model alone.
+
+## 5A. Original local Mac JARVIS — separate historical implementation
+
+An earlier local prototype exists in the conversation history and should not be silently conflated with the current Vercel/Supabase platform. Historical project path mentioned: `~/Downloads/JARVIS_FUTURISTIC`.
+
+- [ ] Inventory and decide whether to preserve, port, or retire the original Python/Mac prototype before changing it.
+- Historical modules/files mentioned: `config.py`, `jarvis.py`, `brain/conversation.py`, Vosk listener, Speaker/TTS, GUI/menu-bar app, memory, system/security modules, and `jarvis_backup.py`.
+- Historical features reported at the time: Vosk microphone listener, passive “Hey” wake word, spoken output, OpenAI-backed `AIBrain`, and conversation history. These were historical reports, not proof of current operation.
+- A prior voice-loop integration created a backup `jarvis_backup.py` first. Duplicate terminal/speaker output was noticed; a GUI/menu-bar upgrade was discussed but not confirmed complete.
+- Historical config notes mentioned `TTS_ENGINE="say"`, `TTS_VOICE="Samantha"`, `TTS_RATE=180`, model string `gpt-5.6-luna`, and persistent memory path `memory/jarvis_memory.json`. These are historical values; validate against the current files and provider documentation before reuse.
+- Voice API mismatch found in a prior debugging session: the speaker method was `Speaker.say()`, not `speak()`. Missing `TTS_VOICE` and `TTS_RATE` had caused initialization/test failures after an earlier engine-setting correction. Preserve this as a historical incident, not a current failure claim.
+- Earlier text-mode startup stopped because `OPENAI_API_KEY` was unset. A Claude migration was floated, but the user questioned why; the retrieved context does **not** establish a final provider switch decision.
+- Identity-prompt requirement from that prototype: JARVIS should describe its role and attribution according to the user's chosen public/private wording, and must not falsely claim it was developed by Google, Anthropic, OpenAI, or another company. Current public attribution preference is **Nexora**, with **Mythos** as the development-partner persona; do not expose the user's private name in public-facing creator copy.
+- An older local memory implementation was described as using `memory/jarvis_memory.json` and `memory_context` in the OpenAI Responses API request. Do not assume it is the same memory system as the current Supabase-backed platform.
+
 ## 7. Specialist agents, missions and tool creation
 
 - [ ] Specialist offices/agents for research, coding, voice, business, personal tasks, publishing, analytics, security and systems—each with an explicit contract and capability list.
