@@ -17,6 +17,7 @@ test('live search produces a supported evidence signal', () => {
     route: { mode: 'search', intent: 'research' },
     responseText: 'The search results support this update.',
     webSearchUsed: true,
+    webCitations: [{ url: 'https://example.com/current', title: 'Current source' }],
   });
   assert.equal(result.level, 'supported');
   assert.equal(result.liveEvidence, true);
@@ -54,4 +55,21 @@ test('epistemic instruction tells JARVIS not to fake verification', () => {
   assert.match(instruction, /Do not present current details as verified/i);
   assert.match(instruction, /do not manufacture confidence/i);
   assert.match(instruction, /invent citations/i);
+});
+test('live search without provider citations remains evidence-limited', () => {
+  const result = assessUncertainty({
+    latestUserMessage: 'What is the current price?',
+    route: { mode: 'search', intent: 'research' },
+    responseText: 'The price is 100.',
+    webSearchUsed: true,
+    webCitations: [],
+  });
+  assert.equal(result.level, 'limited');
+  assert.equal(result.liveEvidence, false);
+  assert.equal(result.webSourceCount, 0);
+  assert.equal(result.shouldSignal, true);
+  assert.match(result.reason, /no provider citation/i);
+
+  const instruction = buildEpistemicInstruction(result);
+  assert.match(instruction, /search ran, but no provider citations were returned/i);
 });
