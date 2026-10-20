@@ -488,6 +488,7 @@ export async function handleApi(req, res, pathname, url) {
       }
       const job = await queueVideoJobForUser(jarvisUser.id, projectId, {
         operation: 'render',
+        project_id: projectId,
         mission_id: missionId || null,
         image_keys: imageKeys,
         format: project.format,
