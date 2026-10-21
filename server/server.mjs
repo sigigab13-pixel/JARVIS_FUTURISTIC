@@ -73,6 +73,7 @@ import { assessActionUncertainty, buildUncertaintyManagerInstruction } from './u
 import { simulateWorkflow } from './workflow-simulator-core.mjs';
 import { buildProvenance, extractWebCitations } from './provenance-core.mjs';
 import { planGoal } from './goal-outcome-core.mjs';
+import { persistConversationSafely } from './chat-persistence.mjs';
 
 const PORT = Number(process.env.PORT || 10000);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -1677,12 +1678,16 @@ export async function handleApi(req, res, pathname, url) {
       }
     }
 
-    if (userId) {
-      await appendConversationMessages(userId, [
-        { role: 'user', content: latestUserMessage },
-        { role: 'assistant', content: text },
-      ]);
-    }
+    const conversationPersistence = userId
+      ? await persistConversationSafely({
+        userId,
+        messages: [
+          { role: 'user', content: latestUserMessage },
+          { role: 'assistant', content: text },
+        ],
+        appendMessages: appendConversationMessages,
+      })
+      : { persistent: false, warning: null };
 
     return json(
       res,
@@ -1693,7 +1698,8 @@ export async function handleApi(req, res, pathname, url) {
         model,
         intelligenceTier,
         responseId,
-        persistent: Boolean(userId),
+        persistent: conversationPersistence.persistent,
+        persistenceWarning: conversationPersistence.warning,
         guest: !userId,
         planning: goalPlan,
         uncertaintyManager,
