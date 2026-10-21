@@ -57,3 +57,25 @@ test('storage normalization preserves approval, evidence, and metadata without u
   assert.deepEqual(normalized.metadata, { source: 'test' });
   assert.ok(!('userId' in normalized));
 });
+
+test('mission state preserves execution identity, adapter, retry bounds, and side-effect metadata', () => {
+  const state = createMissionState({
+    missionId: 'm5',
+    steps: [{
+      id: 'image-step',
+      title: 'Generate image',
+      capability: 'image',
+      executorType: 'image_generation',
+      sideEffect: true,
+      prompt: 'A friendly storybook lion.',
+      maxAttempts: 3,
+      idempotencyKey: 'custom:image-step',
+    }],
+  });
+
+  assert.equal(state.steps[0].executorType, 'image_generation');
+  assert.equal(state.steps[0].sideEffect, true);
+  assert.equal(state.steps[0].prompt, 'A friendly storybook lion.');
+  assert.equal(state.steps[0].maxAttempts, 3);
+  assert.equal(state.steps[0].idempotencyKey, 'custom:image-step');
+});

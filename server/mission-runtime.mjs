@@ -31,12 +31,22 @@ export function createMissionState({
   steps = [],
 } = {}) {
   const normalizedSteps = Array.isArray(steps)
-    ? steps.map((step, index) => ({
-        id: String(step?.id || `step-${index + 1}`),
-        title: String(step?.title || `Step ${index + 1}`).slice(0, 200),
-        capability: String(step?.capability || 'unknown').slice(0, 100),
-        status: String(step?.status || 'pending'),
-      }))
+    ? steps.slice(0, 30).map((step, index) => {
+        const id = String(step?.id || `step-${index + 1}`).trim().slice(0, 120);
+        const executorType = String(step?.executorType || step?.executor_type || step?.type || '').trim().slice(0, 120);
+        return {
+          id,
+          title: String(step?.title || `Step ${index + 1}`).slice(0, 200),
+          capability: String(step?.capability || 'unknown').slice(0, 100),
+          executorType,
+          sideEffect: step?.sideEffect === true || step?.side_effect === true,
+          priority: Math.min(100, Math.max(0, Number(step?.priority ?? 50))),
+          maxAttempts: Math.min(8, Math.max(1, Number(step?.maxAttempts ?? step?.max_attempts ?? 3))),
+          idempotencyKey: String(step?.idempotencyKey || step?.idempotency_key || `mission-step:${missionId}:${id}`).slice(0, 255),
+          prompt: executorType === 'image_generation' ? String(step?.prompt || '').trim().slice(0, 4000) : undefined,
+          status: String(step?.status || 'pending'),
+        };
+      })
     : [];
 
   return {
