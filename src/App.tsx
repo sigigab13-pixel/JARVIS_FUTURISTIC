@@ -281,6 +281,10 @@ function App() {
     return () => { active = false; };
   }, [session]);
 
+  const authRedirectUrl = () => import.meta.env.PROD
+    ? 'https://jarvis-futuristic.vercel.app'
+    : window.location.origin;
+
   const signInWithOAuth = async (provider: 'google' | 'github' | 'azure' | 'apple', label: string) => {
     setAuthBusy(true);
     setAuthError('');
@@ -291,7 +295,7 @@ function App() {
     }
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
-      options: { redirectTo: window.location.origin },
+      options: { redirectTo: authRedirectUrl() },
     });
     if (error) {
       setAuthError(error.message || label + ' sign-in failed.');
@@ -339,7 +343,7 @@ function App() {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { emailRedirectTo: window.location.origin },
+      options: { emailRedirectTo: authRedirectUrl() },
     });
     if (error) {
       setAuthError(error.message);
@@ -366,7 +370,7 @@ function App() {
     }
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: window.location.origin },
+      options: { emailRedirectTo: authRedirectUrl() },
     });
     setAuthError(error ? error.message : 'Magic link sent. Check your email.');
     setAuthBusy(false);
