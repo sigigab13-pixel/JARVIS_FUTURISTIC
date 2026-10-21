@@ -8,6 +8,14 @@ const capabilities = [
     available: () => Boolean(process.env.OPENAI_API_KEY || process.env.HUGGINGFACE_API_TOKEN || process.env.HF_TOKEN),
   },
   {
+    id: 'translation',
+    label: 'AI Interpreter',
+    category: 'multimodal',
+    description: 'Translate text between languages and explain meaning while preserving tone and context, using the conversation AI provider.',
+    keywords: ['translate', 'translation', 'translator', 'interpret', 'interpreter', 'language', 'yoruba', 'igbo', 'hausa', 'french', 'spanish', 'english'],
+    available: () => Boolean(process.env.OPENAI_API_KEY || process.env.HUGGINGFACE_API_TOKEN || process.env.HF_TOKEN),
+  },
+  {
     id: 'memory',
     label: 'Long-Term Memory',
     category: 'core',
@@ -123,6 +131,7 @@ function tokenize(value) {
 }
 
 const intentHints = {
+  translation: ['translate', 'translation', 'translator', 'interpret', 'interpreter', 'yoruba', 'igbo', 'hausa', 'french', 'spanish'],
   image: ['image', 'picture', 'photo', 'illustration', 'draw', 'visual'],
   video: ['video', 'animation', 'reel', 'short', 'storyboard'],
   voice: ['voice', 'speak', 'audio', 'listen', 'microphone', 'call'],
