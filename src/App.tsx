@@ -880,9 +880,10 @@ function App() {
           ? `Done, ${String(session?.user?.user_metadata?.full_name || session?.user?.user_metadata?.name || session?.user?.email || 'there').trim() || 'there'}. Your image is ready in Image Lab.`
           : 'I could not complete that request. Please try again.',
       );
+      const persistenceWarning = safeText(response.data?.persistenceWarning, '').trim();
       setMessages(current => [
         ...current,
-        { role: 'assistant', content: answer, ...(generatedImage?.data && generatedImage?.mimeType ? {
+        { role: 'assistant', content: persistenceWarning ? `${answer}\n\n⚠️ ${persistenceWarning}` : answer, ...(generatedImage?.data && generatedImage?.mimeType ? {
           image: { data: String(generatedImage.data), mimeType: String(generatedImage.mimeType) },
         } : {}) },
       ]);
