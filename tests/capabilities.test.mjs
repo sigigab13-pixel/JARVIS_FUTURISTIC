@@ -19,3 +19,8 @@ test('capability ranking identifies likely tools from natural language', () => {
   assert.ok(ids.includes('business'));
   assert.ok(ids.includes('youtube'));
 });
+
+test('capability ranking identifies AI Interpreter requests', () => {
+  const ranked = rankCapabilitiesForIntent('translate hello to Yoruba');
+  assert.equal(ranked[0]?.id, 'translation');
+});
