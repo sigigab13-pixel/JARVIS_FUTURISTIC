@@ -54,3 +54,27 @@ revoke all on public.video_logs from anon, authenticated;
 alter table public.youtube_oauth_state add column if not exists user_id uuid;
 alter table public.youtube_connection add column if not exists user_id uuid;
 create unique index if not exists youtube_connection_user_id_idx on public.youtube_connection(user_id) where user_id is not null;
+
+
+create table if not exists public.jarvis_media_assets (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.jarvis_users(id) on delete cascade,
+  bucket_id text not null,
+  object_key text not null,
+  media_kind text not null default 'media',
+  content_type text,
+  size_bytes bigint not null default 0 check (size_bytes >= 0),
+  sha256 text,
+  retention_class text not null default 'protected',
+  status text not null default 'active',
+  expires_at timestamptz,
+  last_referenced_at timestamptz,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz,
+  unique(bucket_id, object_key)
+);
+
+alter table public.jarvis_media_assets enable row level security;
+revoke all on public.jarvis_media_assets from anon, authenticated;

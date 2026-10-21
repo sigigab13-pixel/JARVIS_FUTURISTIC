@@ -16,7 +16,7 @@ import {
 } from './store.mjs';
 import { executeMissionStep } from './mission-executor.mjs';
 import { transitionMission } from './mission-runtime.mjs';
-import { createMediaKey, getMedia, isSupabaseStorageConfigured, putMedia } from './media.mjs';
+import { cleanupExpiredMedia, createMediaKey, getMedia, isSupabaseStorageConfigured, putMedia } from './media.mjs';
 import { generateHuggingFaceImage } from './image-generator.mjs';
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
@@ -510,6 +510,16 @@ export async function runWorker({
   let routineDispatches = [];
   let failureCount = 0;
   let batches = 0;
+  let mediaCleanup = { ok: true, deleted: 0, failed: 0, skipped: 0 };
+
+  try {
+    mediaCleanup = await cleanupExpiredMedia({ limit: 10 });
+    if (!mediaCleanup.ok) logger.warn?.('[JARVIS worker] media cleanup did not complete cleanly:', mediaCleanup.reason || mediaCleanup);
+    else if (mediaCleanup.deleted > 0) logger.info?.(`[JARVIS worker] media cleanup deleted ${mediaCleanup.deleted} expired asset(s).`);
+  } catch (error) {
+    mediaCleanup = { ok: false, deleted: 0, failed: 1, skipped: 0, reason: error instanceof Error ? error.message : String(error) };
+    logger.warn?.('[JARVIS worker] media cleanup failed safely:', error);
+  }
 
   while (attempted < jobLimit && Date.now() - startedAt < runtimeLimit) {
     if (Date.now() - startedAt < runtimeLimit) {
@@ -592,6 +602,7 @@ export async function runWorker({
     elapsedMs: Date.now() - startedAt,
     runtimeLimitMs: runtimeLimit,
     routineDispatches,
+    mediaCleanup,
   };
 }
 
