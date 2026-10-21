@@ -88,3 +88,17 @@ test('routing context reports the authoritative surface decision', () => {
   assert.match(context, /surface: system/);
   assert.match(context, /surface action: open/);
 });
+
+test('routes translation requests to the AI Interpreter capability without opening a nonexistent panel', () => {
+  const result = routeIntent({
+    messages: [{ role: 'user', content: 'translate hello to Yoruba' }],
+    availableCapabilities: [
+      { id: 'translation', description: 'Translate text between languages.', keywords: ['translate', 'translation', 'interpreter', 'yoruba'] },
+      ...caps,
+    ],
+  });
+  assert.equal(result.intent, 'translation');
+  assert.ok(result.candidateCapabilities.some(item => item.id === 'translation'));
+  assert.equal(result.surface, null);
+  assert.equal(result.surfaceAction, 'chat');
+});
