@@ -7,10 +7,28 @@ function clean(value, max = MAX_TEXT) {
 }
 
 function classifyRequestMode(text) {
-  const value = text.toLowerCase();
+  const value = clean(text).toLowerCase();
+
   if (/\b(help me decide|should i|which (one|option)|compare|choose)\b/.test(value)) return 'decide';
-  if (/\b(prepare|draft|write|make|create)\b/.test(value) && !/\b(send|publish|book|buy|delete|apply)\b/.test(value)) return 'prepare';
-  if (/\b(do it|actually do|send|publish|book|buy|delete|apply|run|execute|submit)\b/.test(value)) return 'execute';
+
+  // Educational/how-to requests mention actions without asking JARVIS to perform them.
+  if (/^(?:(?:please|can you|could you)\s+)?(?:explain|describe|define|teach me|show me how|tell me how|what is|what are|why|how do i|how can i|how to|steps to|guide me through)\b/.test(value)
+      || /^(?:can you|could you)\s+explain\b/.test(value)
+      || /\b(?:want to know how to|need to know how to)\b/.test(value)) {
+    return 'answer';
+  }
+
+  const actionVerbs = '(?:send|publish|upload|book|buy|delete|apply|run|execute|submit|schedule|launch|post|update|change|transfer|order|deploy|cancel|invite|email|message|share|install|remove|revoke|enable|disable|connect|disconnect|purchase|release|commit|merge|pay)';
+  const directAction = new RegExp('^(?:(?:please|now|just)\\s+)*' + actionVerbs + '\\b');
+  const addressedAction = new RegExp('\\b(?:can you|could you|please|i want you to|i need you to|go ahead and|proceed to|actually do)\\s+' + actionVerbs + '\\b');
+  const preparationLead = /^(?:please\s+)?(?:prepare|draft|write|make|create|build|design|plan|generate|produce|compose)\b/;
+  const compoundAction = new RegExp('\\b(?:and then|then|and)\\s+' + actionVerbs + '\\b');
+
+  // Only an explicit command, addressed instruction, or compound "make and publish"
+  // request is treated as execution. "Create a plan to deploy" stays preparation.
+  if (directAction.test(value) || addressedAction.test(value) || /\b(do it|actually do it)\b/.test(value)) return 'execute';
+  if (preparationLead.test(value) && compoundAction.test(value)) return 'execute';
+  if (preparationLead.test(value)) return 'prepare';
   return 'answer';
 }
 

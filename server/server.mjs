@@ -1561,7 +1561,7 @@ export async function handleApi(req, res, pathname, url) {
       }
 
       selfRepairAttempted = true;
-      const uncertaintySignal = assessUncertainty({ latestUserMessage, route, responseText: text, webSearchUsed });
+      const uncertaintySignal = assessUncertainty({ latestUserMessage, route, responseText: text, webSearchUsed, webCitations });
       const repairInstruction = buildRepairInstruction(selfCheck) + (uncertaintySignal.shouldSignal ? '\\n\\n' + buildEpistemicInstruction(uncertaintySignal) : '');
       let repairedText = '';
 
@@ -1709,7 +1709,7 @@ export async function handleApi(req, res, pathname, url) {
           selfCheck: selfRepairSucceeded ? 'repaired-and-verified' : 'passed',
           repairAttempted: selfRepairAttempted,
           detectedIssues: initialSelfCheck.before.issues.map(item => item.code),
-          epistemic: assessUncertainty({ latestUserMessage, route, responseText: text, webSearchUsed }),
+          epistemic: assessUncertainty({ latestUserMessage, route, responseText: text, webSearchUsed, webCitations }),
           time: timeContext,
           memoryConsistency,
         },

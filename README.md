@@ -4,6 +4,14 @@
 
 JARVIS is being built as a broader AI operating platform — not just a chatbot and not just a content generator. The long-term goal is to bring conversation, memory, business management, specialized offices, missions, automation, image generation, video production, voice, publishing, research, and reliability systems into one product.
 
+## 🧠 JARVIS PRIME capability registry
+
+The complete version-controlled capability inventory and roadmap—including the **AI-output decoder / interoperability analysis** capability—is maintained in:
+
+- [JARVIS PRIME Capability Registry](docs/JARVIS_PRIME_CAPABILITY_REGISTRY.md)
+
+That registry deliberately separates verified implementation from planned capabilities. It defines “decoding another AI” as analyzing authorized, observable outputs and behavior, comparing claims/evidence, and converting outputs into structured handoffs—not extracting hidden model internals or bypassing another system's safeguards.
+
 ## 🚀 What we are building
 
 - 💬 Natural AI conversation and command handling
