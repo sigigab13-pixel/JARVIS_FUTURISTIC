@@ -174,5 +174,11 @@ export function routeContextForPrompt(route) {
     '- Treat references as unresolved until they can be grounded in the supplied conversation, files, memory, or tool context.',
   ];
   if (route.needsClarification) lines.push('- A reference appears unresolved because there is not enough prior context. Ask one focused question if it materially affects the task.');
+  if (route.intent === 'translation') {
+    lines.push('- AI Interpreter instructions: translate the supplied text into the requested target language, preserving meaning, tone, register, and relevant context.');
+    lines.push('- If the target language is clear, provide the translation directly without unnecessary preamble. Do not silently change names, numbers, dates, or factual details.');
+    lines.push('- If the target language is missing or genuinely ambiguous, ask one concise clarification question. For idioms or culturally specific phrases, explain uncertainty rather than inventing an equivalent.');
+    lines.push('- Keep any explanation separate from the translated text; include pronunciation, alternatives, or grammar notes only when requested or needed to resolve ambiguity.');
+  }
   return lines.join('\n');
 }
