@@ -43,6 +43,7 @@ test('Children Factory scene assets are complete only when every numbered scene 
   assert.equal(areChildrenFactoryScenesComplete([asset(1), asset(3)], 3), false);
   assert.equal(areChildrenFactoryScenesComplete([asset(1), { ...asset(2), verified: false }, asset(3)], 3), false);
   assert.equal(areChildrenFactoryScenesComplete([asset(1), asset(2), asset(2), asset(3)], 3), false);
+  assert.equal(areChildrenFactoryScenesComplete([asset(1), asset(2), asset(2)], 3), false);
   assert.equal(areChildrenFactoryScenesComplete([
     asset(1), asset(2), asset(3), { ...asset(3), scene: 4 },
   ], 3), false);
