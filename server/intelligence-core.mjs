@@ -81,6 +81,7 @@ function buildReasoningOptions({ tier, enableWebSearch }) {
       search_context_size: tier === 'reasoning' ? 'high' : 'medium',
     }];
     options.tool_choice = 'required';
+    options.max_tool_calls = 3;
     options.include = ['web_search_call.action.sources'];
   }
   return options;
@@ -191,7 +192,7 @@ export async function generateIntelligentResponse({
       fetchImpl,
     });
   } catch (error) {
-    if (selected.tier !== 'reasoning') throw error;
+    if (enableWebSearch || selected.tier !== 'reasoning') throw error;
     const models = getOpenAIModels(env);
     if (models.fast === selected.model) throw error;
     return callOpenAIResponses({
