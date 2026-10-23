@@ -106,6 +106,48 @@ async function runFfmpeg(args) {
   });
 }
 
+export function normalizeChildrenFactorySceneInput({ story, character, scene, totalScenes }) {
+  const normalizedStory = String(story ?? '').trim();
+  const source = character && typeof character === 'object' && !Array.isArray(character) ? character : {};
+  const normalizedCharacter = {
+    name: String(source.name ?? '').trim(),
+    species: String(source.species ?? '').trim(),
+    color: String(source.color ?? '').trim(),
+    clothes: String(source.clothes ?? '').trim(),
+    description: String(source.description ?? '').trim(),
+  };
+  const sceneNumber = Number(scene);
+  const sceneCount = Number(totalScenes);
+
+  if (!normalizedStory || !normalizedCharacter.name || !normalizedCharacter.species
+    || !normalizedCharacter.color || !normalizedCharacter.clothes) {
+    throw new Error('Children Factory scene requires a story and complete character bible.');
+  }
+  if (!Number.isInteger(sceneNumber) || !Number.isInteger(sceneCount)
+    || sceneCount < 1 || sceneCount > 12 || sceneNumber < 1 || sceneNumber > sceneCount) {
+    throw new Error('Children Factory scene number is outside the requested scene range.');
+  }
+
+  return { story: normalizedStory, character: normalizedCharacter, scene: sceneNumber, totalScenes: sceneCount };
+}
+
+export function areChildrenFactoryScenesComplete(images, totalScenes) {
+  const count = Number(totalScenes);
+  if (!Array.isArray(images) || !Number.isInteger(count) || count < 1 || count > 12) return false;
+  const verifiedScenes = new Set(
+    images
+      .filter(item => item?.verified === true
+        && Number.isInteger(Number(item.scene))
+        && Number(item.scene) >= 1
+        && Number(item.scene) <= count
+        && Boolean(item?.media?.path || item?.media?.key)
+        && /^[a-f0-9]{64}$/i.test(String(item?.sha256 || '')))
+      .map(item => Number(item.scene)),
+  );
+  return verifiedScenes.size === count && Array.from({ length: count }, (_, index) => index + 1)
+    .every(scene => verifiedScenes.has(scene));
+}
+
 export async function executeChildrenFactoryScene(job) {
   const payload = job?.payload && typeof job.payload === 'object' ? job.payload : {};
   const userId = String(job?.user_id || payload.user_id || '').trim();
@@ -134,21 +176,49 @@ export async function executeChildrenFactoryScene(job) {
     };
   }
 
+  const normalizedInput = normalizeChildrenFactorySceneInput({
+    story: payload.story || mission.metadata?.story || '',
+    character: payload.character || mission.metadata?.character || {},
+    scene,
+    totalScenes,
+  });
+  const character = normalizedInput.character;
+  const story = normalizedInput.story;
+  const title = String(payload.title || mission.goal || 'JARVIS Children Story').trim();
+
   const existingImages = Array.isArray(mission.metadata?.images) ? mission.metadata.images : [];
   const existing = existingImages.find(item => Number(item?.scene) === scene);
-  if (existing?.media?.path || existing?.media?.key) {
-    return {
-      scene,
-      skipped: true,
-      media: existing.media,
-      sha256: existing.sha256 || null,
-      missionId,
+  const existingKey = String(existing?.media?.key || existing?.media?.path || '').trim();
+  if (existingKey) {
+    const storedExisting = await getMedia({ key: existingKey });
+    const existingSha256 = crypto.createHash('sha256').update(storedExisting.body).digest('hex');
+    if (!String(storedExisting.contentType || '').startsWith('image/')
+      || existingSha256 !== String(existing.sha256 || '').toLowerCase()) {
+      throw new Error('Children Factory existing scene asset failed storage verification.');
+    }
+    const verifiedMedia = { ...existing.media, key: existingKey, path: existingKey, stored: true };
+    const images = [
+      ...existingImages.filter(item => Number(item?.scene) !== scene),
+      { ...existing, scene, sha256: existingSha256, media: verifiedMedia, verified: true },
+    ].sort((a, b) => Number(a?.scene || 0) - Number(b?.scene || 0));
+    const metadata = {
+      ...(mission.metadata || {}),
+      images,
+      pipeline: updateChildrenFactoryPipeline(mission.metadata?.pipeline, {
+        scene_assets: areChildrenFactoryScenesComplete(images, totalScenes) ? 'completed' : 'running',
+        render: 'pending',
+        verified_video: 'blocked',
+        approval: 'blocked',
+        publish: 'blocked',
+      }),
     };
+    await updateMissionForUser(userId, mission.id, { ...mission, metadata }, {
+      eventType: 'children_factory.scene_asset_verified',
+      message: 'Existing Children Factory scene asset was downloaded and verified.',
+      metadata: { scene, sha256: existingSha256, mediaKey: existingKey },
+    });
+    return { scene, skipped: true, media: verifiedMedia, sha256: existingSha256, missionId, verified: true };
   }
-
-  const character = payload.character && typeof payload.character === 'object' ? payload.character : {};
-  const story = String(payload.story || mission.metadata?.story || '').trim();
-  const title = String(payload.title || mission.goal || 'JARVIS Children Story').trim();
   const characterPrompt = [
     'Create a child-friendly storybook illustration.',
     'Keep this exact character consistent in every image:',
@@ -187,6 +257,11 @@ export async function executeChildrenFactoryScene(job) {
     },
     upsert: true,
   });
+  const storedImage = await getMedia({ key: mediaKey });
+  const storedSha256 = crypto.createHash('sha256').update(storedImage.body).digest('hex');
+  if (!String(storedImage.contentType || '').startsWith('image/') || storedSha256 !== sha256) {
+    throw new Error('Children Factory scene asset failed storage read-back verification.');
+  }
 
   await consumeImageGeneration(userId, {
     prompt: (title + ' — Children Factory scene ' + String(scene)).slice(0, 500),
@@ -198,7 +273,7 @@ export async function executeChildrenFactoryScene(job) {
 
   const images = [
     ...existingImages.filter(item => Number(item?.scene) !== scene),
-    { scene, sha256, media },
+    { scene, sha256, media: { ...media, key: mediaKey, path: mediaKey, stored: true }, verified: true },
   ].sort((a, b) => Number(a?.scene || 0) - Number(b?.scene || 0));
 
   const metadata = {
@@ -206,7 +281,7 @@ export async function executeChildrenFactoryScene(job) {
     factoryFailure: null,
     images,
     pipeline: updateChildrenFactoryPipeline(mission.metadata?.pipeline, {
-      scene_assets: images.length >= totalScenes ? 'completed' : 'running',
+      scene_assets: areChildrenFactoryScenesComplete(images, totalScenes) ? 'completed' : 'running',
       render: 'pending',
       verified_video: 'blocked',
       approval: 'blocked',
@@ -228,12 +303,13 @@ export async function executeChildrenFactoryScene(job) {
   return {
     scene,
     skipped: false,
-    media,
+    media: { ...media, key: mediaKey, path: mediaKey, stored: true },
     mediaKey,
     sha256,
     missionId,
-    completedScenes: images.length,
+    completedScenes: images.filter(item => item?.verified === true).length,
     totalScenes,
+    verified: true,
   };
 }
 
