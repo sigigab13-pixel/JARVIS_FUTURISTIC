@@ -1580,7 +1580,7 @@ function App() {
                 <span>Scene assets: {(factoryDraft.draft.images || []).length}/3 · {String(((factoryDraft.draft.pipeline || []).find((stage:any) => stage.id === 'scene_assets') || {}).status || 'unknown')}</span>
               </div>
               <div style={{ display:'grid', gridTemplateColumns:'repeat(3,minmax(0,1fr))', gap:8, marginTop:12 }}>
-                {(factoryDraft.draft.images || []).map((item:any) => item.media?.url ? <img key={item.scene} src={item.media.url} alt={'Children Factory scene '+item.scene} style={{ width:'100%', borderRadius:10 }} /> : <div key={item.scene} className="lock-note">Scene {item.scene} asset stored</div>)}
+                {(factoryDraft.draft.images || []).map((item:any) => item.media?.url ? <img key={item.scene} src={item.media.url} alt={'Children Factory scene '+item.scene} style={{ width:'100%', borderRadius:10 }} /> : <div key={item.scene} className="lock-note">Scene {item.scene} preview unavailable; storage status not confirmed</div>)}
                 {(factoryDraft.draft.images || []).length < 3 && <div className="lock-note" style={{ gridColumn:'1 / -1' }}>JARVIS Worker is generating the remaining scene assets. The render gate stays locked until all 3 are verified.</div>}
               </div>
               <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:12 }}>
