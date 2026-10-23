@@ -224,34 +224,46 @@ export async function executeChildrenFactoryScene(job) {
   const existing = existingImages.find(item => Number(item?.scene) === scene);
   const existingKey = String(existing?.media?.key || existing?.media?.path || '').trim();
   if (existingKey) {
-    const storedExisting = await getMedia({ key: existingKey });
-    const existingSha256 = crypto.createHash('sha256').update(storedExisting.body).digest('hex');
-    if (!String(storedExisting.contentType || '').startsWith('image/')
-      || existingSha256 !== String(existing.sha256 || '').toLowerCase()) {
-      throw new Error('Children Factory existing scene asset failed storage verification.');
+    let storedExisting = null;
+    try {
+      storedExisting = await getMedia({ key: existingKey });
+    } catch (error) {
+      // A missing object is repairable; auth, network, and server errors must stay visible.
+      if (Number(error?.statusCode) !== 404) throw error;
     }
-    const verifiedMedia = { ...existing.media, key: existingKey, path: existingKey, stored: true };
-    const images = [
-      ...existingImages.filter(item => Number(item?.scene) !== scene),
-      { ...existing, scene, sha256: existingSha256, media: verifiedMedia, verified: true },
-    ].sort((a, b) => Number(a?.scene || 0) - Number(b?.scene || 0));
-    const metadata = {
-      ...(mission.metadata || {}),
-      images,
-      pipeline: updateChildrenFactoryPipeline(mission.metadata?.pipeline, {
-        scene_assets: areChildrenFactoryScenesComplete(images, totalScenes) ? 'completed' : 'running',
-        render: 'pending',
-        verified_video: 'blocked',
-        approval: 'blocked',
-        publish: 'blocked',
-      }),
-    };
-    await updateMissionForUser(userId, mission.id, { ...mission, metadata }, {
-      eventType: 'children_factory.scene_asset_verified',
-      message: 'Existing Children Factory scene asset was downloaded and verified.',
-      metadata: { scene, sha256: existingSha256, mediaKey: existingKey },
-    });
-    return { scene, skipped: true, media: verifiedMedia, sha256: existingSha256, missionId, verified: true };
+
+    if (storedExisting) {
+      const existingSha256 = crypto.createHash('sha256').update(storedExisting.body).digest('hex');
+      if (String(storedExisting.contentType || '').startsWith('image/')
+        && existingSha256 === String(existing.sha256 || '').toLowerCase()) {
+        const verifiedMedia = { ...existing.media, key: existingKey, path: existingKey, stored: true };
+        const images = [
+          ...existingImages.filter(item => Number(item?.scene) !== scene),
+          { ...existing, scene, sha256: existingSha256, media: verifiedMedia, verified: true },
+        ].sort((a, b) => Number(a?.scene || 0) - Number(b?.scene || 0));
+        const metadata = {
+          ...(mission.metadata || {}),
+          images,
+          pipeline: updateChildrenFactoryPipeline(mission.metadata?.pipeline, {
+            scene_assets: areChildrenFactoryScenesComplete(images, totalScenes) ? 'completed' : 'running',
+            render: 'pending',
+            verified_video: 'blocked',
+            approval: 'blocked',
+            publish: 'blocked',
+          }),
+        };
+        await updateMissionForUser(userId, mission.id, { ...mission, metadata }, {
+          eventType: 'children_factory.scene_asset_verified',
+          message: 'Existing Children Factory scene asset was downloaded and verified.',
+          metadata: { scene, sha256: existingSha256, mediaKey: existingKey },
+        });
+        return { scene, skipped: true, media: verifiedMedia, sha256: existingSha256, missionId, verified: true };
+      }
+    }
+
+    // Missing, non-image, or digest-mismatched objects are not reused. Continue
+    // through the normal bounded scene-generation path; storage upload uses the
+    // deterministic mission/scene key with upsert so the bad object can be replaced.
   }
   const characterPrompt = [
     'Create a child-friendly storybook illustration.',
