@@ -9,6 +9,7 @@ import {
   normalizeClaimedJobResult,
   normalizeChildrenFactorySceneInput,
   areChildrenFactoryScenesComplete,
+  isVerifiedChildrenFactoryImage,
 } from '../server/worker.mjs';
 
 test('worker claim normalization treats empty and all-null RPC results as no job', () => {
@@ -41,6 +42,30 @@ test('worker claim normalization preserves a valid job row', () => {
   assert.equal(normalizeClaimedJobResult(
     { worker_claim_job: job }, 'worker_claim_job',
   ), job);
+});
+
+test('Children Factory storage image verification requires image content and matching SHA-256 digests', () => {
+  const digest = 'a'.repeat(64);
+  assert.equal(isVerifiedChildrenFactoryImage({
+    contentType: 'image/png',
+    actualSha256: digest,
+    expectedSha256: digest,
+  }), true);
+  assert.equal(isVerifiedChildrenFactoryImage({
+    contentType: 'text/plain',
+    actualSha256: digest,
+    expectedSha256: digest,
+  }), false);
+  assert.equal(isVerifiedChildrenFactoryImage({
+    contentType: 'image/png',
+    actualSha256: digest,
+    expectedSha256: 'b'.repeat(64),
+  }), false);
+  assert.equal(isVerifiedChildrenFactoryImage({
+    contentType: 'image/png',
+    actualSha256: digest,
+    expectedSha256: 'not-a-digest',
+  }), false);
 });
 
 test('Children Factory scene input requires a complete normalized character bible', () => {
