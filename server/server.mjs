@@ -1986,6 +1986,9 @@ export async function handleApi(req, res, pathname, url) {
       const buffer = Buffer.from(await blob.arrayBuffer());
       const mimeType = blob.type || 'image/png';
       let media = null;
+      let storageWarning = isSupabaseStorageConfigured()
+        ? ''
+        : 'Supabase Storage is not configured; this image is available to download but was not saved to your library.';
       if (isSupabaseStorageConfigured()) {
         const extension = mimeType.includes('jpeg') ? 'jpg' : mimeType.includes('webp') ? 'webp' : 'png';
         try {
@@ -1998,11 +2001,14 @@ export async function handleApi(req, res, pathname, url) {
           });
         } catch (storageError) {
           console.error('JARVIS Supabase Storage upload error:', storageError);
+          storageWarning = 'Image generated, but saving it to your JARVIS library failed. Download it now and try again later.';
         }
       }
       return json(res, 200, {
         image: { data: buffer.toString('base64'), mimeType },
         media,
+        mediaStored: Boolean(media?.stored),
+        storageWarning,
         allowance: { remaining: Number(consumed?.credits_remaining ?? remainingBefore - 1) },
       }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
     } catch (error) {
