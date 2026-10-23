@@ -41,7 +41,7 @@ test('Children Factory scene worker rejects foreign project mission identities',
     error => /mission was not found or does not belong to this video project/i.test(error?.message || '')
   );
 });
-import { buildChildrenFactoryPipeline, canPublishChildrenFactoryMission } from '../server/server.mjs';
+import { buildChildrenFactoryPipeline, canPublishChildrenFactoryMission, normalizeChildrenFactoryDraft } from '../server/server.mjs';
 
 test('worker creates unique stable ids', () => {
   const a = createWorkerId();
@@ -173,4 +173,50 @@ test('Children Factory can publish only after verified video and approval', () =
     },
   };
   assert.equal(canPublishChildrenFactoryMission(mission), true);
+});
+
+
+test('Children Factory rejects whitespace-only title and required character fields after normalization', () => {
+  const story = Array.from({ length: 130 }, () => 'story').join(' ');
+  const base = {
+    title: 'A Little Adventure',
+    story,
+    character: { name: 'Milo', species: 'fox', color: 'orange', clothes: 'blue scarf', description: 'Curious and kind' },
+  };
+
+  assert.throws(
+    () => normalizeChildrenFactoryDraft({ ...base, title: '   ' }),
+    error => error?.statusCode === 502 && /incomplete story or character bible/i.test(error.message),
+  );
+  assert.throws(
+    () => normalizeChildrenFactoryDraft({ ...base, character: { ...base.character, name: '   ' } }),
+    error => error?.statusCode === 502 && /incomplete story or character bible/i.test(error.message),
+  );
+  assert.throws(
+    () => normalizeChildrenFactoryDraft({ ...base, character: { ...base.character, clothes: '\\t  ' } }),
+    error => error?.statusCode === 502 && /incomplete story or character bible/i.test(error.message),
+  );
+});
+
+test('Children Factory returns trimmed title and character bible fields', () => {
+  const story = Array.from({ length: 130 }, () => 'story').join(' ');
+  const normalized = normalizeChildrenFactoryDraft({
+    title: '  A Little Adventure  ',
+    story: `  ${story}  `,
+    character: {
+      name: ' Milo ',
+      species: ' fox ',
+      color: ' orange ',
+      clothes: ' blue scarf ',
+      description: ' curious and kind ',
+    },
+  });
+
+  assert.equal(normalized.title, 'A Little Adventure');
+  assert.equal(normalized.character.name, 'Milo');
+  assert.equal(normalized.character.species, 'fox');
+  assert.equal(normalized.character.color, 'orange');
+  assert.equal(normalized.character.clothes, 'blue scarf');
+  assert.equal(normalized.character.description, 'curious and kind');
+  assert.equal(normalized.story.startsWith('story'), true);
 });
