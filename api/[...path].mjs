@@ -1,8 +1,11 @@
 import { handleApi } from '../server/server.mjs';
+import { applySecurityHeaders, protectRequest } from '../server/security-controls.mjs';
 
 export default async function handler(req, res) {
+  applySecurityHeaders(res);
   try {
     const url = new URL(req.url || '/', `https://${req.headers.host || 'localhost'}`);
+    if (!await protectRequest(req, res, url.pathname)) return;
     await handleApi(req, res, url.pathname, url);
   } catch (error) {
     console.error('JARVIS Vercel API error:', error);
