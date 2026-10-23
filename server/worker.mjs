@@ -130,6 +130,15 @@ async function runFfmpeg(args) {
   });
 }
 
+export function isVerifiedChildrenFactoryImage({ contentType, actualSha256, expectedSha256 }) {
+  const actual = String(actualSha256 || '').toLowerCase();
+  const expected = String(expectedSha256 || '').toLowerCase();
+  return String(contentType || '').startsWith('image/')
+    && /^[a-f0-9]{64}$/.test(actual)
+    && /^[a-f0-9]{64}$/.test(expected)
+    && actual === expected;
+}
+
 export function normalizeChildrenFactorySceneInput({ story, character, scene, totalScenes }) {
   const normalizedStory = String(story ?? '').trim();
   const source = character && typeof character === 'object' && !Array.isArray(character) ? character : {};
@@ -234,8 +243,11 @@ export async function executeChildrenFactoryScene(job) {
 
     if (storedExisting) {
       const existingSha256 = crypto.createHash('sha256').update(storedExisting.body).digest('hex');
-      if (String(storedExisting.contentType || '').startsWith('image/')
-        && existingSha256 === String(existing.sha256 || '').toLowerCase()) {
+      if (isVerifiedChildrenFactoryImage({
+        contentType: storedExisting.contentType,
+        actualSha256: existingSha256,
+        expectedSha256: existing.sha256,
+      })) {
         const verifiedMedia = { ...existing.media, key: existingKey, path: existingKey, stored: true };
         const images = [
           ...existingImages.filter(item => Number(item?.scene) !== scene),
@@ -305,7 +317,11 @@ export async function executeChildrenFactoryScene(job) {
   });
   const storedImage = await getMedia({ key: mediaKey });
   const storedSha256 = crypto.createHash('sha256').update(storedImage.body).digest('hex');
-  if (!String(storedImage.contentType || '').startsWith('image/') || storedSha256 !== sha256) {
+  if (!isVerifiedChildrenFactoryImage({
+    contentType: storedImage.contentType,
+    actualSha256: storedSha256,
+    expectedSha256: sha256,
+  })) {
     throw new Error('Children Factory scene asset failed storage read-back verification.');
   }
 
