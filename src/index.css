@@ -1411,3 +1411,109 @@ body {
   .message-content { font-size: 15px; line-height: 1.64; }
   .rich-heading { font-size: 17px; }
 }
+
+
+/* Live web-search provenance */
+.web-search-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 12px;
+  color: #69cce7;
+  font-size: 10px;
+  letter-spacing: .08em;
+}
+
+.web-search-status strong {
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.web-search-status span {
+  color: #8e9da8;
+  letter-spacing: 0;
+  font-size: 11px;
+}
+
+.web-search-sources {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(105, 204, 231, .16);
+}
+
+.web-search-sources-title {
+  margin-bottom: 2px;
+  color: #87a8b8;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .18em;
+}
+
+.web-search-sources a {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid rgba(105, 204, 231, .13);
+  border-radius: 8px;
+  background: rgba(8, 24, 34, .7);
+  color: #d5e7ee;
+  text-decoration: none;
+  font-size: 12px;
+  line-height: 1.45;
+  transition: border-color .15s ease, background .15s ease;
+}
+
+.web-search-sources a:hover {
+  border-color: rgba(105, 204, 231, .55);
+  background: rgba(8, 33, 47, .9);
+}
+
+.web-search-sources a span {
+  min-width: 0;
+  color: #d5e7ee;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+
+.web-search-sources a small {
+  flex: 0 0 auto;
+  color: #76b8cc;
+  font-size: 10px;
+  letter-spacing: 0;
+}
+
+.web-search-no-sources {
+  margin-top: 9px;
+  color: #98a7b0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.chat-tools button.web-search-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-color: rgba(77, 190, 219, .45);
+  color: #a1dbea;
+}
+
+.chat-tools button.web-search-toggle.active {
+  background: rgba(11, 61, 80, .82);
+  border-color: #36bde0;
+  color: #e0faff;
+  box-shadow: 0 0 0 1px rgba(54, 189, 224, .12);
+}
+
+@media (max-width: 560px) {
+  .web-search-sources a {
+    flex-direction: column;
+    gap: 4px;
+  }
+}
