@@ -14,7 +14,9 @@ function clientAddress(req, env) {
   if (env.JARVIS_TRUST_CLOUDFLARE_HEADERS === 'true' && isIP(cloudflareAddress)) return cloudflareAddress;
 
   const vercelAddress = String(req.headers?.['x-vercel-forwarded-for'] || '').split(',')[0].trim();
-  if (env.JARVIS_TRUST_VERCEL_IP_HEADER === 'true' && isIP(vercelAddress)) return vercelAddress;
+  const trustVercelAddress = env.JARVIS_TRUST_VERCEL_IP_HEADER === 'true'
+    || (env.VERCEL === '1' && env.JARVIS_TRUST_CLOUDFLARE_HEADERS !== 'true');
+  if (trustVercelAddress && isIP(vercelAddress)) return vercelAddress;
 
   return String(req.socket?.remoteAddress || 'unknown');
 }
