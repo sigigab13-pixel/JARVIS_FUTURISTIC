@@ -57,12 +57,44 @@ test('health checks are exempt from application rate limits', async () => {
   assert.equal(result.mode, 'healthcheck-exempt');
 });
 
-test('trusted Cloudflare client IP is used only when explicitly enabled', async () => {
-  const req = {
-    headers: { 'cf-connecting-ip': '203.0.113.5' },
+test('trusted Cloudflare client IP separates rate-limit buckets when explicitly enabled', async () => {
+  const env = { NODE_ENV: 'test', JARVIS_TRUST_CLOUDFLARE_HEADERS: 'true' };
+  const firstClient = {
+    headers: { 'cf-connecting-ip': '203.0.113.51' },
     socket: { remoteAddress: '198.51.100.30' },
   };
-  const env = { NODE_ENV: 'test', JARVIS_TRUST_CLOUDFLARE_HEADERS: 'true' };
-  const result = await checkRequestRateLimit(req, '/api/chat', { env, now: 3_000_000 });
+  let result;
+  for (let i = 0; i < 20; i += 1) {
+    result = await checkRequestRateLimit(firstClient, '/api/chat', { env, now: 3_000_000 });
+    assert.equal(result.allowed, true);
+  }
+  result = await checkRequestRateLimit(firstClient, '/api/chat', { env, now: 3_000_000 });
+  assert.equal(result.allowed, false);
+
+  const secondClient = {
+    headers: { 'cf-connecting-ip': '203.0.113.52' },
+    socket: { remoteAddress: '198.51.100.30' },
+  };
+  result = await checkRequestRateLimit(secondClient, '/api/chat', { env, now: 3_000_000 });
   assert.equal(result.allowed, true);
+});
+
+test('shared Redis rate-limit counters use one atomic EVAL request', async () => {
+  let command;
+  const result = await checkRequestRateLimit(mockRequest('198.51.100.41'), '/api/chat', {
+    env: {
+      NODE_ENV: 'test',
+      UPSTASH_REDIS_REST_URL: 'https://redis.example.test',
+      UPSTASH_REDIS_REST_TOKEN: 'test-token',
+    },
+    now: 4_000_000,
+    fetchImpl: async (_url, options) => {
+      command = JSON.parse(options.body);
+      return { ok: true, json: async () => ({ result: [21, 12_000] }) };
+    },
+  });
+  assert.equal(command[0], 'EVAL');
+  assert.equal(result.allowed, false);
+  assert.equal(result.statusCode, 429);
+  assert.equal(result.mode, 'shared');
 });
