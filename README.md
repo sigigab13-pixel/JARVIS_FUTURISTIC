@@ -18,7 +18,7 @@ JARVIS is being built as a broader AI operating platform — not just a chatbot 
 - 🌲 Forest content-production workflows
 - 🏢 Specialized JARVIS offices
 - 💼 Business management and Brand Kit
-- 🔎 Web intelligence and research
+- 🔎 Live web search with provider-returned citations and clickable source links
 - 🛡️ Security, permissions, health checks, recovery, and observability
 - 🎨 User customization and branding
 - 📣 Future publishing and analytics integrations
@@ -41,6 +41,7 @@ JARVIS is being developed incrementally from verified foundations rather than tr
 Implemented foundations currently include:
 
 - authenticated per-user JARVIS identity
+- live web search for search-mode chat requests, with explicit search evidence and clickable cited sources (feature branch; deployment verification pending)
 - capability registry and intent/context routing
 - durable mission state and mission events
 - mission approval and autonomy gates
