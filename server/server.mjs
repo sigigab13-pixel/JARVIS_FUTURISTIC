@@ -1406,7 +1406,12 @@ export async function handleApi(req, res, pathname, url) {
         }, { 'Set-Cookie': jarvisCookie(authenticated.jarvisUser.id) });
       } catch (error) {
         console.error('JARVIS chat image generation error:', error);
-        return json(res, 502, { error: error instanceof Error ? error.message : 'Image generation failed.' });
+        const statusCode = Number(error?.statusCode) || 502;
+      return json(res, statusCode, {
+        error: error instanceof Error ? error.message : 'Image generation failed.',
+        code: String(error?.code || 'IMAGE_GENERATION_FAILED'),
+        retryable: statusCode === 502 || statusCode === 503,
+      });
       }
     }
 
@@ -1952,7 +1957,7 @@ export async function handleApi(req, res, pathname, url) {
       }
     }
     return json(res, 200, {
-      imageLab: 'ready',
+      imageLab: tokenValid ? 'ready' : token ? 'misconfigured' : 'not_configured',
       tokenConfigured: Boolean(token),
       tokenValid,
       tokenStatus,
