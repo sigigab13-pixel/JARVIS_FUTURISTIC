@@ -1465,9 +1465,22 @@ export async function handleApi(req, res, pathname, url) {
     const openaiKey = process.env.OPENAI_API_KEY || '';
     const hfToken = process.env.HUGGINGFACE_API_TOKEN || process.env.HF_TOKEN || '';
     const enableWebSearch = shouldUseWebSearch({ route });
-    const liveSearchRequired = enableWebSearch;
+    const liveSearchRequired = route.mode === 'search';
 
-    if (liveSearchRequired) {
+    if (liveSearchRequired && !enableWebSearch) {
+      return json(res, 503, {
+        error: 'Live web search is disabled by this deployment configuration. JARVIS did not substitute an offline answer.',
+        code: 'WEB_SEARCH_DISABLED',
+      });
+    }
+    if (liveSearchRequired && !openaiKey) {
+      return json(res, 503, {
+        error: 'Live web search is not configured because the server-side OpenAI API key is unavailable. JARVIS did not substitute an offline answer.',
+        code: 'WEB_SEARCH_UNAVAILABLE',
+      });
+    }
+
+    if (enableWebSearch) {
       let quota;
       try {
         const entitlement = userId ? await getJarvisEntitlement(userId) : null;
