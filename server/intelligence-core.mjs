@@ -66,10 +66,24 @@ function extractOutputText(data) {
   return cleanText(chunks.join(''), 20000);
 }
 
+export function shouldUseWebSearch({ route = null, env = process.env } = {}) {
+  if (route?.mode !== 'search') return false;
+  const setting = String(env.OPENAI_ENABLE_WEB_SEARCH ?? 'true').trim().toLowerCase();
+  return !['false', '0', 'off', 'disabled', 'no'].includes(setting);
+}
+
 function buildReasoningOptions({ tier, enableWebSearch }) {
   const options = {};
   if (tier === 'reasoning') options.reasoning = { effort: 'medium' };
-  if (enableWebSearch) options.tools = [{ type: 'web_search' }];
+  if (enableWebSearch) {
+    options.tools = [{
+      type: 'web_search',
+      search_context_size: tier === 'reasoning' ? 'high' : 'medium',
+    }];
+    options.tool_choice = 'required';
+    options.max_tool_calls = 3;
+    options.include = ['web_search_call.action.sources'];
+  }
   return options;
 }
 
@@ -133,6 +147,14 @@ export async function callOpenAIResponses({
   }
 
   const webCitations = extractWebCitations(data);
+  const webSearchUsed = webCitations.length > 0
+    || (Array.isArray(data?.output) && data.output.some(item => String(item?.type || '').includes('search')));
+  if (enableWebSearch && !webSearchUsed) {
+    throw Object.assign(new Error('The live web search tool did not return evidence that a search ran.'), {
+      code: 'WEB_SEARCH_NOT_CONFIRMED',
+      statusCode: 502,
+    });
+  }
 
   return {
     text,
@@ -141,7 +163,7 @@ export async function callOpenAIResponses({
     tier,
     responseId: cleanText(data?.id, 200),
     usage: data?.usage || null,
-    webSearchUsed: webCitations.length > 0 || (Array.isArray(data?.output) && data.output.some(item => String(item?.type || '').includes('search'))),
+    webSearchUsed,
     webCitations,
   };
 }
@@ -170,7 +192,7 @@ export async function generateIntelligentResponse({
       fetchImpl,
     });
   } catch (error) {
-    if (selected.tier !== 'reasoning') throw error;
+    if (enableWebSearch || selected.tier !== 'reasoning') throw error;
     const models = getOpenAIModels(env);
     if (models.fast === selected.model) throw error;
     return callOpenAIResponses({
