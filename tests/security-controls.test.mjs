@@ -79,6 +79,28 @@ test('trusted Cloudflare client IP separates rate-limit buckets when explicitly 
   assert.equal(result.allowed, true);
 });
 
+test('Vercel direct requests use the platform-provided client IP header by default', async () => {
+  const env = { NODE_ENV: 'test', VERCEL: '1' };
+  const firstClient = {
+    headers: { 'x-vercel-forwarded-for': '203.0.113.61' },
+    socket: { remoteAddress: '198.51.100.50' },
+  };
+  let result;
+  for (let i = 0; i < 20; i += 1) {
+    result = await checkRequestRateLimit(firstClient, '/api/chat', { env, now: 5_000_000 });
+    assert.equal(result.allowed, true);
+  }
+  result = await checkRequestRateLimit(firstClient, '/api/chat', { env, now: 5_000_000 });
+  assert.equal(result.allowed, false);
+
+  const secondClient = {
+    headers: { 'x-vercel-forwarded-for': '203.0.113.62' },
+    socket: { remoteAddress: '198.51.100.50' },
+  };
+  result = await checkRequestRateLimit(secondClient, '/api/chat', { env, now: 5_000_000 });
+  assert.equal(result.allowed, true);
+});
+
 test('shared Redis rate-limit counters use one atomic EVAL request', async () => {
   let command;
   const result = await checkRequestRateLimit(mockRequest('198.51.100.41'), '/api/chat', {
