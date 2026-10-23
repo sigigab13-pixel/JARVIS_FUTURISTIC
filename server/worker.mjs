@@ -62,15 +62,39 @@ export function buildVideoFilter(index, geometry) {
   return `[${index}:v]scale=${geometry.width}:${geometry.height}:force_original_aspect_ratio=increase,crop=${geometry.width}:${geometry.height},setsar=1,zoompan=z='min(zoom+0.0015,1.08)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=120:s=${geometry.width}x${geometry.height}:fps=30[v${index}]`;
 }
 
+export function normalizeClaimedJobResult(result, rpcName = '') {
+  let candidate = result;
+
+  if (Array.isArray(candidate)) candidate = candidate[0] ?? null;
+  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return null;
+
+  // Accommodate a function-name wrapper if the RPC client returns one.
+  if (!Object.prototype.hasOwnProperty.call(candidate, 'id')
+    && rpcName
+    && Object.prototype.hasOwnProperty.call(candidate, rpcName)) {
+    candidate = candidate[rpcName];
+  }
+
+  if (Array.isArray(candidate)) candidate = candidate[0] ?? null;
+  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return null;
+
+  // PostgREST can represent a NULL composite return as an object with every
+  // column set to null. It is an empty queue result, not a claimable job.
+  const id = candidate.id;
+  if (id === null || id === undefined || !String(id).trim()) return null;
+
+  return candidate;
+}
+
 export async function claimNextJob(workerId) {
   const rows = await rpc('worker_claim_next_job', { p_worker_id: workerId });
-  return Array.isArray(rows) ? rows[0] || null : rows || null;
+  return normalizeClaimedJobResult(rows, 'worker_claim_next_job');
 }
 
 export async function claimJob(jobId, workerId) {
   if (!jobId) return null;
   const rows = await rpc('worker_claim_job', { p_job_id: jobId, p_worker_id: workerId });
-  return Array.isArray(rows) ? rows[0] || null : rows || null;
+  return normalizeClaimedJobResult(rows, 'worker_claim_job');
 }
 
 export async function heartbeatJob(jobId, workerId) {
