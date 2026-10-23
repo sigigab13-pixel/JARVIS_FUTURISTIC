@@ -6,7 +6,40 @@ import {
   executeChildrenFactoryScene,
   getVideoRenderGeometry,
   buildVideoFilter,
+  normalizeClaimedJobResult,
 } from '../server/worker.mjs';
+
+test('worker claim normalization treats empty and all-null RPC results as no job', () => {
+  const emptyComposite = {
+    id: null, user_id: null, type: null, payload: null, status: null,
+  };
+  assert.equal(normalizeClaimedJobResult(null, 'worker_claim_next_job'), null);
+  assert.equal(normalizeClaimedJobResult([], 'worker_claim_next_job'), null);
+  assert.equal(normalizeClaimedJobResult([null], 'worker_claim_next_job'), null);
+  assert.equal(normalizeClaimedJobResult(emptyComposite, 'worker_claim_next_job'), null);
+  assert.equal(normalizeClaimedJobResult([emptyComposite], 'worker_claim_next_job'), null);
+  assert.equal(normalizeClaimedJobResult(
+    { worker_claim_next_job: null }, 'worker_claim_next_job',
+  ), null);
+  assert.equal(normalizeClaimedJobResult(
+    { worker_claim_job: emptyComposite }, 'worker_claim_job',
+  ), null);
+});
+
+test('worker claim normalization preserves a valid job row', () => {
+  const job = {
+    id: '11111111-1111-4111-8111-111111111111',
+    user_id: '22222222-2222-4222-8222-222222222222',
+    type: 'mission_step',
+    payload: { mission_id: '33333333-3333-4333-8333-333333333333' },
+    status: 'running',
+  };
+  assert.equal(normalizeClaimedJobResult(job, 'worker_claim_next_job'), job);
+  assert.equal(normalizeClaimedJobResult([job], 'worker_claim_job'), job);
+  assert.equal(normalizeClaimedJobResult(
+    { worker_claim_job: job }, 'worker_claim_job',
+  ), job);
+});
 
 test('Children Factory scene worker rejects missing durable scene identity before provider work', async () => {
   await assert.rejects(
