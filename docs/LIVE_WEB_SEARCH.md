@@ -10,6 +10,30 @@ The request config requires a tool call and asks the provider to include the sea
 
 A requested live search must not quietly fall back to a model that has no web-search tool. If the live search request fails or the response does not confirm a search, JARVIS returns a clear unavailable response instead of presenting an offline model answer as current web research. Ordinary chat may still use the existing Hugging Face fallback.
 
+## Usage and cost protection
+
+Each search request counts against a daily allowance before the provider is called, so failed requests cannot be repeatedly retried to bypass the quota. Each Responses API search is also capped at three built-in tool calls (for example, search/open-page operations).
+
+Default per-day allowances are intentionally bounded and configurable:
+
+| User group | Default daily searches |
+|---|---:|
+| Guest (IP-scoped) | 2 |
+| Free account | 5 |
+| Pro account | 25 |
+| Premium / family-access account | 50 |
+| Entire JARVIS service | 250 |
+
+Set server-side overrides when the real provider costs and plan economics have been reviewed:
+
+- `JARVIS_WEB_SEARCH_GUEST_DAILY_LIMIT`
+- `JARVIS_WEB_SEARCH_FREE_DAILY_LIMIT`
+- `JARVIS_WEB_SEARCH_PRO_DAILY_LIMIT`
+- `JARVIS_WEB_SEARCH_PREMIUM_DAILY_LIMIT`
+- `JARVIS_WEB_SEARCH_GLOBAL_DAILY_LIMIT`
+
+All counters reset at midnight UTC. Production search fails closed if the shared quota store is missing or unavailable; a local in-memory quota is used only outside production. This means `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` must both be configured and verified before live search can be deployed.
+
 ## Configuration
 
 - Live search is enabled by default for search-mode requests.
