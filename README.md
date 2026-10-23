@@ -42,6 +42,7 @@ Implemented foundations currently include:
 
 - authenticated per-user JARVIS identity
 - live web search for search-mode chat requests, with explicit search evidence and clickable cited sources (feature branch; deployment verification pending)
+- plan-based daily web-search quotas, a global daily safety ceiling, and bounded provider tool calls (live Upstash quota verification pending)
 - capability registry and intent/context routing
 - durable mission state and mission events
 - mission approval and autonomy gates
