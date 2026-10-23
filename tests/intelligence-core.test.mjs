@@ -140,6 +140,7 @@ test('preserves provider-returned web citations', async () => {
     }
   });
   assert.equal(requestBody.tool_choice, 'required');
+  assert.equal(requestBody.max_tool_calls, 3);
   assert.deepEqual(requestBody.include, ['web_search_call.action.sources']);
   assert.deepEqual(requestBody.tools, [{ type: 'web_search', search_context_size: 'medium' }]);
   assert.equal(result.webSearchUsed, true);
