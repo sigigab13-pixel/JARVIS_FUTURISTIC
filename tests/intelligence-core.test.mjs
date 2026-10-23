@@ -46,6 +46,65 @@ test('search/current language increases complexity', () => {
 });
 
 
+test('search-mode responses must prove that live web search actually ran', async () => {
+  await assert.rejects(
+    callOpenAIResponses({
+      apiKey: 'test-key',
+      model: 'gpt-test',
+      tier: 'fast',
+      instructions: 'Search the web and cite sources.',
+      messages: [{ role: 'user', content: 'Search the web for current information.' }],
+      enableWebSearch: true,
+      fetchImpl: async () => ({
+        ok: true,
+        async json() {
+          return {
+            id: 'resp_without_search',
+            output_text: 'An unsourced answer.',
+            output: [{ type: 'message', content: [{ type: 'output_text', text: 'An unsourced answer.' }] }],
+          };
+        },
+      }),
+    }),
+    error => error?.code === 'WEB_SEARCH_NOT_CONFIRMED',
+  );
+});
+
+test('preserves source lists returned by the web-search call', async () => {
+  const result = await callOpenAIResponses({
+    apiKey: 'test-key',
+    model: 'gpt-test',
+    tier: 'reasoning',
+    instructions: 'Search and cite sources.',
+    messages: [{ role: 'user', content: 'Research the latest news.' }],
+    enableWebSearch: true,
+    fetchImpl: async (_url, options) => {
+      const request = JSON.parse(options.body);
+      assert.equal(request.tools[0].search_context_size, 'high');
+      return {
+        ok: true,
+        async json() {
+          return {
+            id: 'resp_search_sources',
+            output_text: 'A sourced answer.',
+            output: [
+              { type: 'web_search_call', action: { sources: [{ title: 'Search result', url: 'https://example.com/source' }] } },
+              { type: 'message', content: [{ type: 'output_text', text: 'A sourced answer.' }] },
+            ],
+          };
+        },
+      };
+    },
+  });
+  assert.equal(result.webSearchUsed, true);
+  assert.deepEqual(result.webCitations, [{
+    type: 'live_web',
+    title: 'Search result',
+    url: 'https://example.com/source',
+    evidence: 'external',
+  }]);
+});
+
 test('preserves provider-returned web citations', async () => {
   let requestBody;
   const result = await callOpenAIResponses({
