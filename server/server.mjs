@@ -62,6 +62,7 @@ import { generateHuggingFaceImage, HF_IMAGE_MODELS, HF_IMAGE_EDIT_MODELS, HF_IMA
 import { getYouTubeAccessToken, getYouTubeAnalytics, getYouTubeChannel, uploadYouTubeVideo } from './youtube.mjs';
 import { getRepairOfficeDiagnostics, getRepairOfficePolicy } from './repair-office.mjs';
 import { generateIntelligentResponse, getOpenAIModels, shouldUseWebSearch } from './intelligence-core.mjs';
+import { consumeWebSearchQuota } from './web-search-quota.mjs';
 import { formatDecisionMemory, parseExplicitDecision } from './decision-memory.mjs';
 import { buildRepairInstruction, inspectAssistantResponse, selfCheckAndNormalize } from './self-check-core.mjs';
 import { assessUncertainty, buildEpistemicInstruction } from './uncertainty-core.mjs';
@@ -1465,6 +1466,29 @@ export async function handleApi(req, res, pathname, url) {
     const hfToken = process.env.HUGGINGFACE_API_TOKEN || process.env.HF_TOKEN || '';
     const enableWebSearch = shouldUseWebSearch({ route });
     const liveSearchRequired = enableWebSearch;
+
+    if (liveSearchRequired) {
+      let quota;
+      try {
+        const entitlement = userId ? await getJarvisEntitlement(userId) : null;
+        const planCode = entitlement?.jarvis_plans?.code || entitlement?.plan_code || 'free';
+        quota = await consumeWebSearchQuota({ req, userId, planCode });
+      } catch {
+        quota = {
+          allowed: false,
+          statusCode: 503,
+          code: 'WEB_SEARCH_QUOTA_UNAVAILABLE',
+          message: 'Live web search is temporarily unavailable because its usage-protection check failed.',
+        };
+      }
+      if (!quota.allowed) {
+        return json(res, quota.statusCode || 503, {
+          error: quota.message || 'Live web search is temporarily unavailable.',
+          code: quota.code || 'WEB_SEARCH_QUOTA_UNAVAILABLE',
+          ...(quota.limit ? { quota: { dailyLimit: quota.limit, remaining: quota.remaining ?? 0 } } : {}),
+        });
+      }
+    }
 
     let text = '';
     let provider = '';
