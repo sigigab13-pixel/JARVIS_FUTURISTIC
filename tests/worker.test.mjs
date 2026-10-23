@@ -193,7 +193,7 @@ test('Children Factory rejects whitespace-only title and required character fiel
     error => error?.statusCode === 502 && /incomplete story or character bible/i.test(error.message),
   );
   assert.throws(
-    () => normalizeChildrenFactoryDraft({ ...base, character: { ...base.character, clothes: '\\t  ' } }),
+    () => normalizeChildrenFactoryDraft({ ...base, character: { ...base.character, clothes: '   ' } }),
     error => error?.statusCode === 502 && /incomplete story or character bible/i.test(error.message),
   );
 });
