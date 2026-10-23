@@ -7,6 +7,9 @@ import {
   getVideoRenderGeometry,
   buildVideoFilter,
   normalizeClaimedJobResult,
+  normalizeChildrenFactorySceneInput,
+  areChildrenFactoryScenesComplete,
+  isVerifiedChildrenFactoryImage,
 } from '../server/worker.mjs';
 
 test('worker claim normalization treats empty and all-null RPC results as no job', () => {
@@ -39,6 +42,72 @@ test('worker claim normalization preserves a valid job row', () => {
   assert.equal(normalizeClaimedJobResult(
     { worker_claim_job: job }, 'worker_claim_job',
   ), job);
+});
+
+test('Children Factory storage image verification requires image content and matching SHA-256 digests', () => {
+  const digest = 'a'.repeat(64);
+  assert.equal(isVerifiedChildrenFactoryImage({
+    contentType: 'image/png',
+    actualSha256: digest,
+    expectedSha256: digest,
+  }), true);
+  assert.equal(isVerifiedChildrenFactoryImage({
+    contentType: 'text/plain',
+    actualSha256: digest,
+    expectedSha256: digest,
+  }), false);
+  assert.equal(isVerifiedChildrenFactoryImage({
+    contentType: 'image/png',
+    actualSha256: digest,
+    expectedSha256: 'b'.repeat(64),
+  }), false);
+  assert.equal(isVerifiedChildrenFactoryImage({
+    contentType: 'image/png',
+    actualSha256: digest,
+    expectedSha256: 'not-a-digest',
+  }), false);
+});
+
+test('Children Factory scene input requires a complete normalized character bible', () => {
+  assert.throws(
+    () => normalizeChildrenFactorySceneInput({
+      story: 'A story',
+      character: { name: 'Milo', species: 'fox', color: 'orange', clothes: '   ' },
+      scene: 1,
+      totalScenes: 3,
+    }),
+    /requires a story and complete character bible/i,
+  );
+  const normalized = normalizeChildrenFactorySceneInput({
+    story: '  A story  ',
+    character: { name: ' Milo ', species: ' fox ', color: ' orange ', clothes: ' blue scarf ' },
+    scene: 2,
+    totalScenes: 3,
+  });
+  assert.equal(normalized.story, 'A story');
+  assert.equal(normalized.character.name, 'Milo');
+  assert.equal(normalized.character.clothes, 'blue scarf');
+  assert.equal(normalized.scene, 2);
+});
+
+test('Children Factory scene assets are complete only when every numbered scene is verified', () => {
+  const asset = scene => ({
+    scene,
+    sha256: String(scene).padStart(64, 'a'),
+    media: { key: 'jarvis/user/scene-' + scene + '.png', stored: true },
+    verified: true,
+  });
+  assert.equal(areChildrenFactoryScenesComplete([asset(1), asset(2), asset(3)], 3), true);
+  assert.equal(areChildrenFactoryScenesComplete([asset(1), asset(3)], 3), false);
+  assert.equal(areChildrenFactoryScenesComplete([asset(1), { ...asset(2), verified: false }, asset(3)], 3), false);
+  assert.equal(areChildrenFactoryScenesComplete([asset(1), asset(2), asset(2), asset(3)], 3), false);
+  assert.equal(areChildrenFactoryScenesComplete([asset(1), asset(2), asset(2)], 3), false);
+  assert.equal(areChildrenFactoryScenesComplete([
+    asset(1), asset(2), asset(3), { ...asset(3), scene: 4 },
+  ], 3), false);
+  assert.equal(areChildrenFactoryScenesComplete([
+    asset(1), asset(2), { ...asset(3), sha256: 'not-a-sha256-digest' },
+  ], 3), false);
 });
 
 test('Children Factory scene worker rejects missing durable scene identity before provider work', async () => {
