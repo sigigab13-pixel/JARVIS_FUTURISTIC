@@ -3,7 +3,7 @@ name: JARVIS Worker
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "*/5 * * * *"
 
 # Production work is intentionally separated from pull-request CI.
 # A worker cycle may run only from main, on schedule or explicit dispatch.
@@ -15,7 +15,7 @@ jobs:
   worker:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     permissions:
       contents: read
     steps:
