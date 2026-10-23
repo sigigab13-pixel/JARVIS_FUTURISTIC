@@ -26,7 +26,7 @@ Only when the public app is guaranteed to pass through the configured proxy and 
 - JARVIS_TRUST_CLOUDFLARE_HEADERS=true for Cloudflare-proxied traffic
 - JARVIS_TRUST_VERCEL_IP_HEADER=true when requests reach Vercel directly and its x-vercel-forwarded-for header is the verified client IP
 
-Vercel documents x-vercel-forwarded-for as its client-IP header for direct requests, but notes that a proxy in front of Vercel prevents the original client IP from being forwarded unless its Trusted Proxy feature is enabled. If Cloudflare is proxying traffic in front of Vercel, prefer the Cloudflare client-IP header only after confirming that direct-origin bypass is controlled. Otherwise the limiter may group many users behind the same proxy address.
+The app uses Vercel's x-vercel-forwarded-for client-IP header by default when running on Vercel directly. Vercel documents this header as the client IP for direct requests, but notes that a proxy in front of Vercel prevents the original client IP from being forwarded unless its Trusted Proxy feature is enabled. If Cloudflare is proxying traffic in front of Vercel, set JARVIS_TRUST_CLOUDFLARE_HEADERS=true only after confirming that direct-origin bypass is controlled; otherwise the limiter may group users behind a shared proxy address.
 
 Do not set both proxy-trust variables casually. Confirm the actual request path first. Do not enable JARVIS_ALLOW_LOCAL_RATE_LIMIT_FALLBACK in production merely to silence a missing Redis configuration.
 
