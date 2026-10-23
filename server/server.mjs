@@ -61,7 +61,7 @@ import { preflightMission, getMissionAdapters } from './mission-executor.mjs';
 import { generateHuggingFaceImage, HF_IMAGE_MODELS, HF_IMAGE_EDIT_MODELS, HF_IMAGE_PROVIDERS } from './image-generator.mjs';
 import { getYouTubeAccessToken, getYouTubeAnalytics, getYouTubeChannel, uploadYouTubeVideo } from './youtube.mjs';
 import { getRepairOfficeDiagnostics, getRepairOfficePolicy } from './repair-office.mjs';
-import { generateIntelligentResponse, getOpenAIModels } from './intelligence-core.mjs';
+import { generateIntelligentResponse, getOpenAIModels, shouldUseWebSearch } from './intelligence-core.mjs';
 import { formatDecisionMemory, parseExplicitDecision } from './decision-memory.mjs';
 import { buildRepairInstruction, inspectAssistantResponse, selfCheckAndNormalize } from './self-check-core.mjs';
 import { assessUncertainty, buildEpistemicInstruction } from './uncertainty-core.mjs';
@@ -1463,8 +1463,8 @@ export async function handleApi(req, res, pathname, url) {
 
     const openaiKey = process.env.OPENAI_API_KEY || '';
     const hfToken = process.env.HUGGINGFACE_API_TOKEN || process.env.HF_TOKEN || '';
-    const enableWebSearch = route.mode === 'search'
-      && String(process.env.OPENAI_ENABLE_WEB_SEARCH || '').toLowerCase() === 'true';
+    const enableWebSearch = shouldUseWebSearch({ route });
+    const liveSearchRequired = enableWebSearch;
 
     let text = '';
     let provider = '';
@@ -1496,7 +1496,7 @@ export async function handleApi(req, res, pathname, url) {
       }
     }
 
-    if (!text && hfToken) {
+    if (!text && hfToken && !liveSearchRequired) {
       const response = await fetch(HF_CHAT_URL, {
         method: 'POST',
         headers: { Authorization: `Bearer ${hfToken}`, 'Content-Type': 'application/json' },
@@ -1535,6 +1535,13 @@ export async function handleApi(req, res, pathname, url) {
     }
 
     if (!text) {
+      if (liveSearchRequired) {
+        return json(res, 503, {
+          error: 'JARVIS live web search is unavailable right now. No offline answer was substituted. Please retry after the search provider is available.',
+          code: 'WEB_SEARCH_UNAVAILABLE',
+          searchRequired: true,
+        });
+      }
       return json(res, 503, {
         error: openaiKey || hfToken
           ? 'JARVIS AI core returned no usable response.'
