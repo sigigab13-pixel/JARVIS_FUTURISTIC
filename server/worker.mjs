@@ -133,19 +133,29 @@ export function normalizeChildrenFactorySceneInput({ story, character, scene, to
 
 export function areChildrenFactoryScenesComplete(images, totalScenes) {
   const count = Number(totalScenes);
-  if (!Array.isArray(images) || !Number.isInteger(count) || count < 1 || count > 12) return false;
-  const verifiedScenes = new Set(
-    images
-      .filter(item => item?.verified === true
-        && Number.isInteger(Number(item.scene))
-        && Number(item.scene) >= 1
-        && Number(item.scene) <= count
-        && Boolean(item?.media?.path || item?.media?.key)
-        && /^[a-f0-9]{64}$/i.test(String(item?.sha256 || '')))
-      .map(item => Number(item.scene)),
-  );
-  return verifiedScenes.size === count && Array.from({ length: count }, (_, index) => index + 1)
-    .every(scene => verifiedScenes.has(scene));
+  if (!Array.isArray(images) || !Number.isInteger(count) || count < 1 || count > 12
+    || images.length !== count) return false;
+
+  const verifiedScenes = new Set();
+  for (const item of images) {
+    const scene = Number(item?.scene);
+    const mediaKey = String(item?.media?.path || item?.media?.key || '').trim();
+    const digest = String(item?.sha256 || '');
+
+    if (item?.verified !== true
+      || !Number.isInteger(scene)
+      || scene < 1
+      || scene > count
+      || !mediaKey
+      || !/^[a-f0-9]{64}$/i.test(digest)
+      || verifiedScenes.has(scene)) {
+      return false;
+    }
+
+    verifiedScenes.add(scene);
+  }
+
+  return verifiedScenes.size === count;
 }
 
 export async function executeChildrenFactoryScene(job) {
