@@ -74,6 +74,7 @@ import { simulateWorkflow } from './workflow-simulator-core.mjs';
 import { buildProvenance, extractWebCitations } from './provenance-core.mjs';
 import { planGoal } from './goal-outcome-core.mjs';
 import { persistConversationSafely } from './chat-persistence.mjs';
+import { applySecurityHeaders, protectRequest } from './security-controls.mjs';
 
 const PORT = Number(process.env.PORT || 10000);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -152,19 +153,39 @@ function redirect(res, location) {
 }
 
 function parseBody(req) {
+  const pathname = String(req.url || '').split('?')[0];
+  const maxBytes = pathname === '/api/image/edit' ? 12_000_000 : 1_000_000;
   return new Promise((resolve, reject) => {
     let raw = '';
+    let receivedBytes = 0;
+    let rejected = false;
+    const tooLarge = () => Object.assign(new Error('Request body is too large.'), { statusCode: 413 });
+    const contentLength = Number(req.headers?.['content-length']);
+    if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+      req.resume();
+      reject(tooLarge());
+      return;
+    }
     req.on('data', chunk => {
-      raw += chunk;
-      if (raw.length > 12_000_000) {
-        req.destroy();
-        reject(new Error('Request body is too large.'));
+      if (rejected) return;
+      receivedBytes += chunk.length;
+      if (receivedBytes > maxBytes) {
+        rejected = true;
+        reject(tooLarge());
+        req.resume();
+        return;
       }
+      raw += chunk.toString('utf8');
     });
     req.on('end', () => {
-      try { resolve(raw ? JSON.parse(raw) : {}); } catch { reject(new Error('Invalid JSON body.')); }
+      if (rejected) return;
+      try { resolve(raw ? JSON.parse(raw) : {}); } catch {
+        reject(Object.assign(new Error('Invalid JSON body.'), { statusCode: 400 }));
+      }
     });
-    req.on('error', reject);
+    req.on('error', error => {
+      if (!rejected) reject(error);
+    });
   });
 }
 
@@ -2027,8 +2048,10 @@ function contentType(file) {
 }
 
 const server = http.createServer(async (req, res) => {
+  applySecurityHeaders(res);
   try {
     const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+    if (!await protectRequest(req, res, url.pathname)) return;
     if (url.pathname.startsWith('/api/')) return await handleApi(req, res, url.pathname, url);
 
     const file = safePath(url.pathname);
@@ -2049,7 +2072,7 @@ const server = http.createServer(async (req, res) => {
     });
   } catch (error) {
     console.error('JARVIS server error:', error);
-    if (!res.headersSent) json(res, 500, { error: 'Internal server error.' });
+    if (!res.headersSent) json(res, Number(error?.statusCode) || 500, { error: Number(error?.statusCode) === 413 ? 'Request body is too large.' : Number(error?.statusCode) === 400 ? 'Invalid request body.' : 'Internal server error.' });
   }
 });
 
