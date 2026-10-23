@@ -2,22 +2,20 @@ name: JARVIS Worker
 
 on:
   workflow_dispatch:
-  pull_request:
-  push:
-    branches: [main]
-    paths-ignore:
-      - '**.md'
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "*/15 * * * *"
 
+# Production work is intentionally separated from pull-request CI.
+# A worker cycle may run only from main, on schedule or explicit dispatch.
 concurrency:
-  group: jarvis-main-${{ github.ref }}
-  cancel-in-progress: true
+  group: jarvis-production-worker
+  cancel-in-progress: false
 
 jobs:
   worker:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 4
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
@@ -29,17 +27,12 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
-      - name: Run automated tests
-        run: npm test
-
-      - name: Build frontend
-        run: npm run build
-
       - name: Verify FFmpeg
         run: |
           command -v ffmpeg >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y ffmpeg; }
           ffmpeg -version | head -n 1
 
+      # Production credentials are used only by this main-branch worker job.
       - name: Run one worker cycle
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
