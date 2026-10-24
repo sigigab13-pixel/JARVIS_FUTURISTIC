@@ -200,9 +200,9 @@ function hasVerifiedChildrenFactoryVideo(mission) {
     && /^[a-f0-9]{64}$/i.test(String(video.sha256 || ''))
     && video.sha256 === rendered?.sha256
     && Number.isInteger(Number(video.width))
-    && Number(video.width) > 0
+    && Number(video.width) === 1080
     && Number.isInteger(Number(video.height))
-    && Number(video.height) > 0
+    && Number(video.height) === 1920
     && Number.isFinite(Number(video.durationSeconds))
     && Number(video.durationSeconds) >= 1;
 }
