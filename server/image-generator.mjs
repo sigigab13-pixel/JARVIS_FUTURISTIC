@@ -14,6 +14,11 @@ export const HF_IMAGE_EDIT_MODELS = [
 
 export const HF_IMAGE_PROVIDERS = ['auto'];
 
+export function getImageLabStatus({ tokenConfigured, tokenValid }) {
+  if (!tokenConfigured) return 'not_configured';
+  return tokenValid ? 'ready' : 'misconfigured';
+}
+
 function isImageBlob(value) {
   return Boolean(value && typeof value.arrayBuffer === 'function');
 }

@@ -58,7 +58,7 @@ import { capabilityContextForPrompt, getCapabilityRegistry, getAvailableCapabili
 import { routeContextForPrompt, routeIntent } from './intent-router.mjs';
 import { createMissionState, transitionMission, advanceMissionStep } from './mission-runtime.mjs';
 import { preflightMission, getMissionAdapters } from './mission-executor.mjs';
-import { generateHuggingFaceImage, HF_IMAGE_MODELS, HF_IMAGE_EDIT_MODELS, HF_IMAGE_PROVIDERS } from './image-generator.mjs';
+import { generateHuggingFaceImage, HF_IMAGE_MODELS, HF_IMAGE_EDIT_MODELS, HF_IMAGE_PROVIDERS, getImageLabStatus } from './image-generator.mjs';
 import { getYouTubeAccessToken, getYouTubeAnalytics, getYouTubeChannel, uploadYouTubeVideo } from './youtube.mjs';
 import { getRepairOfficeDiagnostics, getRepairOfficePolicy } from './repair-office.mjs';
 import { generateIntelligentResponse, getOpenAIModels } from './intelligence-core.mjs';
@@ -1406,7 +1406,12 @@ export async function handleApi(req, res, pathname, url) {
         }, { 'Set-Cookie': jarvisCookie(authenticated.jarvisUser.id) });
       } catch (error) {
         console.error('JARVIS chat image generation error:', error);
-        return json(res, 502, { error: error instanceof Error ? error.message : 'Image generation failed.' });
+        const statusCode = Number(error?.statusCode) || 502;
+      return json(res, statusCode, {
+        error: error instanceof Error ? error.message : 'Image generation failed.',
+        code: String(error?.code || 'IMAGE_GENERATION_FAILED'),
+        retryable: statusCode === 502 || statusCode === 503,
+      });
       }
     }
 
@@ -1952,7 +1957,7 @@ export async function handleApi(req, res, pathname, url) {
       }
     }
     return json(res, 200, {
-      imageLab: 'ready',
+      imageLab: getImageLabStatus({ tokenConfigured: Boolean(token), tokenValid }),
       tokenConfigured: Boolean(token),
       tokenValid,
       tokenStatus,
