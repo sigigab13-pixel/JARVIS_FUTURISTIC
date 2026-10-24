@@ -178,6 +178,7 @@ function App() {
   const [imageBusy, setImageBusy] = useState(false);
   const [imageResult, setImageResult] = useState<string | null>(null);
   const [imageError, setImageError] = useState('');
+  const [imageStorageWarning, setImageStorageWarning] = useState('');
   const [referenceImage, setReferenceImage] = useState<{ data: string; mimeType: string } | null>(null);
   const [referencePreview, setReferencePreview] = useState<string | null>(null);
   const [businessOpen, setBusinessOpen] = useState(false);
@@ -1028,6 +1029,7 @@ function App() {
     if (!prompt || imageBusy) return;
     setImageBusy(true);
     setImageError('');
+    setImageStorageWarning('');
     try {
       const endpoint = referenceImage ? '/api/image/edit' : '/api/image/generate';
       const response = await api.post(endpoint, referenceImage
@@ -1036,6 +1038,7 @@ function App() {
       const generated = response.data?.image;
       if (!generated?.data || !generated?.mimeType) throw new Error('Invalid image response');
       setImageResult(`data:${generated.mimeType};base64,${generated.data}`);
+      setImageStorageWarning(String(response.data?.storageWarning || (!response.data?.mediaStored ? 'Image generated but storage was not confirmed. Download a copy to keep it.' : '')).trim());
     } catch (error: any) {
       const detail = String(error?.response?.data?.error || error?.message || '').trim();
       setImageError(detail ? `Image Lab error: ${detail}` : 'I could not generate that image right now. Please try again.');
@@ -1064,6 +1067,7 @@ function App() {
     setImagePrompt('');
     setImageResult(null);
     setImageError('');
+    setImageStorageWarning('');
     setReferenceImage(null);
     setReferencePreview(null);
   };
@@ -1797,6 +1801,7 @@ function App() {
                 {imageResult && <button className="security-secondary" onClick={downloadGeneratedImage}><Download size={16} /> Save Image</button>}
               </div>
               {imageError && <div className="security-result"><AlertTriangle size={14} /> {imageError}</div>}
+              {imageStorageWarning && <div className="security-result"><AlertTriangle size={14} /> {imageStorageWarning}</div>}
               {imageResult && <img src={imageResult} alt="JARVIS generated result" style={{ width: '100%', maxHeight: 560, objectFit: 'contain', borderRadius: 14, border: '1px solid #21445b', background: '#02060a' }} />}
             </div>
           </section>
