@@ -189,12 +189,30 @@ function safePath(urlPath) {
   return target.startsWith(DIST) ? target : null;
 }
 
+function hasVerifiedChildrenFactoryVideo(mission) {
+  const video = mission?.metadata?.verifiedVideo;
+  const rendered = mission?.metadata?.renderedVideo;
+  return video?.verified === true
+    && video?.verificationMethod === 'ffprobe+storage-readback'
+    && typeof video.mediaKey === 'string'
+    && video.mediaKey.trim().length > 0
+    && video.mediaKey === rendered?.mediaKey
+    && /^[a-f0-9]{64}$/i.test(String(video.sha256 || ''))
+    && video.sha256 === rendered?.sha256
+    && Number.isInteger(Number(video.width))
+    && Number(video.width) > 0
+    && Number.isInteger(Number(video.height))
+    && Number(video.height) > 0
+    && Number.isFinite(Number(video.durationSeconds))
+    && Number(video.durationSeconds) >= 1;
+}
+
 export function canPublishChildrenFactoryMission(mission) {
   return mission?.metadata?.factory !== 'children-v1'
     || (mission?.approval?.status === 'approved'
       && mission?.metadata?.pipeline?.render === 'completed'
       && mission?.metadata?.pipeline?.verified_video === 'completed'
-      && Boolean(mission?.metadata?.verifiedVideo?.mediaKey));
+      && hasVerifiedChildrenFactoryVideo(mission));
 }
 
 export function buildChildrenFactoryPipeline({
@@ -712,8 +730,9 @@ export async function handleApi(req, res, pathname, url) {
     }
 
     if (action === 'request-approval') {
-      if (current.metadata?.factory === 'children-v1' && current.metadata?.pipeline?.verified_video !== 'completed' && !current.metadata?.verifiedVideo?.mediaKey) {
-        return json(res, 409, { error: 'Children Factory approval requires a verified video render first.', code: 'CHILDREN_FACTORY_VERIFIED_VIDEO_REQUIRED', mission: current });
+      if (current.metadata?.factory === 'children-v1'
+        && (current.metadata?.pipeline?.verified_video !== 'completed' || !hasVerifiedChildrenFactoryVideo(current))) {
+        return json(res, 409, { error: 'Children Factory approval requires a video that passed FFprobe metadata and storage SHA-256 read-back verification.', code: 'CHILDREN_FACTORY_VERIFIED_VIDEO_REQUIRED', mission: current });
       }
       const next = transitionMission(current, 'waiting_approval');
       next.approval = {
