@@ -102,3 +102,17 @@ test('routes translation requests to the AI Interpreter capability without openi
   assert.equal(result.surface, null);
   assert.equal(result.surfaceAction, 'chat');
 });
+
+
+test('adds explicit AI Interpreter instructions to translation routing context', () => {
+  const context = routeContextForPrompt({
+    intent: 'translation',
+    mode: 'answer',
+    candidateCapabilities: [{ id: 'translation' }],
+    references: [],
+    needsClarification: false,
+  });
+  assert.match(context, /AI Interpreter instructions/);
+  assert.match(context, /preserving meaning, tone, register/);
+  assert.match(context, /target language is missing/);
+});
