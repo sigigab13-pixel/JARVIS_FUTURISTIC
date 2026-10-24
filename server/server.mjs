@@ -215,6 +215,39 @@ export function buildChildrenFactoryPipeline({
   ];
 }
 
+export function normalizeChildrenFactoryDraft(draft) {
+  const title = String(draft?.title ?? '').trim();
+  const story = String(draft?.story ?? '').trim();
+  const storyWordCount = story ? story.split(/\s+/).filter(Boolean).length : 0;
+  const sourceCharacter = draft?.character && typeof draft.character === 'object' && !Array.isArray(draft.character)
+    ? draft.character
+    : {};
+  const character = {
+    name: String(sourceCharacter.name ?? '').trim(),
+    species: String(sourceCharacter.species ?? '').trim(),
+    color: String(sourceCharacter.color ?? '').trim(),
+    clothes: String(sourceCharacter.clothes ?? '').trim(),
+    description: String(sourceCharacter.description ?? '').trim(),
+  };
+
+  if (!title || !story || storyWordCount < 120 || storyWordCount > 300
+    || !character.name || !character.species || !character.color || !character.clothes) {
+    throw Object.assign(new Error('Children Factory received an incomplete story or character bible.'), { statusCode: 502 });
+  }
+
+  return {
+    title: title.slice(0, 200),
+    story: story.slice(0, 5000),
+    character: {
+      name: character.name.slice(0, 120),
+      species: character.species.slice(0, 120),
+      color: character.color.slice(0, 120),
+      clothes: character.clothes.slice(0, 300),
+      description: character.description.slice(0, 1000),
+    },
+  };
+}
+
 async function generateChildrenFactoryDraft(topic, age) {
   const hfToken = process.env.HUGGINGFACE_API_TOKEN || process.env.HF_TOKEN || '';
   if (!hfToken) {
@@ -267,24 +300,7 @@ async function generateChildrenFactoryDraft(topic, age) {
     throw Object.assign(new Error('Children Factory received an invalid story format from the AI Core.'), { statusCode: 502 });
   }
 
-  const story = String(draft?.story || '').trim();
-  const storyWordCount = story ? story.split(/\s+/).filter(Boolean).length : 0;
-  const character = draft?.character && typeof draft.character === 'object' ? draft.character : {};
-  if (!story || storyWordCount < 120 || storyWordCount > 300 || !character.name || !character.species || !character.color || !character.clothes) {
-    throw Object.assign(new Error('Children Factory received an incomplete story or character bible.'), { statusCode: 502 });
-  }
-
-  return {
-    title: String(draft.title || 'JARVIS Children Story').trim().slice(0, 200),
-    story: story.slice(0, 5000),
-    character: {
-      name: String(character.name).trim().slice(0, 120),
-      species: String(character.species).trim().slice(0, 120),
-      color: String(character.color).trim().slice(0, 120),
-      clothes: String(character.clothes).trim().slice(0, 300),
-      description: String(character.description || '').trim().slice(0, 1000),
-    },
-  };
+  return normalizeChildrenFactoryDraft(draft);
 }
 
 export async function handleApi(req, res, pathname, url) {
