@@ -109,6 +109,7 @@ YouTube Analytics
 
 The server now contains a YouTube API service and approval-gated publisher UI for:
 
+- Children Factory policy preflight and upload-time safety, originality, rights, audience, and synthetic-media review (see [YouTube Policy Gate](docs/YOUTUBE_POLICY_GATE.md))
 - Google OAuth with offline access
 - user-scoped YouTube connections
 - access-token refresh
