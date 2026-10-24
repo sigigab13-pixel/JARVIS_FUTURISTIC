@@ -37,17 +37,24 @@ export default function VoiceEnginePanel({ text }: Props) {
         });
         return () => {
             active = false;
+        };
+    }, []);
+
+    useEffect(() => {
+        return () => {
             if (audioUrl) URL.revokeObjectURL(audioUrl);
         };
     }, [audioUrl]);
 
     const selectVoice = async (nextVoiceId: string) => {
+        const previousVoiceId = voiceId;
         setVoiceId(nextVoiceId);
         if (!nextVoiceId) return;
         try {
             await api.post('/api/voice/select', { voiceId: nextVoiceId });
             setMessage('Voice selected for JARVIS: ' + (voices.find(item => item.voiceId === nextVoiceId)?.name || nextVoiceId));
         } catch (error: any) {
+            setVoiceId(previousVoiceId);
             setMessage(error?.response?.data?.error || 'Voice selection could not be saved.');
         }
     };
