@@ -10,6 +10,8 @@ import {
   normalizeChildrenFactorySceneInput,
   areChildrenFactoryScenesComplete,
   isVerifiedChildrenFactoryImage,
+  evaluateRenderedVideoProbe,
+  isVerifiedChildrenFactoryVideo,
 } from '../server/worker.mjs';
 
 test('worker claim normalization treats empty and all-null RPC results as no job', () => {
@@ -253,28 +255,54 @@ test('Children Factory cannot publish before a verified video', () => {
   assert.equal(canPublishChildrenFactoryMission(base), false);
 });
 
-test('Children Factory cannot publish before approval', () => {
-  const base = {
-    approval: { status: 'pending' },
+function verifiedChildrenFactoryMission(approvalStatus = 'approved') {
+  const sha256 = 'a'.repeat(64);
+  const video = {
+    verified: true,
+    verificationMethod: 'ffprobe+storage-readback',
+    mediaKey: 'jarvis/user/video.mp4',
+    sha256,
+    durationSeconds: 12,
+    width: 1080,
+    height: 1920,
+  };
+  return {
+    approval: { status: approvalStatus },
     metadata: {
       factory: 'children-v1',
       pipeline: { render: 'completed', verified_video: 'completed' },
-      verifiedVideo: { mediaKey: 'jarvis/user/video.mp4' },
+      renderedVideo: { mediaKey: video.mediaKey, sha256 },
+      verifiedVideo: video,
     },
   };
-  assert.equal(canPublishChildrenFactoryMission(base), false);
+}
+
+test('Children Factory cannot publish before approval even after technical verification', () => {
+  const mission = verifiedChildrenFactoryMission('pending');
+  assert.equal(canPublishChildrenFactoryMission(mission), false);
 });
 
-test('Children Factory can publish only after verified video and approval', () => {
-  const mission = {
-    approval: { status: 'approved' },
-    metadata: {
-      factory: 'children-v1',
-      pipeline: { render: 'completed', verified_video: 'completed' },
-      verifiedVideo: { mediaKey: 'jarvis/user/video.mp4' },
-    },
-  };
-  assert.equal(canPublishChildrenFactoryMission(mission), true);
+test('Children Factory cannot publish from a media key alone without technical verification evidence', () => {
+  const mission = verifiedChildrenFactoryMission('approved');
+  mission.metadata.verifiedVideo = { mediaKey: 'jarvis/user/video.mp4' };
+  assert.equal(canPublishChildrenFactoryMission(mission), false);
+});
+
+test('Children Factory cannot publish when rendered and verified hashes do not match', () => {
+  const mission = verifiedChildrenFactoryMission('approved');
+  mission.metadata.renderedVideo.sha256 = 'b'.repeat(64);
+  assert.equal(canPublishChildrenFactoryMission(mission), false);
+});
+
+test('Children Factory cannot publish a technically verified video in the wrong aspect ratio', () => {
+  const mission = verifiedChildrenFactoryMission('approved');
+  mission.metadata.verifiedVideo.width = 1280;
+  mission.metadata.verifiedVideo.height = 720;
+  assert.equal(canPublishChildrenFactoryMission(mission), false);
+});
+
+test('Children Factory can publish only after technical video verification and approval', () => {
+  assert.equal(canPublishChildrenFactoryMission(verifiedChildrenFactoryMission('approved')), true);
 });
 
 
@@ -339,4 +367,68 @@ test('Children Factory rejects stories outside the 120–300 word range and malf
     () => normalizeChildrenFactoryDraft({ ...base, character: [] }),
     error => error?.statusCode === 502,
   );
+});
+
+const validVideoProbe = {
+  format: { format_name: 'mov,mp4,m4a,3gp,3g2,mj2', duration: '12.000' },
+  streams: [{
+    codec_type: 'video',
+    codec_name: 'h264',
+    pix_fmt: 'yuv420p',
+    width: 1080,
+    height: 1920,
+  }],
+};
+
+test('rendered-video probe rejects missing streams, wrong codec, dimensions, or invalid duration', () => {
+  assert.equal(evaluateRenderedVideoProbe({
+    probe: validVideoProbe,
+    expectedWidth: 1080,
+    expectedHeight: 1920,
+  }).ready, true);
+
+  const missingVideo = evaluateRenderedVideoProbe({
+    probe: { format: validVideoProbe.format, streams: [] },
+    expectedWidth: 1080,
+    expectedHeight: 1920,
+  });
+  assert.equal(missingVideo.ready, false);
+  assert.ok(missingVideo.findings.some(item => item.code === 'VIDEO_STREAM_COUNT_INVALID'));
+
+  const wrongCodec = evaluateRenderedVideoProbe({
+    probe: { ...validVideoProbe, streams: [{ ...validVideoProbe.streams[0], codec_name: 'mpeg4' }] },
+    expectedWidth: 1080,
+    expectedHeight: 1920,
+  });
+  assert.ok(wrongCodec.findings.some(item => item.code === 'VIDEO_CODEC_INVALID'));
+
+  const wrongDimensions = evaluateRenderedVideoProbe({
+    probe: validVideoProbe,
+    expectedWidth: 1280,
+    expectedHeight: 720,
+  });
+  assert.ok(wrongDimensions.findings.some(item => item.code === 'VIDEO_DIMENSIONS_INVALID'));
+
+  const invalidDuration = evaluateRenderedVideoProbe({
+    probe: { ...validVideoProbe, format: { ...validVideoProbe.format, duration: 'NaN' } },
+    expectedWidth: 1080,
+    expectedHeight: 1920,
+  });
+  assert.ok(invalidDuration.findings.some(item => item.code === 'VIDEO_DURATION_INVALID'));
+});
+
+test('verified rendered video requires MP4 type, a matching SHA-256 digest, and passing probe metadata', () => {
+  const digest = 'a'.repeat(64);
+  const base = {
+    contentType: 'video/mp4',
+    actualSha256: digest,
+    expectedSha256: digest,
+    probe: validVideoProbe,
+    expectedWidth: 1080,
+    expectedHeight: 1920,
+  };
+  assert.equal(isVerifiedChildrenFactoryVideo(base), true);
+  assert.equal(isVerifiedChildrenFactoryVideo({ ...base, contentType: 'text/plain' }), false);
+  assert.equal(isVerifiedChildrenFactoryVideo({ ...base, actualSha256: 'b'.repeat(64) }), false);
+  assert.equal(isVerifiedChildrenFactoryVideo({ ...base, expectedWidth: 1280 }), false);
 });

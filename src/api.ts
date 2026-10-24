@@ -174,7 +174,16 @@ export const youtube = {
     description?: string;
     tags?: string[];
     privacyStatus?: 'private' | 'unlisted' | 'public';
-    madeForKids?: boolean;
+    madeForKids: boolean;
+    containsSyntheticMedia: boolean;
+    policyReview: {
+      rightsConfirmed: boolean;
+      originalityConfirmed: boolean;
+      safetyReviewed: boolean;
+      metadataReviewed: boolean;
+      audienceReviewed: boolean;
+      aiDisclosureReviewed: boolean;
+    };
   }) => api.post('/api/youtube/publish', payload),
 };
 

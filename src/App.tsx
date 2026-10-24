@@ -195,7 +195,16 @@ function App() {
   const [youtubeMediaKey, setYoutubeMediaKey] = useState('');
   const [youtubeMissionId, setYoutubeMissionId] = useState('');
   const [youtubePrivacy, setYoutubePrivacy] = useState<'private' | 'unlisted' | 'public'>('private');
-  const [youtubeMadeForKids, setYoutubeMadeForKids] = useState(true);
+  const [youtubeMadeForKids, setYoutubeMadeForKids] = useState<boolean | null>(null);
+  const [youtubeContainsSyntheticMedia, setYoutubeContainsSyntheticMedia] = useState<boolean | null>(null);
+  const [youtubePolicyReview, setYoutubePolicyReview] = useState({
+    rightsConfirmed: false,
+    originalityConfirmed: false,
+    safetyReviewed: false,
+    metadataReviewed: false,
+    audienceReviewed: false,
+    aiDisclosureReviewed: false,
+  });
   const [youtubePublishBusy, setYoutubePublishBusy] = useState(false);
   const [youtubePublishResult, setYoutubePublishResult] = useState<any>(null);
   const [videoProjects, setVideoProjects] = useState<any[]>([]);
@@ -216,6 +225,19 @@ function App() {
   const recognitionRef = useRef<any>(null);
   const passiveRecognitionRef = useRef<any>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    setYoutubePolicyReview({
+      rightsConfirmed: false,
+      originalityConfirmed: false,
+      safetyReviewed: false,
+      metadataReviewed: false,
+      audienceReviewed: false,
+      aiDisclosureReviewed: false,
+    });
+    setYoutubeMadeForKids(null);
+    setYoutubeContainsSyntheticMedia(null);
+  }, [youtubeMissionId, youtubeMediaKey]);
 
   useEffect(() => {
     const palette = [185, 212, 238, 268, 302, 334, 28, 52, 118, 154];
@@ -466,8 +488,38 @@ function App() {
     }
   };
 
+  const clearYouTubePolicyReview = () => {
+    setYoutubePolicyReview({
+      rightsConfirmed: false,
+      originalityConfirmed: false,
+      safetyReviewed: false,
+      metadataReviewed: false,
+      audienceReviewed: false,
+      aiDisclosureReviewed: false,
+    });
+    setYoutubePublishResult(null);
+    setYoutubeError('');
+  };
+
+  const resetYouTubeReviewForNewContent = () => {
+    clearYouTubePolicyReview();
+    setYoutubePrivacy('private');
+    setYoutubeMadeForKids(null);
+    setYoutubeContainsSyntheticMedia(null);
+  };
+
   const publishToYouTube = async () => {
     if (!youtubeMissionId.trim() || !youtubeMediaKey.trim() || !youtubeTitle.trim() || youtubePublishBusy) return;
+    const audienceSetting = youtubeMadeForKids;
+    const syntheticSetting = youtubeContainsSyntheticMedia;
+    if (typeof audienceSetting !== 'boolean') {
+      setYoutubeError('Choose whether this video is Made for Kids before publishing.');
+      return;
+    }
+    if (typeof syntheticSetting !== 'boolean') {
+      setYoutubeError('Choose the correct altered/synthetic-content disclosure setting before publishing.');
+      return;
+    }
     setYoutubePublishBusy(true);
     setYoutubeError('');
     setYoutubePublishResult(null);
@@ -478,11 +530,20 @@ function App() {
         title: youtubeTitle.trim(),
         description: youtubeDescription.trim(),
         privacyStatus: youtubePrivacy,
-        madeForKids: youtubeMadeForKids,
+        madeForKids: audienceSetting,
+        containsSyntheticMedia: syntheticSetting,
+        policyReview: youtubePolicyReview,
       });
       setYoutubePublishResult(response.data || null);
     } catch (error: any) {
-      setYoutubeError(String(error?.response?.data?.error || error?.message || 'YouTube publishing failed.'));
+      const data = error?.response?.data;
+      const gate = data?.policyGate || {};
+      const findings = [
+        ...(Array.isArray(gate.blockingFindings) ? gate.blockingFindings : []),
+        ...(Array.isArray(gate.reviewFindings) ? gate.reviewFindings : []),
+        ...(Array.isArray(gate.missingAttestations) ? gate.missingAttestations : []),
+      ].map((item: any) => String(item?.message || item?.label || '')).filter(Boolean);
+      setYoutubeError([String(data?.error || error?.message || 'YouTube publishing failed.'), ...findings].join(' '));
     } finally {
       setYoutubePublishBusy(false);
     }
@@ -592,7 +653,14 @@ function App() {
         }
       }
     } catch (error: any) {
-      setFactoryError(String(error?.response?.data?.error || error?.message || 'Children Factory could not create the draft.'));
+      const data = error?.response?.data;
+      const findings = [
+        ...(Array.isArray(data?.policyGate?.blockingFindings) ? data.policyGate.blockingFindings : []),
+        ...(Array.isArray(data?.policyGate?.reviewFindings) ? data.policyGate.reviewFindings : []),
+      ].map((finding: any) => String(finding?.message || '')).filter(Boolean);
+      const closestMatch = String(data?.policyGate?.originality?.closestMatch?.title || '').trim();
+      if (closestMatch) findings.push('Potentially similar recent story: ' + closestMatch + '.');
+      setFactoryError([String(data?.error || error?.message || 'Children Factory could not create the draft.'), ...findings].join(' '));
     } finally {
       setFactoryBusy(false);
     }
@@ -629,6 +697,7 @@ function App() {
           const mediaKey = String(result.mediaKey || (result.media && (result.media.path || result.media.key)) || '').trim();
           if (!mediaKey) throw new Error('Render completed without a stored video media key.');
           setFactoryDraft((draftState: any) => draftState ? { ...draftState, renderedVideo: result } : draftState);
+          resetYouTubeReviewForNewContent();
           setYoutubeMissionId(String(factoryDraft && factoryDraft.approvalGate && factoryDraft.approvalGate.missionId || ''));
           setYoutubeMediaKey(mediaKey);
           setYoutubeTitle(String(draft && draft.project && draft.project.title || 'JARVIS Children Video').slice(0, 100));
@@ -1570,6 +1639,10 @@ function App() {
               </div>
             </div>
             {factoryError && <div className="lock-note"><AlertTriangle size={16} /><span>{factoryError}</span></div>}
+            {factoryDraft?.policyGate && <div className="lock-note" style={{ marginTop:12 }}>
+              <Shield size={16} />
+              <span>YouTube preflight: <b>{String(factoryDraft.policyGate.status || 'not checked').replace(/_/g, ' ')}</b>; recent-project originality screen: <b>{String(factoryDraft.policyGate.originality?.status || 'not checked').replace(/_/g, ' ')}</b>. Automated checks catch only known risk patterns and do not guarantee approval. {(factoryDraft.policyGate.reviewFindings || []).map((item:any) => item.message).join(' ')}</span>
+            </div>}
             {factoryDraft?.draft && <article className="security-card" style={{ display:'block', marginTop:12 }}>
               <span className="eyebrow">{factoryDraft.status === 'scenes_queued' ? 'SCENES IN PROGRESS' : 'CHILDREN FACTORY DRAFT'}</span>
               <h3>{factoryDraft.draft.project?.title || 'Children Story'}</h3>
@@ -1587,7 +1660,7 @@ function App() {
                 <button className="security-secondary" onClick={() => void renderChildrenFactoryVideo()} disabled={factoryBusy || !(factoryDraft && factoryDraft.draft && factoryDraft.draft.project && factoryDraft.draft.project.id) || ((factoryDraft.draft.images || []).length < 3) || String(((factoryDraft.draft.pipeline || []).find((stage:any) => stage.id === 'scene_assets') || {}).status || '') !== 'completed'}>
                   {factoryDraft.draft.images?.length < 3 ? 'Waiting for scene assets…' : factoryRenderJob && (factoryRenderJob.status === 'running' || factoryRenderJob.status === 'queued') ? 'Rendering 9:16 short…' : 'Render 9:16 Short'}
                 </button>
-                {factoryDraft && factoryDraft.renderedVideo && factoryDraft.renderedVideo.mediaKey && <button className="security-secondary" onClick={() => { setYoutubeMissionId(String(factoryDraft.approvalGate && factoryDraft.approvalGate.missionId || '')); setYoutubeMediaKey(String(factoryDraft.renderedVideo.mediaKey)); setYoutubeTitle(String(factoryDraft.draft && factoryDraft.draft.project && factoryDraft.draft.project.title || '').slice(0,100)); setYoutubeDescription(String(factoryDraft.draft && factoryDraft.draft.story || '').slice(0,5000)); setFactoryOpen(false); void openYouTubeCenter(); }}>Open YouTube Publisher</button>}
+                {factoryDraft && factoryDraft.renderedVideo && factoryDraft.renderedVideo.mediaKey && <button className="security-secondary" onClick={() => { resetYouTubeReviewForNewContent(); setYoutubeMissionId(String(factoryDraft.approvalGate && factoryDraft.approvalGate.missionId || '')); setYoutubeMediaKey(String(factoryDraft.renderedVideo.mediaKey)); setYoutubeTitle(String(factoryDraft.draft && factoryDraft.draft.project && factoryDraft.draft.project.title || '').slice(0,100)); setYoutubeDescription(String(factoryDraft.draft && factoryDraft.draft.story || '').slice(0,5000)); void openYouTubeCenter(); }}>Open YouTube Publisher</button>}
               </div>
               {factoryRenderJob && <div className="security-status"><span>Render job: {factoryRenderJob.status}</span></div>}
               {factoryDraft?.mission?.status === 'failed' && <div className="lock-note" style={{ marginTop:12 }}><AlertTriangle size={16} /><span>{String(factoryDraft.mission?.metadata?.factoryFailure?.message || 'Children Factory stopped after bounded retries. Partial progress was preserved.')}</span></div>}
@@ -1820,15 +1893,29 @@ function App() {
             {youtubeAnalytics?.rows && <div className="security-status"><b>Recent daily analytics</b>{youtubeAnalytics.rows.slice(-7).map((row:any[], i:number) => <p key={i}>{row.join(' • ')}</p>)}</div>}
             {youtubeStatus?.connected && <div style={{display:'grid',gap:9,marginTop:16}}>
               <b>Approved Video Publisher</b>
-              <input value={youtubeMissionId} onChange={e=>setYoutubeMissionId(e.target.value)} placeholder="Approved mission ID" />
-              <input value={youtubeMediaKey} onChange={e=>setYoutubeMediaKey(e.target.value)} placeholder="Stored video media key" />
-              <input value={youtubeTitle} onChange={e=>setYoutubeTitle(e.target.value.slice(0,100))} placeholder="YouTube title" maxLength={100} />
-              <textarea value={youtubeDescription} onChange={e=>setYoutubeDescription(e.target.value.slice(0,5000))} placeholder="Description" rows={4} />
-              <div style={{display:'flex',gap:12,alignItems:'center',flexWrap:'wrap'}}>
-                <label>Privacy <select value={youtubePrivacy} onChange={e=>setYoutubePrivacy(e.target.value as 'private'|'unlisted'|'public')}><option value="private">Private</option><option value="unlisted">Unlisted</option><option value="public">Public</option></select></label>
-                <label><input type="checkbox" checked={youtubeMadeForKids} onChange={e=>setYoutubeMadeForKids(e.target.checked)} /> Made for kids</label>
+              <input value={youtubeMissionId} onChange={e=>{ setYoutubeMissionId(e.target.value); resetYouTubeReviewForNewContent(); }} placeholder="Approved mission ID" />
+              <input value={youtubeMediaKey} onChange={e=>{ setYoutubeMediaKey(e.target.value); resetYouTubeReviewForNewContent(); }} placeholder="Stored video media key" />
+              <input value={youtubeTitle} onChange={e=>{ setYoutubeTitle(e.target.value.slice(0,100)); resetYouTubeReviewForNewContent(); }} placeholder="YouTube title" maxLength={100} />
+              <textarea value={youtubeDescription} onChange={e=>{ setYoutubeDescription(e.target.value.slice(0,5000)); resetYouTubeReviewForNewContent(); }} placeholder="Description" rows={4} />
+              <div className="lock-note" style={{ marginTop:4 }}>
+                <Shield size={16} />
+                <span>Children Factory uploads stay private first. Review the processed video in YouTube Studio before making it public. Before upload, confirm rights and originality, check the audience, and choose the truthful synthetic-media disclosure. No automated gate can guarantee YouTube will not remove a video or restrict a channel.</span>
               </div>
-              <button className="security-primary" onClick={() => void publishToYouTube()} disabled={youtubePublishBusy || !youtubeMissionId.trim() || !youtubeMediaKey.trim() || !youtubeTitle.trim()}>
+              <div style={{display:'grid',gap:8,border:'1px solid #244758',borderRadius:10,padding:12}}>
+                <b>YouTube policy review — every confirmation is required</b>
+                <label><input type="checkbox" checked={youtubePolicyReview.rightsConfirmed} onChange={e=>setYoutubePolicyReview((current:any)=>({...current,rightsConfirmed:e.target.checked}))} /> I own or have permission to use all visuals, voices, music, sounds, fonts, and third-party elements.</label>
+                <label><input type="checkbox" checked={youtubePolicyReview.originalityConfirmed} onChange={e=>setYoutubePolicyReview((current:any)=>({...current,originalityConfirmed:e.target.checked}))} /> This video adds original value; it is not a copied, minimally changed, or near-duplicate mass-produced upload.</label>
+                <label><input type="checkbox" checked={youtubePolicyReview.safetyReviewed} onChange={e=>setYoutubePolicyReview((current:any)=>({...current,safetyReviewed:e.target.checked}))} /> I watched the complete video and checked child safety, dangerous or harmful material, privacy, and age suitability.</label>
+                <label><input type="checkbox" checked={youtubePolicyReview.metadataReviewed} onChange={e=>setYoutubePolicyReview((current:any)=>({...current,metadataReviewed:e.target.checked}))} /> The title, description, and tags are accurate and relevant, with no misleading claims or artificial engagement scheme.</label>
+                <label><input type="checkbox" checked={youtubePolicyReview.audienceReviewed} onChange={e=>setYoutubePolicyReview((current:any)=>({...current,audienceReviewed:e.target.checked}))} /> I checked that the audience setting matches the intended viewers. Children Factory videos must be Made for Kids.</label>
+                <label><input type="checkbox" checked={youtubePolicyReview.aiDisclosureReviewed} onChange={e=>setYoutubePolicyReview((current:any)=>({...current,aiDisclosureReviewed:e.target.checked}))} /> I reviewed YouTube’s altered/synthetic-content rule and selected the right option below.</label>
+              </div>
+              <div style={{display:'flex',gap:12,alignItems:'center',flexWrap:'wrap'}}>
+                <label>Privacy <select value={youtubePrivacy} onChange={e=>{ setYoutubePrivacy(e.target.value as 'private'|'unlisted'|'public'); clearYouTubePolicyReview(); }}><option value="private">Private</option><option value="unlisted">Unlisted</option><option value="public">Public</option></select></label>
+                <label>Audience <select value={youtubeMadeForKids === null ? '' : youtubeMadeForKids ? 'yes' : 'no'} onChange={e=>{ setYoutubeMadeForKids(e.target.value === '' ? null : e.target.value === 'yes'); clearYouTubePolicyReview(); }}><option value="">Choose audience…</option><option value="yes">Made for Kids</option><option value="no">Not Made for Kids</option></select></label>
+                <label>Synthetic-media disclosure <select value={youtubeContainsSyntheticMedia === null ? '' : youtubeContainsSyntheticMedia ? 'yes' : 'no'} onChange={e=>{ setYoutubeContainsSyntheticMedia(e.target.value === '' ? null : e.target.value === 'yes'); clearYouTubePolicyReview(); }}><option value="">Choose disclosure…</option><option value="no">No — not realistic / no disclosure trigger</option><option value="yes">Yes — realistic altered/synthetic content or AI music</option></select></label>
+              </div>
+              <button className="security-primary" onClick={() => void publishToYouTube()} disabled={youtubePublishBusy || !youtubeMissionId.trim() || !youtubeMediaKey.trim() || !youtubeTitle.trim() || typeof youtubeMadeForKids !== 'boolean' || typeof youtubeContainsSyntheticMedia !== 'boolean' || !Object.values(youtubePolicyReview).every(Boolean)}>
                 {youtubePublishBusy ? 'Publishing…' : 'Publish Approved Video'}
               </button>
               {youtubePublishResult?.published && <div className="security-status"><p>✓ YouTube confirmed the upload.</p><a href={youtubePublishResult.url} target="_blank" rel="noreferrer">Open published video</a></div>}

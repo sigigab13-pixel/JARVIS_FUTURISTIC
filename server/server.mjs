@@ -60,6 +60,7 @@ import { createMissionState, transitionMission, advanceMissionStep } from './mis
 import { preflightMission, getMissionAdapters } from './mission-executor.mjs';
 import { generateHuggingFaceImage, HF_IMAGE_MODELS, HF_IMAGE_EDIT_MODELS, HF_IMAGE_PROVIDERS } from './image-generator.mjs';
 import { getYouTubeAccessToken, getYouTubeAnalytics, getYouTubeChannel, uploadYouTubeVideo } from './youtube.mjs';
+import { evaluateChildrenFactoryPreflight, evaluateContentOriginality, evaluateYouTubePublishGate } from './youtube-policy-gate.mjs';
 import { getRepairOfficeDiagnostics, getRepairOfficePolicy } from './repair-office.mjs';
 import { generateIntelligentResponse, getOpenAIModels } from './intelligence-core.mjs';
 import { formatDecisionMemory, parseExplicitDecision } from './decision-memory.mjs';
@@ -188,12 +189,30 @@ function safePath(urlPath) {
   return target.startsWith(DIST) ? target : null;
 }
 
+function hasVerifiedChildrenFactoryVideo(mission) {
+  const video = mission?.metadata?.verifiedVideo;
+  const rendered = mission?.metadata?.renderedVideo;
+  return video?.verified === true
+    && video?.verificationMethod === 'ffprobe+storage-readback'
+    && typeof video.mediaKey === 'string'
+    && video.mediaKey.trim().length > 0
+    && video.mediaKey === rendered?.mediaKey
+    && /^[a-f0-9]{64}$/i.test(String(video.sha256 || ''))
+    && video.sha256 === rendered?.sha256
+    && Number.isInteger(Number(video.width))
+    && Number(video.width) === 1080
+    && Number.isInteger(Number(video.height))
+    && Number(video.height) === 1920
+    && Number.isFinite(Number(video.durationSeconds))
+    && Number(video.durationSeconds) >= 1;
+}
+
 export function canPublishChildrenFactoryMission(mission) {
   return mission?.metadata?.factory !== 'children-v1'
     || (mission?.approval?.status === 'approved'
       && mission?.metadata?.pipeline?.render === 'completed'
       && mission?.metadata?.pipeline?.verified_video === 'completed'
-      && Boolean(mission?.metadata?.verifiedVideo?.mediaKey));
+      && hasVerifiedChildrenFactoryVideo(mission));
 }
 
 export function buildChildrenFactoryPipeline({
@@ -248,7 +267,7 @@ export function normalizeChildrenFactoryDraft(draft) {
   };
 }
 
-async function generateChildrenFactoryDraft(topic, age) {
+async function generateChildrenFactoryDraft(userId, topic, age) {
   const hfToken = process.env.HUGGINGFACE_API_TOKEN || process.env.HF_TOKEN || '';
   if (!hfToken) {
     throw Object.assign(new Error('Hugging Face is not configured for the Children Factory.'), { statusCode: 503 });
@@ -261,7 +280,9 @@ async function generateChildrenFactoryDraft(topic, age) {
     'Schema:',
     '{"title":"string","story":"about 200 words","character":{"name":"string","species":"string","color":"string","clothes":"string","description":"string"}}',
     'Keep the story gentle, imaginative, educational or emotionally positive.',
-    'Do not include frightening, graphic, sexual, dangerous, or age-inappropriate material.',
+    'Do not include frightening, graphic, sexual, dangerous, privacy-invasive, or age-inappropriate material.',
+    'Invent original characters, settings, dialogue, and plot; do not copy or closely imitate existing shows, films, games, books, creators, branded characters, signature catchphrases, scripts, or song lyrics.',
+    'Do not request or include real children’s personal contact information, real addresses, school identifiers, or private information.',
     'Keep the main character visually consistent for image generation.',
     'Topic: ' + String(topic).slice(0, 500),
     'Target age: ' + String(age),
@@ -300,7 +321,35 @@ async function generateChildrenFactoryDraft(topic, age) {
     throw Object.assign(new Error('Children Factory received an invalid story format from the AI Core.'), { statusCode: 502 });
   }
 
-  return normalizeChildrenFactoryDraft(draft);
+  const normalized = normalizeChildrenFactoryDraft(draft);
+  const policyGate = evaluateChildrenFactoryPreflight({
+    topic,
+    title: normalized.title,
+    story: normalized.story,
+    character: normalized.character,
+    age,
+  });
+  const existingProjects = await getVideoProjectsForUser(userId);
+  const originalityGate = evaluateContentOriginality({
+    title: normalized.title,
+    story: normalized.story,
+    existingProjects,
+  });
+  policyGate.originality = originalityGate;
+  if (policyGate.status !== 'preflight_passed' || originalityGate.status !== 'unique_in_recent_projects') {
+    const blocked = policyGate.status === 'blocked' || originalityGate.status === 'blocked_near_duplicate';
+    throw Object.assign(
+      new Error(blocked
+        ? 'Children Factory preflight blocked this draft. Rewrite the flagged safety issue or make the story clearly different before generating scene assets.'
+        : 'Children Factory preflight requires review. Resolve the flagged brand, privacy, or story-similarity concern before generating scene assets.'),
+      {
+        statusCode: 422,
+        code: blocked ? 'CHILDREN_FACTORY_POLICY_BLOCKED' : 'CHILDREN_FACTORY_POLICY_REVIEW_REQUIRED',
+        policyGate,
+      },
+    );
+  }
+  return { ...normalized, policyGate };
 }
 
 export async function handleApi(req, res, pathname, url) {
@@ -681,8 +730,9 @@ export async function handleApi(req, res, pathname, url) {
     }
 
     if (action === 'request-approval') {
-      if (current.metadata?.factory === 'children-v1' && current.metadata?.pipeline?.verified_video !== 'completed' && !current.metadata?.verifiedVideo?.mediaKey) {
-        return json(res, 409, { error: 'Children Factory approval requires a verified video render first.', code: 'CHILDREN_FACTORY_VERIFIED_VIDEO_REQUIRED', mission: current });
+      if (current.metadata?.factory === 'children-v1'
+        && (current.metadata?.pipeline?.verified_video !== 'completed' || !hasVerifiedChildrenFactoryVideo(current))) {
+        return json(res, 409, { error: 'Children Factory approval requires a video that passed FFprobe metadata and storage SHA-256 read-back verification.', code: 'CHILDREN_FACTORY_VERIFIED_VIDEO_REQUIRED', mission: current });
       }
       const next = transitionMission(current, 'waiting_approval');
       next.approval = {
@@ -807,7 +857,7 @@ export async function handleApi(req, res, pathname, url) {
     }
 
     try {
-      const draft = await generateChildrenFactoryDraft(topic, age);
+      const draft = await generateChildrenFactoryDraft(jarvisUser.id, topic, age);
 
       const project = await createVideoProjectForUser(jarvisUser.id, {
         title: draft.title,
@@ -819,6 +869,7 @@ export async function handleApi(req, res, pathname, url) {
           age,
           story: draft.story,
           character_bible: draft.character,
+          youtube_policy_gate: draft.policyGate,
         },
       });
 
@@ -860,6 +911,7 @@ export async function handleApi(req, res, pathname, url) {
         age,
         story: draft.story,
         characterBible: draft.character,
+        youtubePolicyGate: draft.policyGate,
         images: [],
         pipeline: buildChildrenFactoryPipeline({ sceneAssetsStatus: 'running', approvalStatus: 'blocked' }),
       };
@@ -925,6 +977,7 @@ export async function handleApi(req, res, pathname, url) {
 
         return json(res, 202, {
           factory: 'children-v1',
+          policyGate: draft.policyGate,
           status: 'scenes_queued',
           draft: {
             project,
@@ -960,7 +1013,8 @@ export async function handleApi(req, res, pathname, url) {
         'Color: ' + draft.character.color,
         'Clothes: ' + draft.character.clothes,
         'Description: ' + draft.character.description,
-        'Style: warm, colorful, friendly, simple storybook art.',
+        'Style: warm, colorful, friendly, original storybook art.',
+        'Use an original character and design; do not imitate or include branded/copyrighted characters, logos, signature costume designs, celebrities, or a named artist style.',
         'No text, no watermark.',
       ].join(' ');
 
@@ -1059,6 +1113,7 @@ export async function handleApi(req, res, pathname, url) {
 
       return json(res, 201, {
         factory: 'children-v1',
+        policyGate: draft.policyGate,
         status: 'render_required',
         draft: {
           project,
@@ -1082,7 +1137,8 @@ export async function handleApi(req, res, pathname, url) {
       console.error('JARVIS Children Factory error:', error);
       return json(res, Number(error?.statusCode) || 502, {
         error: error instanceof Error ? error.message : 'Children Factory failed.',
-        code: 'CHILDREN_FACTORY_FAILED',
+        code: error?.code || 'CHILDREN_FACTORY_FAILED',
+        ...(error?.policyGate ? { policyGate: error.policyGate } : {}),
       });
     }
   }
@@ -1820,10 +1876,35 @@ export async function handleApi(req, res, pathname, url) {
 
     const mission = await getMissionForUser(jarvisUser.id, missionId);
     if (!mission) return json(res, 404, { error: 'Approval mission not found.' });
+    const isChildrenFactory = mission.metadata?.factory === 'children-v1';
+    const policyGate = evaluateYouTubePublishGate({
+      title,
+      description,
+      tags,
+      isChildrenFactory,
+      topic: mission.metadata?.topic || '',
+      story: mission.metadata?.story || '',
+      character: mission.metadata?.characterBible || {},
+      age: Number(mission.metadata?.age || 5),
+      madeForKids: body?.madeForKids,
+      containsSyntheticMedia: body?.containsSyntheticMedia,
+      privacyStatus,
+      policyReview: body?.policyReview || {},
+    });
+    if (!policyGate.ready) {
+      const blocked = policyGate.status === 'blocked';
+      return json(res, 409, {
+        error: blocked
+          ? 'YouTube policy preflight blocked this upload. Fix the listed issues before retrying.'
+          : 'YouTube policy review is incomplete. Complete every required review confirmation before uploading.',
+        code: blocked ? 'YOUTUBE_POLICY_GATE_BLOCKED' : 'YOUTUBE_POLICY_REVIEW_REQUIRED',
+        policyGate,
+      });
+    }
     if (mission.approval?.status !== 'approved') {
       return json(res, 409, { error: 'YouTube publishing requires an approved JARVIS mission.', code: 'YOUTUBE_APPROVAL_REQUIRED', mission });
     }
-    if (mission.metadata?.factory === 'children-v1' && !canPublishChildrenFactoryMission(mission)) {
+    if (isChildrenFactory && !canPublishChildrenFactoryMission(mission)) {
       return json(res, 409, { error: 'Children Factory publishing requires a completed, verified video render and approval.', code: 'CHILDREN_FACTORY_PIPELINE_INCOMPLETE', mission });
     }
     if (mission.metadata?.youtube?.videoId) {
@@ -1851,7 +1932,8 @@ export async function handleApi(req, res, pathname, url) {
           snippet: { title, description, tags, categoryId: '24' },
           status: {
             privacyStatus,
-            selfDeclaredMadeForKids: Boolean(body?.madeForKids),
+            selfDeclaredMadeForKids: body.madeForKids,
+            containsSyntheticMedia: body.containsSyntheticMedia,
           },
         },
       });
@@ -1863,6 +1945,11 @@ export async function handleApi(req, res, pathname, url) {
         url: `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`,
         privacyStatus,
         mediaKey,
+        policyGateVersion: policyGate.version,
+        policyGateStatus: policyGate.status,
+        policyReview: body.policyReview,
+        madeForKids: body.madeForKids,
+        containsSyntheticMedia: body.containsSyntheticMedia,
         publishedAt: new Date().toISOString(),
       };
       let missionUpdated = false;
