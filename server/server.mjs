@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
+import { validateChildrenFactoryRenderAssets } from './children-factory-validation.mjs';
 import {
   ensureJarvisUser,
   getConversationMessages,
@@ -481,9 +482,14 @@ export async function handleApi(req, res, pathname, url) {
         if (mission.metadata?.factory && mission.metadata.factory !== 'children-v1') return json(res, 409, { error: 'The supplied mission is not a Children Factory publishing mission.', code: 'VIDEO_MISSION_MISMATCH' });
         if (mission.metadata?.projectId && mission.metadata.projectId !== projectId) return json(res, 409, { error: 'The render project does not match the selected mission.', code: 'VIDEO_PROJECT_MISMATCH' });
         if (mission.metadata?.pipeline?.render === 'completed') return json(res, 409, { error: 'This Children Factory render is already completed. A new render must create a new verified video state.', code: 'VIDEO_RENDER_ALREADY_COMPLETED' });
+        const sceneValidation = validateChildrenFactoryRenderAssets({ mission, userId: jarvisUser.id, imageKeys });
+        if (!sceneValidation.ok) {
+          return json(res, 409, { error: sceneValidation.message, code: sceneValidation.code });
+        }
       }
       const job = await queueVideoJobForUser(jarvisUser.id, projectId, {
         operation: 'render',
+        project_id: projectId,
         mission_id: missionId || null,
         image_keys: imageKeys,
         format: project.format,

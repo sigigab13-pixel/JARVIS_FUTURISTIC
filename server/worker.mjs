@@ -18,6 +18,7 @@ import { executeMissionStep } from './mission-executor.mjs';
 import { transitionMission } from './mission-runtime.mjs';
 import { createMediaKey, getMedia, isSupabaseStorageConfigured, putMedia } from './media.mjs';
 import { generateHuggingFaceImage } from './image-generator.mjs';
+import { validateChildrenFactoryRenderAssets } from './children-factory-validation.mjs';
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
 const SUPABASE_SERVER_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -383,6 +384,19 @@ async function executeVideoPipeline(job) {
   if (!isSupabaseStorageConfigured()) throw new Error('Supabase Storage is not configured for video rendering.');
   if (!imageKeys.length) throw new Error('Video render requires at least one stored image asset.');
   if (imageKeys.some(key => !key.startsWith(`jarvis/${userId}/`))) throw new Error('Video render asset ownership validation failed.');
+
+  const missionId = String(payload.mission_id || '').trim();
+  if (missionId) {
+    const mission = await getMissionForUser(userId, missionId);
+    if (!mission) throw new Error('Video render mission was not found for this JARVIS user.');
+    if (mission.metadata?.factory === 'children-v1') {
+      if (String(mission.metadata?.projectId || '') !== String(payload.project_id || '')) {
+        throw new Error('Children Factory render project does not match the mission.');
+      }
+      const validation = validateChildrenFactoryRenderAssets({ mission, userId, imageKeys });
+      if (!validation.ok) throw Object.assign(new Error(validation.message), { code: validation.code });
+    }
+  }
 
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'jarvis-video-'));
   try {
