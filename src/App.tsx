@@ -503,6 +503,7 @@ function App() {
 
   const resetYouTubeReviewForNewContent = () => {
     clearYouTubePolicyReview();
+    setYoutubePrivacy('private');
     setYoutubeMadeForKids(null);
     setYoutubeContainsSyntheticMedia(null);
   };
