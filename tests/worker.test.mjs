@@ -143,7 +143,7 @@ test('Children Factory scene worker rejects foreign project mission identities',
     error => /mission was not found or does not belong to this video project/i.test(error?.message || '')
   );
 });
-import { buildChildrenFactoryPipeline, canPublishChildrenFactoryMission } from '../server/server.mjs';
+import { buildChildrenFactoryPipeline, canPublishChildrenFactoryMission, normalizeChildrenFactoryDraft } from '../server/server.mjs';
 
 test('worker creates unique stable ids', () => {
   const a = createWorkerId();
@@ -275,4 +275,68 @@ test('Children Factory can publish only after verified video and approval', () =
     },
   };
   assert.equal(canPublishChildrenFactoryMission(mission), true);
+});
+
+
+test('Children Factory rejects whitespace-only title and required character fields after normalization', () => {
+  const story = Array.from({ length: 130 }, () => 'story').join(' ');
+  const base = {
+    title: 'A Little Adventure',
+    story,
+    character: { name: 'Milo', species: 'fox', color: 'orange', clothes: 'blue scarf', description: 'Curious and kind' },
+  };
+
+  assert.throws(
+    () => normalizeChildrenFactoryDraft({ ...base, title: '   ' }),
+    error => error?.statusCode === 502 && /incomplete story or character bible/i.test(error.message),
+  );
+  for (const field of ['name', 'species', 'color', 'clothes']) {
+    assert.throws(
+      () => normalizeChildrenFactoryDraft({
+        ...base,
+        character: { ...base.character, [field]: '   ' },
+      }),
+      error => error?.statusCode === 502 && /incomplete story or character bible/i.test(error.message),
+    );
+  }
+});
+
+test('Children Factory returns trimmed title, story and character fields', () => {
+  const story = Array.from({ length: 130 }, () => 'story').join(' ');
+  const normalized = normalizeChildrenFactoryDraft({
+    title: '  A Little Adventure  ',
+    story: `  ${story}  `,
+    character: {
+      name: ' Milo ',
+      species: ' fox ',
+      color: ' orange ',
+      clothes: ' blue scarf ',
+      description: ' curious and kind ',
+    },
+  });
+
+  assert.equal(normalized.title, 'A Little Adventure');
+  assert.equal(normalized.story, story);
+  assert.equal(normalized.character.name, 'Milo');
+  assert.equal(normalized.character.species, 'fox');
+  assert.equal(normalized.character.color, 'orange');
+  assert.equal(normalized.character.clothes, 'blue scarf');
+  assert.equal(normalized.character.description, 'curious and kind');
+});
+
+test('Children Factory rejects stories outside the 120–300 word range and malformed characters', () => {
+  const character = { name: 'Milo', species: 'fox', color: 'orange', clothes: 'blue scarf' };
+  const base = { title: 'A Little Adventure', story: Array.from({ length: 130 }, () => 'story').join(' '), character };
+  assert.throws(
+    () => normalizeChildrenFactoryDraft({ ...base, story: Array.from({ length: 119 }, () => 'story').join(' ') }),
+    error => error?.statusCode === 502,
+  );
+  assert.throws(
+    () => normalizeChildrenFactoryDraft({ ...base, story: Array.from({ length: 301 }, () => 'story').join(' ') }),
+    error => error?.statusCode === 502,
+  );
+  assert.throws(
+    () => normalizeChildrenFactoryDraft({ ...base, character: [] }),
+    error => error?.statusCode === 502,
+  );
 });
