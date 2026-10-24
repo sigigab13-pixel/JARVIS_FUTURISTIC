@@ -34,7 +34,14 @@ import {
   Apple,
 } from 'lucide-react';
 
-type Message = { role: 'user' | 'assistant'; content: string; image?: { data: string; mimeType: string } };
+type WebSource = { title: string; url: string };
+type Message = {
+  role: 'user' | 'assistant';
+  content: string;
+  image?: { data: string; mimeType: string };
+  webSearchUsed?: boolean;
+  sources?: WebSource[];
+};
 
 function safeText(value: unknown, fallback = ''): string {
   if (typeof value === 'string') return value;
@@ -51,6 +58,31 @@ function safeText(value: unknown, fallback = ''): string {
   return String(value);
 }
 
+function normalizeWebSources(value: unknown): WebSource[] {
+  const candidates = Array.isArray(value) ? value : [];
+  const seen = new Set<string>();
+  const sources: WebSource[] = [];
+  for (const item of candidates) {
+    const url = String(item?.url || '').trim();
+    if (!/^https?:\/\//i.test(url) || seen.has(url)) continue;
+    try {
+      const parsed = new URL(url);
+      if (!['http:', 'https:'].includes(parsed.protocol) || !parsed.hostname) continue;
+    } catch {
+      continue;
+    }
+    seen.add(url);
+    sources.push({ title: String(item?.title || url).trim().slice(0, 240) || url, url: url.slice(0, 2000) });
+    if (sources.length >= 10) break;
+  }
+  return sources;
+}
+
+function sourceHostname(url: string): string {
+  try { return new URL(url).hostname.replace(/^www\./i, ''); }
+  catch { return url; }
+}
+
 function normalizeMessages(value: unknown, fallback: Message[] = starter): Message[] {
   if (!Array.isArray(value)) return fallback;
   return value
@@ -58,7 +90,15 @@ function normalizeMessages(value: unknown, fallback: Message[] = starter): Messa
       if (item?.role !== 'user' && item?.role !== 'assistant') return null;
       const content = safeText(item?.content).trim();
       const image = item?.image?.data && item?.image?.mimeType ? { data: String(item.image.data), mimeType: String(item.image.mimeType) } : undefined;
-      return content || image ? { role: item.role, content, ...(image ? { image } : {}) } : null;
+      const sources = normalizeWebSources(item?.sources);
+      const webSearchUsed = item?.webSearchUsed === true;
+      return content || image ? {
+        role: item.role,
+        content,
+        ...(image ? { image } : {}),
+        ...(sources.length ? { sources } : {}),
+        ...(webSearchUsed ? { webSearchUsed: true } : {}),
+      } : null;
     })
     .filter(Boolean) as Message[];
 }
@@ -145,6 +185,7 @@ function App() {
   const [messages, setMessages] = useState<Message[]>(starter);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
+  const [webSearchMode, setWebSearchMode] = useState(false);
   const [listening, setListening] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
@@ -839,8 +880,10 @@ function App() {
   };
 
   const sendMessage = async (text = input) => {
-    const clean = text.trim();
-    if (!clean || busy) return;
+    const typed = text.trim();
+    if (!typed || busy) return;
+    const alreadySearchRequest = /^(search|look up|research|check online|find)\b/i.test(typed);
+    const clean = webSearchMode && !alreadySearchRequest ? `Search the web for ${typed}` : typed;
     if (handleLocalCommand(clean)) return;
 
     const next = [...messages, { role: 'user' as const, content: clean }];
@@ -881,11 +924,22 @@ function App() {
           : 'I could not complete that request. Please try again.',
       );
       const persistenceWarning = safeText(response.data?.persistenceWarning, '').trim();
+      const provenance = response.data?.provenance;
+      const webSearchUsed = provenance?.webSearchUsed === true;
+      const sources = normalizeWebSources(
+        (Array.isArray(provenance?.sources) ? provenance.sources : []).filter((source: any) => source?.type === 'live_web'),
+      );
       setMessages(current => [
         ...current,
-        { role: 'assistant', content: persistenceWarning ? `${answer}\n\n⚠️ ${persistenceWarning}` : answer, ...(generatedImage?.data && generatedImage?.mimeType ? {
-          image: { data: String(generatedImage.data), mimeType: String(generatedImage.mimeType) },
-        } : {}) },
+        {
+          role: 'assistant',
+          content: persistenceWarning ? `${answer}\\n\\n⚠️ ${persistenceWarning}` : answer,
+          ...(webSearchUsed ? { webSearchUsed: true } : {}),
+          ...(sources.length ? { sources } : {}),
+          ...(generatedImage?.data && generatedImage?.mimeType ? {
+            image: { data: String(generatedImage.data), mimeType: String(generatedImage.mimeType) },
+          } : {}),
+        },
       ]);
       if (voiceEnabled) void speak(answer);
 
@@ -904,6 +958,7 @@ function App() {
       ]);
     } finally {
       setBusy(false);
+      setWebSearchMode(false);
     }
   };
 
@@ -1402,6 +1457,26 @@ function App() {
                 <div className="bubble">
                   <span>{message.role === 'user' ? 'YOU' : 'JARVIS'}</span>
                   {message.content && <div className="message-content">{renderRichMessage(message.content)}</div>}
+                  {message.webSearchUsed && (
+                    <div className="web-search-status">
+                      <Globe size={13} />
+                      <strong>LIVE WEB SEARCH</strong>
+                      <span>{message.sources?.length ? `· ${message.sources.length} sources` : '· no citations returned'}</span>
+                    </div>
+                  )}
+                  {message.sources?.length ? (
+                    <div className="web-search-sources" aria-label="Web sources">
+                      <div className="web-search-sources-title">SOURCES</div>
+                      {message.sources.map(source => (
+                        <a key={source.url} href={source.url} target="_blank" rel="noopener noreferrer">
+                          <span>{source.title}</span>
+                          <small>{sourceHostname(source.url)} ↗</small>
+                        </a>
+                      ))}
+                    </div>
+                  ) : message.webSearchUsed ? (
+                    <div className="web-search-no-sources">Live search ran, but no clickable source links were returned.</div>
+                  ) : null}
                   {message.image?.data && message.image?.mimeType && (
                     <div className="chat-generated-image">
                       <img src={`data:${message.image.mimeType};base64,${message.image.data}`} alt="JARVIS generated result" />
@@ -1421,6 +1496,15 @@ function App() {
           </div>
 
           <div className="chat-tools" aria-label="JARVIS chat actions">
+            <button
+              className={`web-search-toggle ${webSearchMode ? 'active' : ''}`}
+              onClick={() => setWebSearchMode(current => !current)}
+              disabled={busy}
+              aria-pressed={webSearchMode}
+              title="Use live web search for the next message"
+            >
+              <Globe size={13} /> {webSearchMode ? 'Web Search ON' : 'Web Search'}
+            </button>
             {[
               ['Create image', 'Create an image of a cute storybook animal in a magical forest.'],
               ['Children Factory', 'Open children factory'],
@@ -1440,7 +1524,7 @@ function App() {
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') void sendMessage(); }}
-              placeholder={listening ? 'Listening… speak now' : 'Speak or type to JARVIS…'}
+              placeholder={webSearchMode ? 'Ask JARVIS to search the web…' : listening ? 'Listening… speak now' : 'Speak or type to JARVIS…'}
               aria-label="Message JARVIS"
             />
             <button className="send" onClick={() => void sendMessage()} disabled={busy || !input.trim()} aria-label="Send message">
