@@ -294,6 +294,13 @@ test('Children Factory cannot publish when rendered and verified hashes do not m
   assert.equal(canPublishChildrenFactoryMission(mission), false);
 });
 
+test('Children Factory cannot publish a technically verified video in the wrong aspect ratio', () => {
+  const mission = verifiedChildrenFactoryMission('approved');
+  mission.metadata.verifiedVideo.width = 1280;
+  mission.metadata.verifiedVideo.height = 720;
+  assert.equal(canPublishChildrenFactoryMission(mission), false);
+});
+
 test('Children Factory can publish only after technical video verification and approval', () => {
   assert.equal(canPublishChildrenFactoryMission(verifiedChildrenFactoryMission('approved')), true);
 });
