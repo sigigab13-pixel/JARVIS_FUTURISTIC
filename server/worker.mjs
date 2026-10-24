@@ -130,6 +130,105 @@ async function runFfmpeg(args) {
   });
 }
 
+async function runFfprobe(file) {
+  return new Promise((resolve, reject) => {
+    const child = spawn('ffprobe', [
+      '-v', 'error',
+      '-show_entries', 'format=format_name,duration:stream=codec_type,codec_name,width,height,pix_fmt',
+      '-of', 'json',
+      file,
+    ], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    const timeout = setTimeout(() => {
+      child.kill('SIGKILL');
+      reject(Object.assign(new Error('ffprobe timed out while inspecting the rendered video.'), { code: 'VIDEO_PROBE_TIMEOUT' }));
+    }, 15000);
+    child.stdout.on('data', chunk => {
+      stdout += chunk.toString();
+      if (stdout.length > 256 * 1024) child.kill('SIGKILL');
+    });
+    child.stderr.on('data', chunk => { stderr = (stderr + chunk.toString()).slice(-2000); });
+    child.on('error', error => {
+      clearTimeout(timeout);
+      reject(Object.assign(error, { code: error.code || 'FFPROBE_UNAVAILABLE' }));
+    });
+    child.on('close', code => {
+      clearTimeout(timeout);
+      if (code !== 0) {
+        reject(Object.assign(new Error('ffprobe exited with code ' + code + ': ' + stderr.slice(-1200)), { code: 'VIDEO_PROBE_FAILED' }));
+        return;
+      }
+      try {
+        resolve(JSON.parse(stdout));
+      } catch {
+        reject(Object.assign(new Error('ffprobe returned invalid JSON for the rendered video.'), { code: 'VIDEO_PROBE_INVALID' }));
+      }
+    });
+  });
+}
+
+export function evaluateRenderedVideoProbe({ probe, expectedWidth, expectedHeight } = {}) {
+  const findings = [];
+  const streams = Array.isArray(probe?.streams) ? probe.streams : [];
+  const videos = streams.filter(stream => stream?.codec_type === 'video');
+  const formatNames = String(probe?.format?.format_name || '').toLowerCase().split(',');
+  const video = videos[0] || {};
+  const width = Number(video.width);
+  const height = Number(video.height);
+  const durationSeconds = Number(probe?.format?.duration);
+
+  if (!formatNames.includes('mp4') && !formatNames.includes('mov')) {
+    findings.push({ code: 'VIDEO_FORMAT_INVALID', message: 'The rendered asset is not a recognized MP4/MOV container.' });
+  }
+  if (videos.length !== 1) {
+    findings.push({ code: 'VIDEO_STREAM_COUNT_INVALID', message: 'The rendered asset must contain exactly one video stream.' });
+  }
+  if (video.codec_name !== 'h264') {
+    findings.push({ code: 'VIDEO_CODEC_INVALID', message: 'The rendered asset must use the expected H.264 video codec.' });
+  }
+  if (video.pix_fmt !== 'yuv420p') {
+    findings.push({ code: 'VIDEO_PIXEL_FORMAT_INVALID', message: 'The rendered asset must use the compatible yuv420p pixel format.' });
+  }
+  if (!Number.isInteger(width) || !Number.isInteger(height)
+    || width !== Number(expectedWidth) || height !== Number(expectedHeight)) {
+    findings.push({ code: 'VIDEO_DIMENSIONS_INVALID', message: 'The rendered asset dimensions do not match the requested aspect-ratio preset.' });
+  }
+  if (!Number.isFinite(durationSeconds) || durationSeconds < 1 || durationSeconds > 3600) {
+    findings.push({ code: 'VIDEO_DURATION_INVALID', message: 'The rendered asset duration must be between 1 second and 60 minutes.' });
+  }
+
+  return {
+    ready: findings.length === 0,
+    findings,
+    metadata: {
+      format: formatNames.includes('mp4') ? 'mp4' : formatNames.includes('mov') ? 'mov' : null,
+      videoCodec: String(video.codec_name || ''),
+      pixelFormat: String(video.pix_fmt || ''),
+      width: Number.isFinite(width) ? width : null,
+      height: Number.isFinite(height) ? height : null,
+      durationSeconds: Number.isFinite(durationSeconds) ? Number(durationSeconds.toFixed(3)) : null,
+    },
+  };
+}
+
+export function isVerifiedChildrenFactoryVideo({
+  contentType,
+  actualSha256,
+  expectedSha256,
+  probe,
+  expectedWidth,
+  expectedHeight,
+} = {}) {
+  const actual = String(actualSha256 || '').toLowerCase();
+  const expected = String(expectedSha256 || '').toLowerCase();
+  return String(contentType || '').toLowerCase().startsWith('video/mp4')
+    && /^[a-f0-9]{64}$/.test(actual)
+    && /^[a-f0-9]{64}$/.test(expected)
+    && actual === expected
+    && evaluateRenderedVideoProbe({ probe, expectedWidth, expectedHeight }).ready;
+}
+
 export function isVerifiedChildrenFactoryImage({ contentType, actualSha256, expectedSha256 }) {
   const actual = String(actualSha256 || '').toLowerCase();
   const expected = String(expectedSha256 || '').toLowerCase();
@@ -404,7 +503,20 @@ async function executeVideoPipeline(job) {
     for (const file of inputs) args.push('-loop', '1', '-i', file);
     args.push('-filter_complex', filters.join(';'), '-map', '[v]', '-t', String(Math.max(4, inputs.length * 4)), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-y', output);
     await runFfmpeg(args);
+    const probe = await runFfprobe(output);
+    const probeCheck = evaluateRenderedVideoProbe({
+      probe,
+      expectedWidth: geometry.width,
+      expectedHeight: geometry.height,
+    });
+    if (!probeCheck.ready) {
+      throw Object.assign(
+        new Error('The rendered video failed technical verification: ' + probeCheck.findings.map(item => item.code).join(', ')),
+        { code: 'VIDEO_RENDER_VERIFICATION_FAILED', findings: probeCheck.findings },
+      );
+    }
     const video = await fs.readFile(output);
+    if (!video.length) throw Object.assign(new Error('FFmpeg produced an empty video file.'), { code: 'VIDEO_RENDER_EMPTY' });
     const sha256 = crypto.createHash('sha256').update(video).digest('hex');
     const mediaKey = createMediaKey({ userId, kind: 'video-render', extension: 'mp4', id: sha256 });
     const stored = await putMedia({
@@ -414,7 +526,52 @@ async function executeVideoPipeline(job) {
       metadata: { user_id: userId, source: 'video_pipeline', sha256, project_id: payload.project_id || '' },
       upsert: true,
     });
-    const result = { rendered: true, media: stored, mediaKey, sha256, durationSeconds: Math.max(4, inputs.length * 4), format: geometry.label, width: geometry.width, height: geometry.height, sourceImageCount: inputs.length, missionId: String(payload.mission_id || '') || null };
+    const storedVideo = await getMedia({ key: mediaKey });
+    const storedSha256 = crypto.createHash('sha256').update(storedVideo.body).digest('hex');
+    if (!isVerifiedChildrenFactoryVideo({
+      contentType: storedVideo.contentType,
+      actualSha256: storedSha256,
+      expectedSha256: sha256,
+      probe,
+      expectedWidth: geometry.width,
+      expectedHeight: geometry.height,
+    })) {
+      throw Object.assign(new Error('The stored video failed content-type, SHA-256 read-back, or technical metadata verification.'), { code: 'VIDEO_STORAGE_VERIFICATION_FAILED' });
+    }
+    const verifiedMetadata = {
+      verified: true,
+      verificationMethod: 'ffprobe+storage-readback',
+      mediaKey,
+      sha256: storedSha256,
+      durationSeconds: probeCheck.metadata.durationSeconds,
+      format: geometry.label,
+      width: probeCheck.metadata.width,
+      height: probeCheck.metadata.height,
+      videoCodec: probeCheck.metadata.videoCodec,
+      pixelFormat: probeCheck.metadata.pixelFormat,
+      verifiedAt: new Date().toISOString(),
+    };
+    const result = {
+      rendered: true,
+      media: stored,
+      mediaKey,
+      sha256: storedSha256,
+      durationSeconds: verifiedMetadata.durationSeconds,
+      format: geometry.label,
+      width: geometry.width,
+      height: geometry.height,
+      sourceImageCount: inputs.length,
+      missionId: String(payload.mission_id || '') || null,
+      verification: {
+        verified: true,
+        method: verifiedMetadata.verificationMethod,
+        videoCodec: verifiedMetadata.videoCodec,
+        pixelFormat: verifiedMetadata.pixelFormat,
+        durationSeconds: verifiedMetadata.durationSeconds,
+        width: verifiedMetadata.width,
+        height: verifiedMetadata.height,
+      },
+    };
     if (payload.mission_id) {
       const mission = await getMissionForUser(userId, String(payload.mission_id));
       if (!mission) throw new Error('Video render mission was not found for this JARVIS user.');
@@ -425,18 +582,14 @@ async function executeVideoPipeline(job) {
           sha256,
           durationSeconds: result.durationSeconds,
           format: result.format,
+          width: result.width,
+          height: result.height,
           sourceImageCount: result.sourceImageCount,
           jobId: String(job?.id || ''),
           renderedAt: new Date().toISOString(),
+          verificationMethod: 'ffprobe+storage-readback',
         },
-        verifiedVideo: {
-          mediaKey,
-          sha256,
-          verifiedAt: new Date().toISOString(),
-          format: result.format,
-          width: result.width,
-          height: result.height,
-        },
+        verifiedVideo: verifiedMetadata,
         pipeline: updateChildrenFactoryPipeline(mission.metadata?.pipeline, {
           render: 'completed',
           verified_video: 'completed',
