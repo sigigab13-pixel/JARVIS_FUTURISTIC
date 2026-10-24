@@ -6,6 +6,7 @@ The policy gate is a conservative preflight layer for Children Factory and uploa
 
 - Screens the story, title, topic, description, and character text for a limited list of child-safety, dangerous-challenge, graphic-content, privacy, known-character/brand, and fake-engagement signals.
 - Compares a proposed title/story with up to 50 recent stored Children Factory projects and blocks exact-title or likely textual near-duplicates.
+- Inspects the rendered MP4 with FFprobe and requires the expected container, one H.264 video stream, the yuv420p pixel format, the selected dimensions, and a sane duration. It then reads the stored video back and confirms its SHA-256 matches the render before marking it verified.
 - Blocks a Children Factory draft when the automated screen finds a blocking issue or needs review, before the scene images are generated.
 - Requires explicit audience and altered/synthetic-content disclosure choices at upload time.
 - Forces Children Factory videos to upload as private first; the owner must inspect the processed upload in YouTube Studio before manually making it public.
@@ -15,7 +16,7 @@ The policy gate is a conservative preflight layer for Children Factory and uploa
 
 ## Important limits
 
-This is a risk-reduction control, not a guarantee, legal opinion, or YouTube certification. Text patterns cannot inspect every frame, detect every copyright-protected work, determine fair use, decide whether a video is sufficiently original, identify every policy violation, or predict YouTube's enforcement and monetization decisions. The checks can also produce false positives and miss risks.
+This is a risk-reduction control, not a guarantee, legal opinion, or YouTube certification. Text patterns and FFprobe metadata cannot inspect the meaning of every frame, assess the safety or quality of the visuals/audio, detect every copyright-protected work, determine fair use, decide whether a video is sufficiently original, identify every policy violation, or predict YouTube's enforcement and monetization decisions. FFprobe and SHA-256 only validate technical structure and stored-byte integrity; they do not certify content compliance. The checks can also produce false positives and miss risks.
 
 Before publishing, a human must watch the complete rendered video and verify rights for every asset and track. Keep license/permission records. Use original stories and visuals, make each episode substantively different, avoid deceptive titles/thumbnails/tags or engagement schemes, protect children's privacy, and stop when uncertain. Never tick a review box unless it is true. For serious doubts, keep the video private and review it in YouTube Studio.
 
