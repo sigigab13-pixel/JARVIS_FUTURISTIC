@@ -1,6 +1,6 @@
 # JARVIS Futuristic
 
-> An independent AI platform being built by Saviour, with GPT-5.6 Luna as the AI development partner.
+> An independent AI platform stewarded by **Nexora**, with **Mythos** as the AI development partner.
 
 JARVIS is being built as a broader AI operating platform — not just a chatbot and not just a content generator. The long-term goal is to bring conversation, memory, business management, specialized offices, missions, automation, image generation, video production, voice, publishing, research, and reliability systems into one product.
 
@@ -20,6 +20,7 @@ JARVIS is being built as a broader AI operating platform — not just a chatbot 
 - 💼 Business management and Brand Kit
 - 🔎 Web intelligence and research
 - 🛡️ Security, permissions, health checks, recovery, and observability
+- 🤝 Planned AI Intervention & Alliance: diagnose and help repair other AIs, then cooperate through verified, permissioned contracts
 - 🎨 User customization and branding
 - 📣 Future publishing and analytics integrations
 - ☁️ Multi-cloud architecture for scalable production
@@ -270,6 +271,10 @@ Never commit:
 
 The public repository should contain source code and documentation, not private credentials.
 
+## 🗂️ Project portfolio and integration roadmap
+
+The [JARVIS Decision Log & Recovered Backlog](docs/JARVIS_DECISION_LOG_AND_RECOVERED_BACKLOG.md) preserves prior decisions, safety laws, historical incidents, and recovered feature requests. The unified [Project Portfolio & Integration Queue](docs/PROJECT_PORTFOLIO_AND_INTEGRATION_QUEUE.md) records unfinished JARVIS capabilities and the boundaries for related workstreams including Optimus Prime (a separate harmless simulation project), SENTINEL, Vantora, Nexora, the Nexora hospitality scenario, Maverick Legion creative work, and Children Factory / Kobi Episode 1. Roadmap entries are not claims of completed functionality.
+
 ## 📖 Build in public
 
 This project is being built publicly so people can follow the real journey.
@@ -312,10 +317,10 @@ These are roadmap items, not claims that the features are already production-com
 
 See the active queues: [#17 Future-Ready Cryptography](https://github.com/sigigab13-pixel/JARVIS_FUTURISTIC/issues/17) and [#18 Simple Custom Domain + Search Discovery](https://github.com/sigigab13-pixel/JARVIS_FUTURISTIC/issues/18).
 
-## 👤 Creator
+## 🏢 Company
 
-**Saviour** — Creator and developer of JARVIS.
+**Nexora** — company building and stewarding JARVIS Futuristic.
 
-**GPT-5.6 Luna** — AI development partner helping build, debug, document, and evolve the platform.
+**Mythos** — AI development partner supporting planning, implementation, debugging, and verification.
 
 > **JARVIS Futuristic is being built in public — one verified capability at a time.**
