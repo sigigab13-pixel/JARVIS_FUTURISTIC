@@ -285,7 +285,8 @@ export async function executeChildrenFactoryScene(job) {
     'Color: ' + String(character.color || 'colorful'),
     'Clothes: ' + String(character.clothes || 'simple child-friendly clothes'),
     'Description: ' + String(character.description || ''),
-    'Style: warm, colorful, friendly, simple storybook art.',
+    'Style: warm, colorful, friendly, original storybook art.',
+    'Use an original character and design; do not imitate or include branded/copyrighted characters, logos, signature costume designs, celebrities, or a named artist style.',
     'No text, no watermark.',
     'Scene ' + String(scene) + ' of ' + String(totalScenes) + ' should depict a different moment from this story: ' + story.slice(0, 1800),
   ].join(' ');
