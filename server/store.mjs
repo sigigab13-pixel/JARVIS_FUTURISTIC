@@ -222,9 +222,9 @@ export async function getConversationMessages(userId, limit = 50) {
     }));
   }
   const rows = await request(
-    `conversation_messages?select=role,content,created_at&conversation_id=eq.${encodeURIComponent(conversation.id)}&order=created_at.asc&limit=${safeLimit}`
+    `conversation_messages?select=role,content,created_at&conversation_id=eq.${encodeURIComponent(conversation.id)}&order=created_at.desc&limit=${safeLimit}`
   );
-  return (rows || []).map(m => ({ role: m.role, content: m.content }));
+  return (rows || []).reverse().map(m => ({ role: m.role, content: m.content }));
 }
 
 
