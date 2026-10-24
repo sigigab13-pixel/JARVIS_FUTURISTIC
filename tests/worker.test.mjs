@@ -143,7 +143,11 @@ test('Children Factory scene worker rejects foreign project mission identities',
     error => /mission was not found or does not belong to this video project/i.test(error?.message || '')
   );
 });
-import { buildChildrenFactoryPipeline, canPublishChildrenFactoryMission } from '../server/server.mjs';
+import {
+  buildChildrenFactoryPipeline,
+  canPublishChildrenFactoryMission,
+  canRequestChildrenFactoryApproval,
+} from '../server/server.mjs';
 
 test('worker creates unique stable ids', () => {
   const a = createWorkerId();
@@ -275,4 +279,42 @@ test('Children Factory can publish only after verified video and approval', () =
     },
   };
   assert.equal(canPublishChildrenFactoryMission(mission), true);
+});
+
+test('Children Factory approval request requires both completed verification and a media key', () => {
+  const base = {
+    metadata: {
+      factory: 'children-v1',
+      pipeline: { verified_video: 'blocked' },
+      verifiedVideo: null,
+    },
+  };
+
+  assert.equal(canRequestChildrenFactoryApproval(base), false);
+  assert.equal(canRequestChildrenFactoryApproval({
+    ...base,
+    metadata: {
+      ...base.metadata,
+      verifiedVideo: { mediaKey: 'jarvis/user/video.mp4' },
+    },
+  }), false, 'a media key alone must not substitute for completed verification');
+  assert.equal(canRequestChildrenFactoryApproval({
+    ...base,
+    metadata: {
+      ...base.metadata,
+      pipeline: { verified_video: 'completed' },
+    },
+  }), false, 'completed stage alone must not substitute for a stored verified video');
+  assert.equal(canRequestChildrenFactoryApproval({
+    ...base,
+    metadata: {
+      ...base.metadata,
+      pipeline: { verified_video: 'completed' },
+      verifiedVideo: { mediaKey: 'jarvis/user/video.mp4' },
+    },
+  }), true);
+});
+
+test('non-Children Factory missions keep their existing approval-request behavior', () => {
+  assert.equal(canRequestChildrenFactoryApproval({ metadata: { factory: 'other' } }), true);
 });

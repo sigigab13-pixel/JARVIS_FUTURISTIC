@@ -196,6 +196,12 @@ export function canPublishChildrenFactoryMission(mission) {
       && Boolean(mission?.metadata?.verifiedVideo?.mediaKey));
 }
 
+export function canRequestChildrenFactoryApproval(mission) {
+  return mission?.metadata?.factory !== 'children-v1'
+    || (mission?.metadata?.pipeline?.verified_video === 'completed'
+      && Boolean(mission?.metadata?.verifiedVideo?.mediaKey));
+}
+
 export function buildChildrenFactoryPipeline({
   sceneAssetsStatus = 'completed',
   renderQueued = false,
@@ -665,7 +671,7 @@ export async function handleApi(req, res, pathname, url) {
     }
 
     if (action === 'request-approval') {
-      if (current.metadata?.factory === 'children-v1' && current.metadata?.pipeline?.verified_video !== 'completed' && !current.metadata?.verifiedVideo?.mediaKey) {
+      if (!canRequestChildrenFactoryApproval(current)) {
         return json(res, 409, { error: 'Children Factory approval requires a verified video render first.', code: 'CHILDREN_FACTORY_VERIFIED_VIDEO_REQUIRED', mission: current });
       }
       const next = transitionMission(current, 'waiting_approval');
