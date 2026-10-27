@@ -8,6 +8,7 @@ The policy gate is a conservative preflight layer for Children Factory and uploa
 - Compares a proposed title/story with up to 50 recent stored Children Factory projects and blocks exact-title or likely textual near-duplicates.
 - Inspects the rendered MP4 with FFprobe and requires the expected container, one H.264 video stream, the yuv420p pixel format, the selected dimensions, and a sane duration. It then reads the stored video back and confirms its SHA-256 matches the render before marking it verified.
 - Recomputes SHA-256 from the stored MP4 again immediately before YouTube upload and rejects the upload if the actual bytes, storage key, rendered-video record, and verified-video record do not all match.
+- Records a durable upload-attempt state before sending video bytes. A repeated request is blocked while an attempt is in progress, after an uncertain outcome, or after a completed attempt, reducing accidental duplicate uploads. Uncertain attempts must be reconciled against YouTube Studio before a retry.
 - Blocks a Children Factory draft when the automated screen finds a blocking issue or needs review, before the scene images are generated.
 - Requires explicit audience and altered/synthetic-content disclosure choices at upload time.
 - Forces Children Factory videos to upload as private first; the owner must inspect the processed upload in YouTube Studio before manually making it public.
