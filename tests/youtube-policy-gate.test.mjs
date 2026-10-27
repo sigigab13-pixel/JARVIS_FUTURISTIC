@@ -145,6 +145,27 @@ test('incomplete human rights and originality review blocks upload', () => {
   assert.equal(result.missingAttestations.length, 8);
 });
 
+test('visual and audio review attestations are independently mandatory', () => {
+  for (const key of ['visualsReviewed', 'audioReviewed']) {
+    const incompleteReview = { ...policyReview, [key]: false };
+    const result = evaluateYouTubePublishGate({
+      title: 'Milo and the Little Garden',
+      description: 'An original story about sharing and patience.',
+      isChildrenFactory: true,
+      story: safeStory,
+      topic: 'friendship and gardening',
+      character,
+      age: 5,
+      madeForKids: true,
+      containsSyntheticMedia: false,
+      policyReview: incompleteReview,
+    });
+
+    assert.equal(result.ready, false, `upload must be blocked when ${key} is missing`);
+    assert.ok(result.missingAttestations.some(item => item.key === key));
+  }
+});
+
 test('deceptive engagement wording in metadata blocks upload', () => {
   const result = evaluateYouTubePublishGate({
     title: 'Buy views and subscribers now',
