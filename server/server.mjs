@@ -61,6 +61,7 @@ import { preflightMission, getMissionAdapters } from './mission-executor.mjs';
 import { generateHuggingFaceImage, HF_IMAGE_MODELS, HF_IMAGE_EDIT_MODELS, HF_IMAGE_PROVIDERS } from './image-generator.mjs';
 import { getYouTubeAccessToken, getYouTubeAnalytics, getYouTubeChannel, uploadYouTubeVideo } from './youtube.mjs';
 import { evaluateChildrenFactoryPreflight, evaluateContentOriginality, evaluateYouTubePublishGate } from './youtube-policy-gate.mjs';
+import { getYouTubeUploadAttemptBlockReason } from './youtube-upload-attempt.mjs';
 import { getRepairOfficeDiagnostics, getRepairOfficePolicy } from './repair-office.mjs';
 import { generateIntelligentResponse, getOpenAIModels } from './intelligence-core.mjs';
 import { formatDecisionMemory, parseExplicitDecision } from './decision-memory.mjs';
@@ -1927,6 +1928,10 @@ export async function handleApi(req, res, pathname, url) {
     if (isChildrenFactory && !canPublishChildrenFactoryMission(mission)) {
       return json(res, 409, { error: 'Children Factory publishing requires a completed, verified video render and approval.', code: 'CHILDREN_FACTORY_PIPELINE_INCOMPLETE', mission });
     }
+    const previousUploadAttempt = getYouTubeUploadAttemptBlockReason(mission);
+    if (previousUploadAttempt) {
+      return json(res, 409, { error: previousUploadAttempt.message, code: previousUploadAttempt.code, mission });
+    }
     if (mission.metadata?.youtube?.videoId) {
       return json(res, 409, { error: 'This mission has already been published to YouTube.', code: 'YOUTUBE_ALREADY_PUBLISHED', mission });
     }
@@ -1960,6 +1965,25 @@ export async function handleApi(req, res, pathname, url) {
       if (token.refreshed) {
         await saveYouTubeConnection(jarvisUser.id, { ...connection, accessToken: token.accessToken, expiresAt: token.expiresAt });
       }
+      const uploadAttemptId = crypto.randomUUID();
+      const uploadAttemptStartedAt = new Date().toISOString();
+      const attemptMission = {
+        ...mission,
+        metadata: {
+          ...(mission.metadata || {}),
+          youtubeUploadAttempt: {
+            id: uploadAttemptId,
+            status: 'in_progress',
+            mediaKey,
+            startedAt: uploadAttemptStartedAt,
+          },
+        },
+      };
+      await updateMissionForUser(jarvisUser.id, mission.id, attemptMission, {
+        eventType: 'mission.youtube_upload_started',
+        message: 'YouTube upload attempt recorded before sending video bytes.',
+        metadata: { attemptId: uploadAttemptId, mediaKey, startedAt: uploadAttemptStartedAt },
+      });
       const video = await uploadYouTubeVideo(token.accessToken, {
         videoBuffer: media.body,
         contentType: media.contentType,
@@ -1991,7 +2015,17 @@ export async function handleApi(req, res, pathname, url) {
       try {
         const completed = transitionMission(mission, 'succeeded');
         completed.lastEvidence = evidence;
-        completed.metadata = { ...(mission.metadata || {}), youtube: evidence };
+        completed.metadata = {
+          ...(mission.metadata || {}),
+          youtube: evidence,
+          youtubeUploadAttempt: {
+            id: uploadAttemptId,
+            status: 'completed',
+            mediaKey,
+            videoId,
+            completedAt: evidence.publishedAt,
+          },
+        };
         await updateMissionForUser(jarvisUser.id, mission.id, completed, {
           eventType: 'mission.published',
           message: 'YouTube confirmed the upload and the mission was completed with verified evidence.',
@@ -2011,6 +2045,30 @@ export async function handleApi(req, res, pathname, url) {
       }, { 'Set-Cookie': jarvisCookie(jarvisUser.id) });
     } catch (error) {
       console.error('YouTube publish error:', error);
+      try {
+        const latestMission = await getMissionForUser(jarvisUser.id, missionId);
+        const attempt = latestMission?.metadata?.youtubeUploadAttempt;
+        if (latestMission && attempt?.id === uploadAttemptId && attempt.status === 'in_progress') {
+          await updateMissionForUser(jarvisUser.id, missionId, {
+            ...latestMission,
+            metadata: {
+              ...(latestMission.metadata || {}),
+              youtubeUploadAttempt: {
+                ...attempt,
+                status: 'uncertain',
+                failedAt: new Date().toISOString(),
+                error: error instanceof Error ? error.message.slice(0, 500) : 'Unknown upload error',
+              },
+            },
+          }, {
+            eventType: 'mission.youtube_upload_uncertain',
+            message: 'The upload request failed or its outcome could not be confirmed. Automatic retry is blocked pending reconciliation.',
+            metadata: { attemptId: attempt.id, mediaKey },
+          });
+        }
+      } catch (attemptPersistenceError) {
+        console.error('Could not persist uncertain YouTube upload state:', attemptPersistenceError);
+      }
       return json(res, Number(error?.statusCode) || 502, {
         published: false,
         provider: 'youtube',
