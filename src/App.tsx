@@ -200,6 +200,8 @@ function App() {
   const [youtubePolicyReview, setYoutubePolicyReview] = useState({
     rightsConfirmed: false,
     originalityConfirmed: false,
+    visualsReviewed: false,
+    audioReviewed: false,
     safetyReviewed: false,
     metadataReviewed: false,
     audienceReviewed: false,
@@ -1905,6 +1907,8 @@ function App() {
                 <b>YouTube policy review — every confirmation is required</b>
                 <label><input type="checkbox" checked={youtubePolicyReview.rightsConfirmed} onChange={e=>setYoutubePolicyReview((current:any)=>({...current,rightsConfirmed:e.target.checked}))} /> I own or have permission to use all visuals, voices, music, sounds, fonts, and third-party elements.</label>
                 <label><input type="checkbox" checked={youtubePolicyReview.originalityConfirmed} onChange={e=>setYoutubePolicyReview((current:any)=>({...current,originalityConfirmed:e.target.checked}))} /> This video adds original value; it is not a copied, minimally changed, or near-duplicate mass-produced upload.</label>
+                <label><input type="checkbox" checked={youtubePolicyReview.visualsReviewed} onChange={e=>setYoutubePolicyReview((current:any)=>({...current,visualsReviewed:e.target.checked}))} /> I inspected every rendered scene for unsafe, age-inappropriate, misleading, or unexpected visual content.</label>
+                <label><input type="checkbox" checked={youtubePolicyReview.audioReviewed} onChange={e=>setYoutubePolicyReview((current:any)=>({...current,audioReviewed:e.target.checked}))} /> I listened to the full audio for unsafe language, unexpected sounds, music/voice problems, and audio-rights concerns.</label>
                 <label><input type="checkbox" checked={youtubePolicyReview.safetyReviewed} onChange={e=>setYoutubePolicyReview((current:any)=>({...current,safetyReviewed:e.target.checked}))} /> I watched the complete video and checked child safety, dangerous or harmful material, privacy, and age suitability.</label>
                 <label><input type="checkbox" checked={youtubePolicyReview.metadataReviewed} onChange={e=>setYoutubePolicyReview((current:any)=>({...current,metadataReviewed:e.target.checked}))} /> The title, description, and tags are accurate and relevant, with no misleading claims or artificial engagement scheme.</label>
                 <label><input type="checkbox" checked={youtubePolicyReview.audienceReviewed} onChange={e=>setYoutubePolicyReview((current:any)=>({...current,audienceReviewed:e.target.checked}))} /> I checked that the audience setting matches the intended viewers. Children Factory videos must be Made for Kids.</label>
