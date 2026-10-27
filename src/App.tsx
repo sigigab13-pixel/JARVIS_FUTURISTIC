@@ -232,6 +232,8 @@ function App() {
     setYoutubePolicyReview({
       rightsConfirmed: false,
       originalityConfirmed: false,
+      visualsReviewed: false,
+      audioReviewed: false,
       safetyReviewed: false,
       metadataReviewed: false,
       audienceReviewed: false,
@@ -494,6 +496,8 @@ function App() {
     setYoutubePolicyReview({
       rightsConfirmed: false,
       originalityConfirmed: false,
+      visualsReviewed: false,
+      audioReviewed: false,
       safetyReviewed: false,
       metadataReviewed: false,
       audienceReviewed: false,
