@@ -41,6 +41,7 @@ import {
   getMissionForUser,
   listMissionsForUser,
   updateMissionForUser,
+  claimYouTubeUploadAttemptForUser,
   recordMissionEventForUser,
   getMissionEventsForUser,
   queueMissionStepForUser,
@@ -1968,23 +1969,25 @@ export async function handleApi(req, res, pathname, url) {
       }
       uploadAttemptId = crypto.randomUUID();
       const uploadAttemptStartedAt = new Date().toISOString();
-      const attemptMission = {
-        ...mission,
-        metadata: {
-          ...(mission.metadata || {}),
-          youtubeUploadAttempt: {
-            id: uploadAttemptId,
-            status: 'in_progress',
-            mediaKey,
-            startedAt: uploadAttemptStartedAt,
-          },
-        },
+      const uploadAttempt = {
+        id: uploadAttemptId,
+        status: 'in_progress',
+        mediaKey,
+        startedAt: uploadAttemptStartedAt,
       };
-      await updateMissionForUser(jarvisUser.id, mission.id, attemptMission, {
-        eventType: 'mission.youtube_upload_started',
-        message: 'YouTube upload attempt recorded before sending video bytes.',
-        metadata: { attemptId: uploadAttemptId, mediaKey, startedAt: uploadAttemptStartedAt },
-      });
+      const claimed = await claimYouTubeUploadAttemptForUser(
+        jarvisUser.id,
+        mission.id,
+        uploadAttempt,
+      );
+      if (!claimed) {
+        return json(res, 409, {
+          published: false,
+          provider: 'youtube',
+          error: 'Another request already claimed this mission for upload, or the mission was already uploaded. Reconcile its saved attempt before retrying.',
+          code: 'YOUTUBE_UPLOAD_CLAIM_LOST',
+        });
+      }
       const video = await uploadYouTubeVideo(token.accessToken, {
         videoBuffer: media.body,
         contentType: media.contentType,
