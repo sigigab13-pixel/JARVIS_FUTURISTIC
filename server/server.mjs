@@ -1941,6 +1941,7 @@ export async function handleApi(req, res, pathname, url) {
     const connection = await getYouTubeConnection(jarvisUser.id);
     if (!connection) return json(res, 409, { error: 'Connect YouTube before publishing.', code: 'YOUTUBE_NOT_CONNECTED' });
 
+    let uploadAttemptId = null;
     try {
       const media = await getMedia({ key: mediaKey });
       if (!String(media.contentType).startsWith('video/')) {
@@ -1965,7 +1966,7 @@ export async function handleApi(req, res, pathname, url) {
       if (token.refreshed) {
         await saveYouTubeConnection(jarvisUser.id, { ...connection, accessToken: token.accessToken, expiresAt: token.expiresAt });
       }
-      const uploadAttemptId = crypto.randomUUID();
+      uploadAttemptId = crypto.randomUUID();
       const uploadAttemptStartedAt = new Date().toISOString();
       const attemptMission = {
         ...mission,
