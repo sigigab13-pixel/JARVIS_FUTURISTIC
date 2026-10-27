@@ -1004,6 +1004,52 @@ export async function listMissionsForUser(userId, limit = 20) {
   return (rows || []).map(missionStateFromRow).filter(Boolean);
 }
 
+export async function claimYouTubeUploadAttemptForUser(userId, missionId, attempt) {
+  if (!validUuid(userId) || !validUuid(missionId)) throw new Error('Invalid mission identity.');
+  if (!attempt || typeof attempt !== 'object' || attempt.status !== 'in_progress' || !attempt.id) {
+    throw new Error('A valid in-progress YouTube upload attempt is required.');
+  }
+
+  let claimed = false;
+  if (!configured) {
+    // This fallback is suitable only for local, single-process development.
+    // Cross-instance production claims are performed by the Supabase RPC below.
+    const existing = await getMissionForUser(userId, missionId);
+    if (!existing
+      || existing.metadata?.youtubeUploadAttempt
+      || existing.metadata?.youtube?.videoId) return false;
+    const next = {
+      ...existing,
+      metadata: { ...(existing.metadata || {}), youtubeUploadAttempt: attempt },
+      updatedAt: new Date().toISOString(),
+    };
+    memory.missions.set(userId + ':' + missionId, next);
+    claimed = true;
+  } else {
+    claimed = await request('rpc/jarvis_claim_youtube_upload_attempt', {
+      method: 'POST',
+      body: JSON.stringify({
+        p_user_id: userId,
+        p_mission_id: missionId,
+        p_attempt: attempt,
+      }),
+    }) === true;
+  }
+
+  if (!claimed) return false;
+  try {
+    await recordMissionEventForUser(userId, missionId, {
+      eventType: 'mission.youtube_upload_started',
+      message: 'YouTube upload attempt atomically claimed before sending video bytes.',
+      metadata: { attemptId: attempt.id, mediaKey: attempt.mediaKey, startedAt: attempt.startedAt },
+    });
+  } catch (error) {
+    // The atomic claim is authoritative; an event-log failure must not erase it.
+    console.error('Could not record YouTube upload claim event:', error);
+  }
+  return true;
+}
+
 export async function updateMissionForUser(userId, missionId, state, event = {}) {
   if (!validUuid(userId) || !validUuid(missionId)) throw new Error('Invalid mission identity.');
   const existing = await getMissionForUser(userId, missionId);
