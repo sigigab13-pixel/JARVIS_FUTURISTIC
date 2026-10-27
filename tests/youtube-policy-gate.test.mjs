@@ -84,21 +84,23 @@ test('Children Factory publishing requires all review attestations and explicit 
   assert.deepEqual(result.missingAttestations, []);
 });
 
-test('Children Factory upload cannot go directly public before Studio review', () => {
-  const result = evaluateYouTubePublishGate({
-    title: 'Milo and the Little Garden',
-    isChildrenFactory: true,
-    story: safeStory,
-    topic: 'friendship and gardening',
-    character,
-    age: 5,
-    madeForKids: true,
-    containsSyntheticMedia: false,
-    privacyStatus: 'public',
-    policyReview,
-  });
-  assert.equal(result.ready, false);
-  assert.ok(result.blockingFindings.some(item => item.code === 'CHILDREN_FACTORY_PRIVATE_FIRST_REQUIRED'));
+test('Children Factory upload rejects both public and unlisted privacy before Studio review', () => {
+  for (const privacyStatus of ['public', 'unlisted']) {
+    const result = evaluateYouTubePublishGate({
+      title: 'Milo and the Little Garden',
+      isChildrenFactory: true,
+      story: safeStory,
+      topic: 'friendship and gardening',
+      character,
+      age: 5,
+      madeForKids: true,
+      containsSyntheticMedia: false,
+      privacyStatus,
+      policyReview,
+    });
+    assert.equal(result.ready, false, `Expected ${privacyStatus} to be blocked`);
+    assert.ok(result.blockingFindings.some(item => item.code === 'CHILDREN_FACTORY_PRIVATE_FIRST_REQUIRED'));
+  }
 });
 
 test('Children Factory upload is blocked if audience is not Made for Kids', () => {
