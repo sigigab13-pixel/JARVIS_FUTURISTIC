@@ -142,7 +142,7 @@ test('incomplete human rights and originality review blocks upload', () => {
     policyReview: {},
   });
   assert.equal(result.ready, false);
-  assert.equal(result.missingAttestations.length, 6);
+  assert.equal(result.missingAttestations.length, 8);
 });
 
 test('deceptive engagement wording in metadata blocks upload', () => {
