@@ -60,6 +60,8 @@ const THIRD_PARTY_IP_RULES = [
 const REQUIRED_REVIEW_ATTESTATIONS = [
   ['rightsConfirmed', 'I own or have permission to use every visual, voice, song, sound, font, and other third-party element.'],
   ['originalityConfirmed', 'This video adds original value and is not a copied, minimally changed, or near-duplicate mass-produced upload.'],
+  ['visualsReviewed', 'I inspected the rendered video scene by scene for visual safety, age suitability, misleading imagery, and unexpected content.'],
+  ['audioReviewed', 'I listened to the complete video audio for unsafe language, unexpected sounds, music/voice problems, and rights concerns.'],
   ['safetyReviewed', 'I reviewed the complete rendered video for child safety, harmful or dangerous material, privacy, and age suitability.'],
   ['metadataReviewed', 'The title, description, and tags are accurate, relevant, and not deceptive or engagement-manipulating.'],
   ['audienceReviewed', 'I checked that the audience setting accurately reflects who this video is made for.'],
