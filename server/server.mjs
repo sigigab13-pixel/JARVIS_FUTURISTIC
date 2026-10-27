@@ -189,6 +189,26 @@ function safePath(urlPath) {
   return target.startsWith(DIST) ? target : null;
 }
 
+export function isVerifiedChildrenFactoryUploadAsset({
+  contentType,
+  mediaKey,
+  actualSha256,
+  renderedVideo,
+  verifiedVideo,
+} = {}) {
+  const actual = String(actualSha256 || '').toLowerCase();
+  const renderedSha = String(renderedVideo?.sha256 || '').toLowerCase();
+  const verifiedSha = String(verifiedVideo?.sha256 || '').toLowerCase();
+  const key = String(mediaKey || '');
+  return String(contentType || '').toLowerCase().startsWith('video/mp4')
+    && key.length > 0
+    && key === renderedVideo?.mediaKey
+    && key === verifiedVideo?.mediaKey
+    && /^[a-f0-9]{64}$/.test(actual)
+    && actual === renderedSha
+    && actual === verifiedSha;
+}
+
 function hasVerifiedChildrenFactoryVideo(mission) {
   const video = mission?.metadata?.verifiedVideo;
   const rendered = mission?.metadata?.renderedVideo;
@@ -1920,6 +1940,21 @@ export async function handleApi(req, res, pathname, url) {
       const media = await getMedia({ key: mediaKey });
       if (!String(media.contentType).startsWith('video/')) {
         return json(res, 400, { error: 'The selected media asset is not a video.' });
+      }
+      if (isChildrenFactory) {
+        const actualSha256 = crypto.createHash('sha256').update(media.body).digest('hex');
+        if (!isVerifiedChildrenFactoryUploadAsset({
+          contentType: media.contentType,
+          mediaKey,
+          actualSha256,
+          renderedVideo: mission.metadata?.renderedVideo,
+          verifiedVideo: mission.metadata?.verifiedVideo,
+        })) {
+          return json(res, 409, {
+            error: 'The stored video bytes no longer match the exact verified Children Factory render.',
+            code: 'CHILDREN_FACTORY_STORED_VIDEO_HASH_MISMATCH',
+          });
+        }
       }
       const token = await getYouTubeAccessToken(connection);
       if (token.refreshed) {
