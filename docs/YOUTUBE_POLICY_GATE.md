@@ -10,7 +10,8 @@ The policy gate is a conservative preflight layer for Children Factory and uploa
 - Blocks a Children Factory draft when the automated screen finds a blocking issue or needs review, before the scene images are generated.
 - Requires explicit audience and altered/synthetic-content disclosure choices at upload time.
 - Forces Children Factory videos to upload as private first; the owner must inspect the processed upload in YouTube Studio before manually making it public.
-- Requires review attestations for rights, originality, child safety/privacy, metadata accuracy, audience classification, and AI disclosure.
+- Requires eight review attestations covering rights, originality, scene-by-scene visual review, full audio review, child safety/privacy, metadata accuracy, audience classification, and AI disclosure. These are separate confirmations so checking one does not silently stand in for the other.
+- Clears every review confirmation when the selected mission or media asset changes.
 - Repeats the checks on the server's publish endpoint, so hiding the UI or calling the endpoint directly does not bypass the server gate.
 - Saves the gate version and review evidence with the confirmed upload event.
 
