@@ -4,6 +4,7 @@ import EmpireDashboard from './EmpireDashboard';
 import CapabilityCenter from './CapabilityCenter';
 import './EmpireDashboard.css';
 import { api, image } from './api';
+import TurnstileCaptcha from './TurnstileCaptcha';
 import { shouldApplyCloudHistory } from './chat-history-guard.mjs';
 import { supabase, supabaseConfigured } from './supabase';
 import {
@@ -142,6 +143,9 @@ function App() {
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
+  const [captchaToken, setCaptchaToken] = useState('');
+  const [captchaWidgetVersion, setCaptchaWidgetVersion] = useState(0);
+  const turnstileSiteKey = String(import.meta.env.VITE_TURNSTILE_SITE_KEY || '').trim();
   const [entitlement, setEntitlement] = useState<any>(null);
   const [messages, setMessages] = useState<Message[]>(starter);
   const [input, setInput] = useState('');
@@ -313,12 +317,25 @@ function App() {
     }
     const email = authEmail.trim();
     const password = authPassword;
+    if (!turnstileSiteKey) {
+      setAuthError('Turnstile is not configured in this deployment. Add VITE_TURNSTILE_SITE_KEY to the frontend environment.');
+      setAuthBusy(false);
+      return;
+    }
+    if (!captchaToken) {
+      setAuthError('Complete the Cloudflare Turnstile verification first.');
+      setAuthBusy(false);
+      return;
+    }
     if (!email || !password) {
       setAuthError('Enter your email and password.');
       setAuthBusy(false);
       return;
     }
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const token = captchaToken;
+    const { error } = await supabase.auth.signInWithPassword({ email, password, options: { captchaToken: token } });
+    setCaptchaToken('');
+    setCaptchaWidgetVersion(version => version + 1);
     if (error) setAuthError(error.message);
     setAuthBusy(false);
   };
@@ -333,16 +350,29 @@ function App() {
     }
     const email = authEmail.trim();
     const password = authPassword;
+    if (!turnstileSiteKey) {
+      setAuthError('Turnstile is not configured in this deployment. Add VITE_TURNSTILE_SITE_KEY to the frontend environment.');
+      setAuthBusy(false);
+      return;
+    }
+    if (!captchaToken) {
+      setAuthError('Complete the Cloudflare Turnstile verification first.');
+      setAuthBusy(false);
+      return;
+    }
     if (!email || password.length < 8) {
       setAuthError('Use a valid email and a password of at least 8 characters.');
       setAuthBusy(false);
       return;
     }
+    const token = captchaToken;
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { emailRedirectTo: window.location.origin },
+      options: { emailRedirectTo: window.location.origin, captchaToken: token },
     });
+    setCaptchaToken('');
+    setCaptchaWidgetVersion(version => version + 1);
     if (error) {
       setAuthError(error.message);
     } else if (!data.session) {
@@ -361,15 +391,28 @@ function App() {
       return;
     }
     const email = authEmail.trim();
+    if (!turnstileSiteKey) {
+      setAuthError('Turnstile is not configured in this deployment. Add VITE_TURNSTILE_SITE_KEY to the frontend environment.');
+      setAuthBusy(false);
+      return;
+    }
+    if (!captchaToken) {
+      setAuthError('Complete the Cloudflare Turnstile verification first.');
+      setAuthBusy(false);
+      return;
+    }
     if (!email) {
       setAuthError('Enter your email address first.');
       setAuthBusy(false);
       return;
     }
+    const token = captchaToken;
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: window.location.origin },
+      options: { emailRedirectTo: window.location.origin, captchaToken: token },
     });
+    setCaptchaToken('');
+    setCaptchaWidgetVersion(version => version + 1);
     setAuthError(error ? error.message : 'Magic link sent. Check your email.');
     setAuthBusy(false);
   };
@@ -1344,7 +1387,8 @@ function App() {
               </div>
               <input type="email" value={authEmail} onChange={e=>setAuthEmail(e.target.value)} placeholder="Email address" autoComplete="email" />
               <input type="password" value={authPassword} onChange={e=>setAuthPassword(e.target.value)} placeholder={authMode === 'signup' ? 'Password (8+ characters)' : 'Password'} autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'} onKeyDown={e=>{if(e.key==='Enter') void (authMode === 'signup' ? createEmailAccount() : signInWithEmail());}} />
-              <button className="security-primary" onClick={() => void (authMode === 'signup' ? createEmailAccount() : signInWithEmail())} disabled={authBusy || !supabaseConfigured}>
+              {turnstileSiteKey ? <TurnstileCaptcha key={captchaWidgetVersion} siteKey={turnstileSiteKey} onVerify={setCaptchaToken} /> : <small>CAPTCHA site key missing: configure VITE_TURNSTILE_SITE_KEY in the deployment environment.</small>}
+              <button className="security-primary" onClick={() => void (authMode === 'signup' ? createEmailAccount() : signInWithEmail())} disabled={authBusy || !supabaseConfigured || !turnstileSiteKey || !captchaToken}>
                 <Mail size={16} /> {authMode === 'signup' ? 'Create with Email' : 'Continue with Email'}
               </button>
               <button className="security-secondary" onClick={() => void sendMagicLink()} disabled={authBusy || !supabaseConfigured || !authEmail.trim()}>
