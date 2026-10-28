@@ -4,6 +4,7 @@ import EmpireDashboard from './EmpireDashboard';
 import CapabilityCenter from './CapabilityCenter';
 import './EmpireDashboard.css';
 import { api, image } from './api';
+import { shouldApplyCloudHistory } from './chat-history-guard.mjs';
 import { supabase, supabaseConfigured } from './supabase';
 import {
   Mic,
@@ -216,6 +217,7 @@ function App() {
   const recognitionRef = useRef<any>(null);
   const passiveRecognitionRef = useRef<any>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const chatInteractionVersionRef = useRef(0);
 
   useEffect(() => {
     const palette = [185, 212, 238, 268, 302, 334, 28, 52, 118, 154];
@@ -387,9 +389,10 @@ function App() {
   useEffect(() => {
     if (!session) return;
     let active = true;
+    const requestInteractionVersion = chatInteractionVersionRef.current;
     void api.get('/api/chat/history').then(response => {
       const cloudMessages = Array.isArray(response.data?.messages) ? response.data.messages : [];
-      if (!active || cloudMessages.length === 0) return;
+      if (!active || !shouldApplyCloudHistory(requestInteractionVersion, chatInteractionVersionRef.current, cloudMessages)) return;
       setMessages(normalizeMessages(cloudMessages));
     }).catch(() => {
       // Local memory remains available if the cloud memory service is temporarily unavailable.
@@ -843,6 +846,7 @@ function App() {
     if (!clean || busy) return;
     if (handleLocalCommand(clean)) return;
 
+    chatInteractionVersionRef.current += 1;
     const next = [...messages, { role: 'user' as const, content: clean }];
     setMessages(next);
     setInput('');
