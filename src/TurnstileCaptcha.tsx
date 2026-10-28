@@ -30,9 +30,10 @@ export default function TurnstileCaptcha({ siteKey, onVerify }: TurnstileCaptcha
   useEffect(() => {
     let cancelled = false;
     let widgetId: string | null = null;
+    let script: HTMLScriptElement | null = null;
 
     const renderWidget = () => {
-      if (cancelled || !containerRef.current || !window.turnstile) return;
+      if (cancelled || !containerRef.current || !window.turnstile || widgetId) return;
       widgetId = window.turnstile.render(containerRef.current, {
         sitekey: siteKey,
         theme: 'dark',
@@ -42,28 +43,36 @@ export default function TurnstileCaptcha({ siteKey, onVerify }: TurnstileCaptcha
       });
     };
 
+    const handleScriptError = () => {
+      onVerifyRef.current('');
+    };
+
     if (window.turnstile) {
       renderWidget();
     } else {
-      let script = document.getElementById(SCRIPT_ID) as HTMLScriptElement | null;
+      script = document.getElementById(SCRIPT_ID) as HTMLScriptElement | null;
       if (!script) {
         script = document.createElement('script');
         script.id = SCRIPT_ID;
         script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
         script.async = true;
         script.defer = true;
-        document.head.appendChild(script);
       }
+
+      // Register listeners before inserting a new script so its load event cannot be missed.
       script.addEventListener('load', renderWidget);
-      script.addEventListener('error', () => onVerifyRef.current(''));
-      return () => {
-        cancelled = true;
-        script?.removeEventListener('load', renderWidget);
-      };
+      script.addEventListener('error', handleScriptError);
+      if (!script.isConnected) document.head.appendChild(script);
+
+      // If another part of the page loaded the API between the first check and listener setup,
+      // render immediately instead of waiting for an event that may already have fired.
+      if (window.turnstile) renderWidget();
     }
 
     return () => {
       cancelled = true;
+      script?.removeEventListener('load', renderWidget);
+      script?.removeEventListener('error', handleScriptError);
       if (widgetId && window.turnstile) window.turnstile.remove(widgetId);
     };
   }, [siteKey]);
