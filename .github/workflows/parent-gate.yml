@@ -23,7 +23,13 @@ jobs:
           set -euo pipefail
 
           pr_json="$RUNNER_TEMP/jarvis-pr.json"
-          curl --fail --silent --show-error             --retry 3             -H "Accept: application/vnd.github+json"             -H "Authorization: Bearer $GH_TOKEN"             -H "X-GitHub-Api-Version: 2022-11-28"             "$GITHUB_API_URL/repos/$REPOSITORY/pulls/$PR_NUMBER"             > "$pr_json"
+          curl --fail --silent --show-error \
+            --retry 3 \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "$GITHUB_API_URL/repos/$REPOSITORY/pulls/$PR_NUMBER" \
+            > "$pr_json"
 
           node <<'NODE'
           const fs = require('fs');
@@ -32,7 +38,8 @@ jobs:
             fs.readFileSync(process.env.RUNNER_TEMP + '/jarvis-pr.json', 'utf8')
           );
 
-          const body = payload?.body || '';
+          // GitHub descriptions can contain CRLF or LF line endings.
+          const body = String(payload?.body || '').replace(/\r\n?/g, '\n');
 
           const requiredSections = [
             '# JARVIS Parent Gate',
@@ -44,30 +51,43 @@ jobs:
           const missing = requiredSections.filter((section) => !body.includes(section));
 
           if (missing.length) {
-            console.error('Parent Gate failed: required sections are missing:');
-            for (const item of missing) console.error(`- ${item}`);
+            console.error('Parent Gate failed: required PR description content is missing.');
+            for (const item of missing) {
+              console.error(`- Missing exact required text: ${item}`);
+            }
+            console.error(
+              'Fix the PR description using the repository Parent Gate template, then edit the PR to rerun this check.'
+            );
             process.exit(1);
           }
 
-          const parentGateStart = body.indexOf(
-            '## Parent Gate — required before merge'
-          );
-          const stopConditionStart = body.indexOf('## Parent stop condition');
+          const parentGateHeading = '## Parent Gate — required before merge';
+          const stopConditionHeading = '## Parent stop condition';
+          const parentGateStart = body.indexOf(parentGateHeading);
+          const stopConditionStart = body.indexOf(stopConditionHeading);
 
-          const gateSection =
-            stopConditionStart > parentGateStart
-              ? body.slice(parentGateStart, stopConditionStart)
-              : body.slice(parentGateStart);
+          if (stopConditionStart !== -1 && stopConditionStart <= parentGateStart) {
+            console.error(
+              'Parent Gate failed: "## Parent stop condition" must appear after the required checklist section.'
+            );
+            process.exit(1);
+          }
 
+          const gateSection = stopConditionStart > parentGateStart
+            ? body.slice(parentGateStart, stopConditionStart)
+            : body.slice(parentGateStart);
+
+          // Split on actual line endings. The previous over-escaped expression
+          // could fail to split normal PR-description lines.
           const unchecked = gateSection
-            .split(/\\r?\\n/)
-            .filter((line) => line.trim().startsWith('- [ ]'));
+            .split(/\r?\n/)
+            .filter((line) => /^\s*-\s*\[\s\]\s+/.test(line));
 
           if (unchecked.length) {
             console.error(
-              `Parent Gate failed: ${unchecked.length} required checklist item(s) remain unchecked.`
+              `Parent Gate failed: ${unchecked.length} required checklist item(s) remain unchecked:`
             );
-            for (const line of unchecked) console.error(line.trim());
+            for (const line of unchecked) console.error(`- ${line.trim()}`);
             process.exit(1);
           }
 
@@ -86,12 +106,12 @@ jobs:
           const missingEvidence = prompts.filter((prompt) => !evidence.includes(prompt));
 
           if (missingEvidence.length) {
-            console.error('Parent Gate failed: evidence prompts are missing:');
-            for (const item of missingEvidence) console.error(`- ${item}`);
+            console.error('Parent Gate failed: required evidence prompts are missing:');
+            for (const prompt of missingEvidence) console.error(`- ${prompt}`);
             process.exit(1);
           }
 
           console.log(
-            'Parent Gate passed: PR body contains the required checklist and evidence.'
+            'Parent Gate passed: required PR sections, completed checklist, and evidence prompts are present.'
           );
           NODE
