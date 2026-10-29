@@ -73,6 +73,10 @@ function makeStarter(displayName = 'there'): Message[] {
 
 const starter: Message[] = makeStarter();
 
+const backgroundThemes = ['futuristic', 'minimal', 'space', 'glass'] as const;
+type BackgroundTheme = typeof backgroundThemes[number];
+
+
 
 
 function renderInlineMarkdown(value: string) {
@@ -134,6 +138,21 @@ function renderRichMessage(content: string): ReactNode[] {
 }
 
 function App() {
+  // Pick a different visual theme on each page session, then rotate every 12 minutes.
+  const [backgroundTheme, setBackgroundTheme] = useState<BackgroundTheme>(() => {
+    const index = Math.floor(Math.random() * backgroundThemes.length);
+    return backgroundThemes[index];
+  });
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setBackgroundTheme(current => {
+        const currentIndex = backgroundThemes.indexOf(current);
+        return backgroundThemes[(currentIndex + 1) % backgroundThemes.length];
+      });
+    }, 12 * 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   const [session, setSession] = useState<any>(null);
   const [authReady, setAuthReady] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
@@ -1304,12 +1323,12 @@ function App() {
   }, [passiveWake]);
 
   if (!authReady) {
-    return <main className="jarvis-shell"><section className="auth-screen"><div className="auth-card"><div className="orb"><Sparkles size={20} /></div><span className="eyebrow">JARVIS AUTHENTICATION</span><h1>Connecting to JARVIS...</h1><p>Preparing your secure account session.</p></div></section></main>;
+    return <main className="jarvis-shell" data-background={backgroundTheme}><section className="auth-screen"><div className="auth-card"><div className="orb"><Sparkles size={20} /></div><span className="eyebrow">JARVIS AUTHENTICATION</span><h1>Connecting to JARVIS...</h1><p>Preparing your secure account session.</p></div></section></main>;
   }
 
   if (!session) {
     return (
-      <main className="jarvis-shell">
+      <main className="jarvis-shell" data-background={backgroundTheme}>
         <section className="auth-screen">
           <div className="auth-card">
             <div className="orb"><Sparkles size={20} /></div>
@@ -1357,7 +1376,7 @@ function App() {
   }
 
   return (
-    <main className="jarvis-shell">
+    <main className="jarvis-shell" data-background={backgroundTheme}>
       <div className="scanline" />
       <header className="topbar">
         <div className="brand">
