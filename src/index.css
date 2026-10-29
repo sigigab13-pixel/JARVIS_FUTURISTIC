@@ -1496,3 +1496,73 @@ body {
   .jarvis-shell[data-background]::before,
   .jarvis-shell[data-background]::after { animation: none !important; }
 }
+
+
+/* PR #89 visual separation: make each theme unmistakable. */
+.jarvis-shell[data-background="futuristic"] {
+  background:
+    linear-gradient(rgba(0, 229, 255, .12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 229, 255, .12) 1px, transparent 1px),
+    radial-gradient(ellipse at 50% 35%, rgba(0, 229, 255, .28), transparent 45%),
+    linear-gradient(145deg, #020713 0%, #062747 48%, #170b31 100%) !important;
+  background-size: 32px 32px, 32px 32px, auto, auto !important;
+}
+.jarvis-shell[data-background="futuristic"]::before {
+  width: 72vw; height: 72vw; left: 48%; top: 42%;
+  border: 1px solid rgba(0,229,255,.22);
+  background: radial-gradient(circle, rgba(0,229,255,.24), rgba(0,229,255,.07) 32%, transparent 68%);
+  box-shadow: 0 0 80px rgba(0,229,255,.12), inset 0 0 80px rgba(0,229,255,.08);
+}
+.jarvis-shell[data-background="futuristic"]::after { display: block; }
+
+.jarvis-shell[data-background="minimal"] {
+  background: #080a0d !important;
+}
+.jarvis-shell[data-background="minimal"]::before,
+.jarvis-shell[data-background="minimal"]::after {
+  display: none !important;
+}
+.jarvis-shell[data-background="minimal"] .chat-panel,
+.jarvis-shell[data-background="minimal"] .chat-head { background: transparent !important; }
+
+.jarvis-shell[data-background="space"] {
+  background:
+    radial-gradient(2px 2px at 12% 18%, #fff 99%, transparent 100%),
+    radial-gradient(2px 2px at 78% 24%, #b9d8ff 99%, transparent 100%),
+    radial-gradient(1px 1px at 41% 66%, #fff 99%, transparent 100%),
+    radial-gradient(2px 2px at 88% 77%, #d8c8ff 99%, transparent 100%),
+    radial-gradient(ellipse at 72% 30%, rgba(126,67,220,.48), transparent 38%),
+    radial-gradient(ellipse at 24% 75%, rgba(0,111,190,.42), transparent 42%),
+    linear-gradient(155deg, #01020a 0%, #080b24 48%, #190b2d 100%) !important;
+  background-size: 140px 140px, 190px 190px, 120px 120px, 220px 220px, auto, auto, auto !important;
+}
+.jarvis-shell[data-background="space"]::before {
+  width: 85vw; height: 85vw; left: 45%; top: 35%;
+  background: radial-gradient(ellipse, rgba(102,70,220,.22), rgba(30,80,180,.08) 40%, transparent 70%);
+  filter: blur(12px);
+}
+.jarvis-shell[data-background="space"]::after { display: block; }
+
+.jarvis-shell[data-background="glass"] {
+  background:
+    radial-gradient(ellipse at 0% 0%, rgba(46,190,210,.30), transparent 42%),
+    radial-gradient(ellipse at 100% 100%, rgba(155,92,240,.30), transparent 44%),
+    linear-gradient(135deg, #091c29 0%, #101526 48%, #241333 100%) !important;
+}
+.jarvis-shell[data-background="glass"]::before,
+.jarvis-shell[data-background="glass"]::after {
+  display: block;
+  width: 58vw; height: 58vw;
+  border: 1px solid rgba(190,235,255,.22);
+  border-radius: 34px;
+  background: linear-gradient(135deg, rgba(160,225,255,.12), rgba(140,115,220,.035) 52%, rgba(255,255,255,.08));
+  box-shadow: inset 0 0 70px rgba(160,220,255,.08), 0 0 70px rgba(95,165,220,.08);
+  backdrop-filter: blur(3px);
+}
+.jarvis-shell[data-background="glass"]::before { transform: rotate(-18deg); }
+.jarvis-shell[data-background="glass"]::after { transform: rotate(18deg); }
+
+@media (prefers-reduced-motion: reduce) {
+  .jarvis-shell[data-background]::before,
+  .jarvis-shell[data-background]::after { animation: none !important; }
+}
