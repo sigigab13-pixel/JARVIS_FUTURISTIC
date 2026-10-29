@@ -1566,3 +1566,17 @@ body {
   .jarvis-shell[data-background]::before,
   .jarvis-shell[data-background]::after { animation: none !important; }
 }
+
+
+/* PR #89 dashboard fix: remove the dashboard's legacy overlays so the
+   selected shell theme remains visible after login, not only on auth screens. */
+.jarvis-shell[data-background="futuristic"] .dashboard::before,
+.jarvis-shell[data-background="futuristic"] .dashboard::after,
+.jarvis-shell[data-background="minimal"] .dashboard::before,
+.jarvis-shell[data-background="minimal"] .dashboard::after,
+.jarvis-shell[data-background="space"] .dashboard::before,
+.jarvis-shell[data-background="space"] .dashboard::after,
+.jarvis-shell[data-background="glass"] .dashboard::before,
+.jarvis-shell[data-background="glass"] .dashboard::after {
+  display: none !important;
+}
