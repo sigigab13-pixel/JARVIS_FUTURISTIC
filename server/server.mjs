@@ -74,6 +74,7 @@ import { simulateWorkflow } from './workflow-simulator-core.mjs';
 import { buildProvenance, extractWebCitations } from './provenance-core.mjs';
 import { planGoal } from './goal-outcome-core.mjs';
 import { persistConversationSafely } from './chat-persistence.mjs';
+import { buildLocalGreeting, isSimpleGreeting } from './local-greeting.mjs';
 
 const PORT = Number(process.env.PORT || 10000);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -1337,6 +1338,30 @@ export async function handleApi(req, res, pathname, url) {
     const userId = authenticated?.jarvisUser?.id || null;
     const latestUserMessage = String(messages[messages.length - 1]?.content || '').trim();
     const displayName = String(authenticated?.jarvisUser?.name || authenticated?.jarvisUser?.email || '').trim();
+
+    if (isSimpleGreeting(latestUserMessage)) {
+      const greetingText = buildLocalGreeting(displayName);
+      const conversationPersistence = userId
+        ? await persistConversationSafely({
+          userId,
+          messages: [
+            { role: 'user', content: latestUserMessage },
+            { role: 'assistant', content: greetingText },
+          ],
+          appendMessages: appendConversationMessages,
+        })
+        : { persistent: false, warning: null };
+
+      return json(res, 200, {
+        text: greetingText,
+        provider: 'JARVIS local greeting',
+        model: 'deterministic-greeting-v1',
+        intelligenceTier: 'local',
+        persistent: conversationPersistence.persistent,
+        persistenceWarning: conversationPersistence.warning,
+        guest: !userId,
+      }, userId ? { 'Set-Cookie': jarvisCookie(userId) } : {});
+    }
     const userIdentity = displayName ? `${displayName}'s` : 'the current user';
     const intentCandidates = rankCapabilitiesForIntent(latestUserMessage, 4);
     const route = routeIntent({
@@ -1513,48 +1538,48 @@ export async function handleApi(req, res, pathname, url) {
     }
 
     if (!text && hfToken) {
-      const response = await fetch(HF_CHAT_URL, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${hfToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: HF_MODEL,
-          messages: [
-            { role: 'system', content: systemMessage },
-            ...messages,
-          ],
-          max_tokens: 1200,
-          temperature: 0.7,
-        }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        const providerError = data?.error;
-        const message = providerError?.message || providerError?.detail || providerError?.error
-          || (typeof providerError === 'string' ? providerError : null)
-          || (providerError && typeof providerError === 'object' ? JSON.stringify(providerError) : null)
-          || 'JARVIS AI core request failed.';
-        console.error('JARVIS Hugging Face request failed:', response.status, message);
-        return json(res, response.status >= 400 && response.status < 500 ? 400 : 502, {
-          error: String(message),
-          code: 'AI_PROVIDER_REQUEST_FAILED',
-          provider: 'Hugging Face Inference Providers',
+      try {
+        const response = await fetch(HF_CHAT_URL, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${hfToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: HF_MODEL,
+            messages: [
+              { role: 'system', content: systemMessage },
+              ...messages,
+            ],
+            max_tokens: 1200,
+            temperature: 0.7,
+          }),
         });
-      }
-      text = String(data?.choices?.[0]?.message?.content || '').trim();
-      if (text) {
-        provider = 'Hugging Face Inference Providers';
-        model = HF_MODEL;
-        intelligenceTier = 'fallback';
-        webSearchUsed = false;
-        webCitations = [];
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const providerError = data?.error;
+          const message = providerError?.message || providerError?.detail || providerError?.error
+            || (typeof providerError === 'string' ? providerError : null)
+            || (providerError && typeof providerError === 'object' ? JSON.stringify(providerError) : null)
+            || 'Provider request failed.';
+          console.error('JARVIS Hugging Face request failed:', response.status, message);
+        } else {
+          text = String(data?.choices?.[0]?.message?.content || '').trim();
+          if (text) {
+            provider = 'Hugging Face Inference Providers';
+            model = HF_MODEL;
+            intelligenceTier = 'fallback';
+            webSearchUsed = false;
+            webCitations = [];
+          }
+        }
+      } catch (error) {
+        console.error('JARVIS Hugging Face network request failed:', error?.message || error);
       }
     }
 
     if (!text) {
       return json(res, 503, {
-        error: openaiKey || hfToken
-          ? 'JARVIS AI core returned no usable response.'
-          : 'JARVIS AI core is not configured on this deployment. Add OPENAI_API_KEY in Vercel Environment Variables.',
+        error: 'JARVIS is temporarily unable to reach its AI services. Your message has not been processed. Please try again shortly.',
+        code: 'AI_TEMPORARILY_UNAVAILABLE',
+        retryable: true,
       });
     }
 
